@@ -101,6 +101,7 @@ extern int GoInitORMWithPath(char* path);
 extern int GoStartTCPServer(void);
 extern int GoStopTCPServer(void);
 extern int GoStartTCPClient(void);
+extern int GoStartTCPClientWithAddress(char* remoteIP, int remotePort, char* localIP);
 extern int GoStopTCPClient(void);
 extern char* GoTCPClientSend(char* message);
 

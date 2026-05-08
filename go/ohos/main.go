@@ -92,6 +92,20 @@ func GoStartTCPClient() C.int {
 	return C.int(tcp.StartTCPClient("127.0.0.1", 9998, ""))
 }
 
+//export GoStartTCPClientWithAddress
+func GoStartTCPClientWithAddress(remoteIP *C.char, remotePort C.int, localIP *C.char) C.int {
+	if remoteIP == nil {
+		return -1
+	}
+
+	local := ""
+	if localIP != nil {
+		local = C.GoString(localIP)
+	}
+
+	return C.int(tcp.StartTCPClient(C.GoString(remoteIP), int(remotePort), local))
+}
+
 //export GoStopTCPClient
 func GoStopTCPClient() C.int {
 	return C.int(tcp.StopTCPClient())

@@ -4,21 +4,27 @@ import { window } from '@kit.ArkUI';
 import testNapi from 'libentry.so';
 
 const DOMAIN = 0x0000;
+const TCP_REMOTE_IP = '127.0.0.1';
+const TCP_REMOTE_PORT = 6666;
+const TCP_LOCAL_IP = '';
 
 export default class EntryAbility extends UIAbility {
   private startTcpClient(): void {
-    if (!testNapi) {
+
+    if (!testNapi) { //判断有没有动态库
       hilog.error(DOMAIN, 'testTag', 'Native module libentry.so export object is undefined, skip TCP client start.');
       return;
     }
 
-    if (!testNapi.startTcpClient) {
+    if (!testNapi.startTcpClient) { //判断有没有这个函数
       hilog.error(DOMAIN, 'testTag', 'Native module libentry.so has no startTcpClient export, skip TCP client start.');
       return;
     }
 
-    const tcpClientResult = testNapi.startTcpClient();
-    hilog.info(DOMAIN, 'testTag', 'TCP client init result = %{public}d', tcpClientResult);
+    const tcpClientResult = testNapi.startTcpClient(TCP_REMOTE_IP, TCP_REMOTE_PORT, TCP_LOCAL_IP); //调用函数
+    
+    hilog.info(DOMAIN, 'testTag', 'TCP client init result = %{public}d, target = %{public}s:%{public}d',
+      tcpClientResult, TCP_REMOTE_IP, TCP_REMOTE_PORT);
     if (tcpClientResult < 0 && testNapi.nativeLastError) {
       hilog.error(DOMAIN, 'testTag', 'TCP client native error: %{public}s', testNapi.nativeLastError());
     }
