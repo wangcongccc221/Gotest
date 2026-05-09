@@ -32,7 +32,7 @@ const NativeMock: Record<string, Object> = {
   'stopTcpServer': () => {
     return 0;
   },
-  'startTcpClient': (_remoteIp?: string, _remotePort?: number, _localIp?: string) => {
+  'startTcpClient': (_remoteIp: string, _remotePort: number, _destId: number, _cmd: number) => {
     return 18082;
   },
   'stopTcpClient': () => {
@@ -57,10 +57,7 @@ export const stopModbusServer = NativeMock.stopModbusServer as () => number;
 export const initOrm = NativeMock.initOrm as (databasePath?: string) => number;
 export const startTcpServer = NativeMock.startTcpServer as () => number;
 export const stopTcpServer = NativeMock.stopTcpServer as () => number;
-export const startTcpClient = NativeMock.startTcpClient as {
-  (): number;
-  (remoteIp: string, remotePort: number, localIp?: string): number;
-};
+export const startTcpClient = NativeMock.startTcpClient as (remoteIp: string, remotePort: number, destId: number, cmd: number) => number;
 export const stopTcpClient = NativeMock.stopTcpClient as () => number;
 export const tcpSend = NativeMock.tcpSend as (message: string) => string;
 export const nativeLastError = NativeMock.nativeLastError as () => string;

@@ -6,7 +6,8 @@ import testNapi from 'libentry.so';
 const DOMAIN = 0x0000;
 const TCP_REMOTE_IP = '127.0.0.1';
 const TCP_REMOTE_PORT = 6666;
-const TCP_LOCAL_IP = '';
+const TCP_DEST_ID = 0x0100; // CommonFunction::EncodeSubsys(0)
+const TCP_CMD = 0x0019; // HC_FSM_COMMAND_TYPE::HC_CMD_DISPLAY_ON
 
 export default class EntryAbility extends UIAbility {
   private startTcpClient(): void {
@@ -21,10 +22,10 @@ export default class EntryAbility extends UIAbility {
       return;
     }
 
-    const tcpClientResult = testNapi.startTcpClient(TCP_REMOTE_IP, TCP_REMOTE_PORT, TCP_LOCAL_IP); //调用函数
+    const tcpClientResult = testNapi.startTcpClient(TCP_REMOTE_IP, TCP_REMOTE_PORT, TCP_DEST_ID, TCP_CMD); //调用函数
     
-    hilog.info(DOMAIN, 'testTag', 'TCP client init result = %{public}d, target = %{public}s:%{public}d',
-      tcpClientResult, TCP_REMOTE_IP, TCP_REMOTE_PORT);
+    hilog.info(DOMAIN, 'testTag', 'TCP client sync result = %{public}d, target = %{public}s:%{public}d, dest = %{public}d, cmd = %{public}d',
+      tcpClientResult, TCP_REMOTE_IP, TCP_REMOTE_PORT, TCP_DEST_ID, TCP_CMD);
     if (tcpClientResult < 0 && testNapi.nativeLastError) {
       hilog.error(DOMAIN, 'testTag', 'TCP client native error: %{public}s', testNapi.nativeLastError());
     }
@@ -41,9 +42,6 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
-    if (testNapi && testNapi.stopTcpClient) {
-      testNapi.stopTcpClient();
-    }
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
   }
 

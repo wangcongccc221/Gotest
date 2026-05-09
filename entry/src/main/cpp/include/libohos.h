@@ -102,6 +102,7 @@ extern int GoStartTCPServer(void);
 extern int GoStopTCPServer(void);
 extern int GoStartTCPClient(void);
 extern int GoStartTCPClientWithAddress(char* remoteIP, int remotePort, char* localIP);
+extern int GoStartCTCPClient(char* remoteIP, int remotePort, int destID, int cmd);
 extern int GoStopTCPClient(void);
 extern char* GoTCPClientSend(char* message);
 

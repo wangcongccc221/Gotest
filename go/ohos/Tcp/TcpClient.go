@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"encoding/binary"
 	"io"
 	"net"
 	"strconv"
@@ -11,6 +12,8 @@ import (
 
 const (
 	tcpWriteTimeout = 3 * time.Second //超时设置
+	STX             = 0x02            // 同步头（RIS模式）
+	SBC_INFO_REQ    = 0x18            // 设备信息请求
 )
 
 var (
@@ -31,7 +34,9 @@ type TcpClient struct {
 	OnError        func(string)
 	OnClosed       func()
 
-	reading bool
+	reading            bool
+	autoSendInitCmd    bool // 是否在连接后自动发送初始化命令
+	initCmdSent        bool // 初始化命令是否已发送
 }
 
 // NewTcpClient 1.创建新的TCP客户端

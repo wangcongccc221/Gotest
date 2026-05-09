@@ -9,10 +9,7 @@ export const stopModbusServer: () => number;
 export const initOrm: (databasePath?: string) => number;
 export const startTcpServer: () => number;
 export const stopTcpServer: () => number;
-export const startTcpClient: {
-  (): number;
-  (remoteIp: string, remotePort: number, localIp?: string): number;
-};
+export const startTcpClient: (remoteIp: string, remotePort: number, destId: number, cmd: number) => number;
 export const stopTcpClient: () => number;
 export const tcpSend: (message: string) => string;
 export const nativeLastError: () => string;

@@ -12,6 +12,7 @@ using GoFreeCStringFunc = void (*)(char *);
 using GoIntFunc = int (*)();
 using GoInitORMWithPathFunc = int (*)(char *);
 using GoStartTCPClientWithAddressFunc = int (*)(char *, int, char *);
+using GoStartCTCPClientFunc = int (*)(char *, int, int, int);
 using GoTCPClientSendFunc = char *(*)(char *);
 
 struct GoApi {
@@ -34,6 +35,7 @@ struct GoApi {
     GoIntFunc stopTCPServer = nullptr;
     GoIntFunc startTCPClient = nullptr;
     GoStartTCPClientWithAddressFunc startTCPClientWithAddress = nullptr;
+    GoStartCTCPClientFunc startCTCPClient = nullptr;
     GoIntFunc stopTCPClient = nullptr;
     GoTCPClientSendFunc tcpClientSend = nullptr;
 };
@@ -98,6 +100,7 @@ static bool LoadGoApi()
         !LoadGoSymbol(g_goApi.handle, "GoStopTCPServer", &g_goApi.stopTCPServer) ||
         !LoadGoSymbol(g_goApi.handle, "GoStartTCPClient", &g_goApi.startTCPClient) ||
         !LoadGoSymbol(g_goApi.handle, "GoStartTCPClientWithAddress", &g_goApi.startTCPClientWithAddress) ||
+        !LoadGoSymbol(g_goApi.handle, "GoStartCTCPClient", &g_goApi.startCTCPClient) ||
         !LoadGoSymbol(g_goApi.handle, "GoStopTCPClient", &g_goApi.stopTCPClient) ||
         !LoadGoSymbol(g_goApi.handle, "GoTCPClientSend", &g_goApi.tcpClientSend)) {
         return false;
@@ -319,46 +322,42 @@ static napi_value NapiStopTCPServer(napi_env env, napi_callback_info info)
 
 static napi_value NapiStartTCPClient(napi_env env, napi_callback_info info) //StartTCPClient
 {
-    size_t argc = 3;
-    napi_value args[3] = {nullptr};
+    size_t argc = 4;
+    napi_value args[4] = {nullptr};
     napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
 
     int goResult = -1;
     if (LoadGoApi()) {
-        if (argc == 0) {
-            goResult = g_goApi.startTCPClient();
-        } else {
-            if (argc < 2) {
-                napi_throw_type_error(env, nullptr, "startTcpClient expects remote IP and remote port");
-                return nullptr;
-            }
-
-            std::string remoteIp;
-            if (!ReadString(env, args[0], &remoteIp)) {
-                return nullptr;
-            }
-
-            double remotePortValue;
-            if (!ReadNumber(env, args[1], &remotePortValue)) {
-                return nullptr;
-            }
-
-            std::string localIp;
-            if (argc >= 3) {
-                napi_valuetype type;
-                napi_typeof(env, args[2], &type);
-                if (type != napi_undefined && type != napi_null) {
-                    if (!ReadString(env, args[2], &localIp)) {
-                        return nullptr;
-                    }
-                }
-            }
-
-            goResult = g_goApi.startTCPClientWithAddress(
-                const_cast<char *>(remoteIp.c_str()),
-                static_cast<int>(remotePortValue),
-                const_cast<char *>(localIp.c_str()));
+        if (argc < 4) {
+            napi_throw_type_error(env, nullptr, "startTcpClient expects remote IP, remote port, destination ID and command");
+            return nullptr;
         }
+
+        std::string remoteIp;
+        if (!ReadString(env, args[0], &remoteIp)) {
+            return nullptr;
+        }
+
+        double remotePortValue;
+        if (!ReadNumber(env, args[1], &remotePortValue)) {
+            return nullptr;
+        }
+
+        double destIdValue;
+        if (!ReadNumber(env, args[2], &destIdValue)) {
+            return nullptr;
+        }
+
+        double cmdValue;
+        if (!ReadNumber(env, args[3], &cmdValue)) {
+            return nullptr;
+        }
+
+        goResult = g_goApi.startCTCPClient(
+            const_cast<char *>(remoteIp.c_str()),
+            static_cast<int>(remotePortValue),
+            static_cast<int>(destIdValue),
+            static_cast<int>(cmdValue));
     }
 
     napi_value result;

@@ -106,6 +106,21 @@ func GoStartTCPClientWithAddress(remoteIP *C.char, remotePort C.int, localIP *C.
 	return C.int(tcp.StartTCPClient(C.GoString(remoteIP), int(remotePort), local))
 }
 
+//export GoStartCTCPClient
+func GoStartCTCPClient(remoteIP *C.char, remotePort C.int, destID C.int, cmd C.int) C.int {
+	if remoteIP == nil {
+		return -1
+	}
+
+	return C.int(tcp.StartCTCPClient(
+		C.GoString(remoteIP),
+		int(remotePort),
+		int32(destID),
+		int32(cmd),
+		nil,
+	))
+}
+
 //export GoStopTCPClient
 func GoStopTCPClient() C.int {
 	return C.int(tcp.StopTCPClient())
