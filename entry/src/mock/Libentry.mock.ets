@@ -27,13 +27,13 @@ const NativeMock: Record<string, Object> = {
     return 0;
   },
   'startTcpServer': () => {
-    return 18081;
+    return 1128;
   },
   'stopTcpServer': () => {
     return 0;
   },
   'startTcpClient': (_remoteIp: string, _remotePort: number, _destId: number, _cmd: number) => {
-    return 18082;
+    return 0;
   },
   'stopTcpClient': () => {
     return 0;
@@ -43,6 +43,9 @@ const NativeMock: Record<string, Object> = {
   },
   'nativeLastError': () => {
     return '';
+  },
+  'tcpServerLastMessage': () => {
+    return 'CTCP mock server received 0 bytes';
   },
 };
 
@@ -61,5 +64,6 @@ export const startTcpClient = NativeMock.startTcpClient as (remoteIp: string, re
 export const stopTcpClient = NativeMock.stopTcpClient as () => number;
 export const tcpSend = NativeMock.tcpSend as (message: string) => string;
 export const nativeLastError = NativeMock.nativeLastError as () => string;
+export const tcpServerLastMessage = NativeMock.tcpServerLastMessage as () => string;
 
 export default NativeMock;

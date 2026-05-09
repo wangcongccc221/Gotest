@@ -48,6 +48,7 @@ struct Index {
             const pong = await this.requestGin(port);
             const tcpResponse = testNapi.tcpSend('hello tcp');
             this.message = `${pong}\n${tcpResponse}`;
+            console.log("")
             hilog.info(DOMAIN, 'testTag', 'Go NAPI 2 + 3 = %{public}s, Gin port = %{public}d', `${sum}`, port);
             hilog.info(DOMAIN, 'testTag', 'Gin /ping = %{public}s', pong);
             hilog.info(DOMAIN, 'testTag', 'OPC UA server port = %{public}d', opcuaServerPort);

@@ -1,7 +1,6 @@
 package tcp
 
 import (
-	"encoding/binary"
 	"io"
 	"net"
 	"strconv"
@@ -34,9 +33,9 @@ type TcpClient struct {
 	OnError        func(string)
 	OnClosed       func()
 
-	reading            bool
-	autoSendInitCmd    bool // 是否在连接后自动发送初始化命令
-	initCmdSent        bool // 初始化命令是否已发送
+	reading         bool
+	autoSendInitCmd bool // 是否在连接后自动发送初始化命令
+	initCmdSent     bool // 初始化命令是否已发送
 }
 
 // NewTcpClient 1.创建新的TCP客户端

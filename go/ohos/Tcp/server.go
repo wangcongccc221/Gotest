@@ -41,6 +41,7 @@ func newRouter() http.Handler {
 			"message":   "pong from Go",
 		})
 	})
+	registerCTCPHTTPRoutes(router)
 	return router
 }
 

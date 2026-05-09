@@ -7,11 +7,11 @@
         "material": {
           "certpath": "C:\\Users\\AI008\\.ohos\\config\\default_goTest_6-NCgQ2MloZDKKelLt9aGHQ2sdWcCGQAHeEu0akG3qQ=.cer",
           "keyAlias": "debugKey",
-          "keyPassword": "0000001A97205319CBD12D790AFBC0B1E30965311D44A544F9BCF95C62C5CF5A14C7491C57A646B100BD",
+          "keyPassword": "0000001B027A5AA6B3E5DD070179B5B4C4089AC35D1928A68C14D9D6F9105DF56E80FA87CF32A982018873",
           "profile": "C:\\Users\\AI008\\.ohos\\config\\default_goTest_6-NCgQ2MloZDKKelLt9aGHQ2sdWcCGQAHeEu0akG3qQ=.p7b",
           "signAlg": "SHA256withECDSA",
           "storeFile": "C:\\Users\\AI008\\.ohos\\config\\default_goTest_6-NCgQ2MloZDKKelLt9aGHQ2sdWcCGQAHeEu0akG3qQ=.p12",
-          "storePassword": "0000001AB6BD895A6586CFF31C9ED2617E993A092FA81BDAE0E6B6A3AC9E9F0067540060F326A6D4FAB3"
+          "storePassword": "0000001B02084482E061A1DF7CD0A084EF1D5ED962CEDE6F593918319875F1831FEF4D2F5A8A04B174BA61"
         }
       }
     ],

@@ -105,6 +105,7 @@ extern int GoStartTCPClientWithAddress(char* remoteIP, int remotePort, char* loc
 extern int GoStartCTCPClient(char* remoteIP, int remotePort, int destID, int cmd);
 extern int GoStopTCPClient(void);
 extern char* GoTCPClientSend(char* message);
+extern char* GoLastTCPServerMessage(void);
 
 #ifdef __cplusplus
 }

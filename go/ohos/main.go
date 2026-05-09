@@ -79,12 +79,12 @@ func GoInitORMWithPath(path *C.char) C.int {
 
 //export GoStartTCPServer
 func GoStartTCPServer() C.int {
-	return 0
+	return C.int(tcp.StartCTCPServer())
 }
 
 //export GoStopTCPServer
 func GoStopTCPServer() C.int {
-	return 0
+	return C.int(tcp.StopCTCPServer())
 }
 
 //export GoStartTCPClient
@@ -132,6 +132,11 @@ func GoTCPClientSend(message *C.char) *C.char {
 		return C.CString("")
 	}
 	return C.CString(tcp.TCPClientSend(C.GoString(message)))
+}
+
+//export GoLastTCPServerMessage
+func GoLastTCPServerMessage() *C.char {
+	return C.CString(tcp.LastCTCPServerMessage())
 }
 
 func main() {}

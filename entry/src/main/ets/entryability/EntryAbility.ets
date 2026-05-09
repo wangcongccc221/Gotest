@@ -4,12 +4,64 @@ import { window } from '@kit.ArkUI';
 import testNapi from 'libentry.so';
 
 const DOMAIN = 0x0000;
-const TCP_REMOTE_IP = '127.0.0.1';
-const TCP_REMOTE_PORT = 6666;
+const TCP_REMOTE_IP = '192.168.0.16';
+const TCP_REMOTE_PORT = 1279;
 const TCP_DEST_ID = 0x0100; // CommonFunction::EncodeSubsys(0)
 const TCP_CMD = 0x0019; // HC_FSM_COMMAND_TYPE::HC_CMD_DISPLAY_ON
 
 export default class EntryAbility extends UIAbility {
+  private tcpServerLogTimer: number = 0;
+  private lastTcpServerMessage: string = '';
+
+  private startTcpServer(): void {
+    if (!testNapi) {
+      hilog.error(DOMAIN, 'testTag', 'Native module libentry.so export object is undefined, skip TCP server start.');
+      return;
+    }
+
+    if (!testNapi.startTcpServer) {
+      hilog.error(DOMAIN, 'testTag', 'Native module libentry.so has no startTcpServer export, skip TCP server start.');
+      return;
+    }
+
+    const tcpServerResult = testNapi.startTcpServer();
+    hilog.info(DOMAIN, 'testTag', 'TCP server start result = %{public}d', tcpServerResult);
+    if (tcpServerResult < 0 && testNapi.nativeLastError) {
+      hilog.error(DOMAIN, 'testTag', 'TCP server native error: %{public}s', testNapi.nativeLastError());
+    }
+    if (tcpServerResult < 0 && testNapi.tcpServerLastMessage) {
+      hilog.error(DOMAIN, 'testTag', 'TCP server last message: %{public}s', testNapi.tcpServerLastMessage());
+    }
+  }
+
+  private startTcpServerLogPolling(): void {
+    if (!testNapi || !testNapi.tcpServerLastMessage || this.tcpServerLogTimer !== 0) {
+      return;
+    }
+
+    this.tcpServerLogTimer = setInterval(() => {
+      const message = testNapi.tcpServerLastMessage();
+      if (message.length > 0 && message !== this.lastTcpServerMessage) {
+        this.lastTcpServerMessage = message;
+        hilog.info(DOMAIN, 'testTag', 'TCP server receive info: %{public}s', message);
+      }
+    }, 1000);
+  }
+
+  private stopTcpServer(): void {
+    if (this.tcpServerLogTimer !== 0) {
+      clearInterval(this.tcpServerLogTimer);
+      this.tcpServerLogTimer = 0;
+    }
+
+    if (!testNapi || !testNapi.stopTcpServer) {
+      return;
+    }
+
+    const tcpServerResult = testNapi.stopTcpServer();
+    hilog.info(DOMAIN, 'testTag', 'TCP server stop result = %{public}d', tcpServerResult);
+  }
+
   private startTcpClient(): void {
 
     if (!testNapi) { //判断有没有动态库
@@ -42,6 +94,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
+    this.stopTcpServer();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
   }
 
@@ -55,6 +108,8 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+      this.startTcpServer();
+      this.startTcpServerLogPolling();
       this.startTcpClient();
     });
   }

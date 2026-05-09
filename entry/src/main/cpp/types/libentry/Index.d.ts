@@ -13,6 +13,7 @@ export const startTcpClient: (remoteIp: string, remotePort: number, destId: numb
 export const stopTcpClient: () => number;
 export const tcpSend: (message: string) => string;
 export const nativeLastError: () => string;
+export const tcpServerLastMessage: () => string;
 
 declare const testNapi: {
   add: typeof add;
@@ -30,6 +31,7 @@ declare const testNapi: {
   stopTcpClient: typeof stopTcpClient;
   tcpSend: typeof tcpSend;
   nativeLastError: typeof nativeLastError;
+  tcpServerLastMessage: typeof tcpServerLastMessage;
 };
 
 export default testNapi;
