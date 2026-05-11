@@ -47,6 +47,9 @@ const NativeMock: Record<string, Object> = {
   'tcpServerLastMessage': () => {
     return 'CTCP mock server received 0 bytes';
   },
+  'stGradeItemInfoLayout': () => {
+    return 'StGradeItemInfo sizeof=36 (mock)\n  Exit offset=0 size=8';
+  },
 };
 
 export const add = NativeMock.add as (a: number, b: number) => number;
@@ -65,5 +68,6 @@ export const stopTcpClient = NativeMock.stopTcpClient as () => number;
 export const tcpSend = NativeMock.tcpSend as (message: string) => string;
 export const nativeLastError = NativeMock.nativeLastError as () => string;
 export const tcpServerLastMessage = NativeMock.tcpServerLastMessage as () => string;
+export const stGradeItemInfoLayout = NativeMock.stGradeItemInfoLayout as () => string;
 
 export default NativeMock;

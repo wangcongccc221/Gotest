@@ -402,7 +402,8 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 
 	switch head.NCmdId {
 	case cmdFSMConfig:
-		//稍后完善
+		// TODO: StGlobal 强转解析后在此处理
+		setCTCPServerLastMessage("CTCP handled %s: raw StGlobal saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
 
 	case cmdFSMStatistics: //0x1001
 		stats, err := parseStStatistics(payload)
@@ -504,16 +505,18 @@ func parseStGlobalGradeInfo(payload []byte, sysConfig StSysConfig) (StGradeInfo,
 func parseStGradeInfoAt(payload []byte, base int, maxExitNum int, gradeItemSize int) (StGradeInfo, error) { //解析逻辑
 	_ = payload
 	_ = base
-	gradeInfo := StGradeInfo{
-		MaxExitNum:    maxExitNum,
-		GradeItemSize: gradeItemSize,
-	}
-	return gradeInfo, nil
+	_ = maxExitNum
+	_ = gradeItemSize
+	return StGradeInfo{}, nil
 }
 
 func parseStGradeItemInfo(data []byte, itemSize int) StGradeItemInfo {
-	grade := StGradeItemInfo{}
-	return grade
+	_ = itemSize
+	w, err := StGradeItemInfoWireFromSlice(data)
+	if err != nil {
+		return StGradeItemInfo{}
+	}
+	return UnpackStGradeItemInfo(w)
 }
 
 func scoreStGradeInfo(gradeInfo StGradeInfo) int {
@@ -533,6 +536,11 @@ func parseStStatistics(payload []byte) (StStatistics, error) {
 		return StStatistics{}, fmt.Errorf("payload too short for StStatistics: need %d, got %d", n, len(payload))
 	}
 	return *(*StStatistics)(unsafe.Pointer(&payload[0])), nil
+}
+
+func parseStGlobal(payload []byte) (StGlobal, error) {
+	_ = payload
+	return StGlobal{}, nil
 }
 
 func cleanTCPServerCString(data []byte) string {

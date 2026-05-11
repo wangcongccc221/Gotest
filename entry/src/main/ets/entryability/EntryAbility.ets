@@ -108,6 +108,10 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
+      if (testNapi && testNapi.stGradeItemInfoLayout) {
+        const layout = testNapi.stGradeItemInfoLayout() as string;
+        console.log('[StGradeItemInfo layout]\n' + layout);
+      }
       this.startTcpServer();
       this.startTcpServerLogPolling();
       this.startTcpClient();
