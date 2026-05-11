@@ -139,4 +139,14 @@ func GoLastTCPServerMessage() *C.char {
 	return C.CString(tcp.LastCTCPServerMessage())
 }
 
+//export GoLastCTCPConfigJSON
+func GoLastCTCPConfigJSON() *C.char {
+	return C.CString(tcp.LastCTCPConfigJSON())
+}
+
+//export GoLastCTCPStatisticsJSON
+func GoLastCTCPStatisticsJSON() *C.char {
+	return C.CString(tcp.LastCTCPStatisticsJSON())
+}
+
 func main() {}

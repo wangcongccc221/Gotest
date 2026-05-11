@@ -106,6 +106,8 @@ extern int GoStartCTCPClient(char* remoteIP, int remotePort, int destID, int cmd
 extern int GoStopTCPClient(void);
 extern char* GoTCPClientSend(char* message);
 extern char* GoLastTCPServerMessage(void);
+extern char* GoLastCTCPConfigJSON(void);
+extern char* GoLastCTCPStatisticsJSON(void);
 
 #ifdef __cplusplus
 }

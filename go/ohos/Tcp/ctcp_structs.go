@@ -1,5 +1,11 @@
 package tcp
 
+import (
+	"encoding/binary"
+	"fmt"
+	"unsafe"
+)
+
 // Structures below mirror the CTCP payload structs in 48/RSS/Base/interface.h.
 // RawSize/Offset fields are local parser metadata, not part of the wire data.
 
@@ -54,6 +60,29 @@ type StGradeItemInfo struct {
 	SBLabelByGrade int8
 }
 
+const stGradeItemInfoQtLinux64Pack4ReferenceSize = 36
+
+func stGradeItemInfoGoSize() uintptr {
+	return unsafe.Sizeof(StGradeItemInfo{})
+}
+
+func stGradeItemInfoWireSize() int {
+	return binary.Size(StGradeItemInfo{})
+}
+
+func stGradeItemInfoQtLinux64Pack4Size() int {
+	return stGradeItemInfoQtLinux64Pack4ReferenceSize
+}
+
+func stGradeItemInfoSizeSummary() string {
+	return fmt.Sprintf(
+		"StGradeItemInfo size(go=%d, wire=%d, qt_linux64_pack4=%d)",
+		stGradeItemInfoGoSize(),
+		stGradeItemInfoWireSize(),
+		stGradeItemInfoQtLinux64Pack4Size(),
+	)
+}
+
 type StGradeInfo struct {
 	Offset           int
 	RawSize          int
@@ -85,6 +114,17 @@ type CTCPConfigSnapshot struct {
 	SysConfig  StSysConfig
 	GradeInfo  StGradeInfo
 }
+
+/*
+go           QT  linux 64
+uint64   // ulong    8字节
+float64  // double   8字节
+int32    // int      4
+uint16   // ushort / quint16    2
+uint8    // quint8       1
+
+*/
+
 type StGlobalExitInfo struct { //全局出口
 	nPulse      uint8
 	versionFlag uint8
@@ -95,35 +135,64 @@ type StGlobalExitInfo struct { //全局出口
 }
 
 const (
-	cTCPServerStatisticsMaxExitNum = cTCPServerStSysConfigExit64
+	cTCPServerStatisticsMaxExitNum = cTCPServerStSysConfigExit48
 	cTCPServerMaxNoticeLength      = 30
+	cTCPServerMaxQualityGradeNum   = 16
+
+	stStatisticsExpectedSize = 9096
 )
 
-// StStatistics mirrors RSS/Base/interface.h on 64-bit Linux with MAX64 enabled
-// and WEIGHTANDSIZE disabled. C++ ulong is unsigned long under LP64, so it is
-// represented as uint64 here.
+// StStatistics 对应 struct StStatistics。
+
+/*
+go           QT  linux 64
+uint64   // ulong    8字节
+float64  // double   8字节
+int32    // int      4
+uint16   // ushort / quint16    2
+uint8    // quint8       1
+
+*/
+
 type StStatistics struct {
-	NGradeCount           [cTCPServerMaxQualityGradeNum * cTCPServerMaxSizeGradeNum]uint64
-	NWeightGradeCount     [cTCPServerMaxQualityGradeNum * cTCPServerMaxSizeGradeNum]float64
-	NExitCount            [cTCPServerStatisticsMaxExitNum]uint64
-	NExitWeightCount      [cTCPServerStatisticsMaxExitNum]float64
-	NChannelTotalCount    [cTCPServerStSysConfigMaxChan]uint64
-	NChannelWeightCount   [cTCPServerStSysConfigMaxChan]float64
-	NSubsysId             int32
-	NBoxGradeCount        [cTCPServerMaxQualityGradeNum * cTCPServerMaxSizeGradeNum]int32
-	NBoxGradeWeight       [cTCPServerMaxQualityGradeNum * cTCPServerMaxSizeGradeNum]float64
+	NGradeCount         [256]uint64
+	NWeightGradeCount   [256]uint64
+	NExitCount          [48]uint64
+	NExitWeightCount    [48]uint64
+	NChannelTotalCount  uint64
+	NChannelWeightCount uint64
+	NSubsysId           int32
+	NBoxGradeCount      [256]int32
+	// Pad1                  [4]byte
+	NBoxGradeWeight [256]int32
+	//------------
 	NTotalCupNum          int32
 	NInterval             int32
 	NIntervalSumperminute int32
 	NCupState             uint16
 	NPulseInterval        uint16
 	NUnpushFruitCount     uint16
-	NNetState             uint16
-	NWeightSetting        uint16
-	NSCMState             int32
-	NIQSNetState          uint16 //quint8
-	NLockState            uint8
-	ExitBoxNum            [cTCPServerStatisticsMaxExitNum]uint16
-	ExitWeight            [cTCPServerStatisticsMaxExitNum]float64
-	Notice                [cTCPServerMaxNoticeLength]uint8
+
+	//#if defined
+	NNetState      uint8 //1字节
+	NWeightSetting uint8
+
+	NSCMState    uint8
+	NIQSNetState uint8
+	NLockState   uint8
+
+	ExitBoxNum [48]uint32
+}
+
+func stStatisticsWireSize() int {
+	return binary.Size(StStatistics{})
+}
+
+func stStatisticsSizeSummary() string {
+	return fmt.Sprintf(
+		"StStatistics size(go=%d, wire=%d, expected=%d)",
+		unsafe.Sizeof(StStatistics{}),
+		stStatisticsWireSize(),
+		stStatisticsExpectedSize,
+	)
 }

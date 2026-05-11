@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 )
 
 const (
@@ -32,12 +33,12 @@ const (
 
 	cTCPServerMaxColorIntervalNum = 3
 	cTCPServerMaxColorGradeNum    = 16
-	cTCPServerMaxQualityGradeNum  = 16
-	cTCPServerMaxSizeGradeNum     = 16
-	cTCPServerMaxTextLength       = 12
-	cTCPServerMaxFruitNameLength  = 50
-	cTCPServerParasTagInfoNum     = 6
-	cTCPServerMinorGradeNum       = 6
+
+	cTCPServerMaxSizeGradeNum    = 16
+	cTCPServerMaxTextLength      = 12
+	cTCPServerMaxFruitNameLength = 50
+	cTCPServerParasTagInfoNum    = 6
+	cTCPServerMinorGradeNum      = 6
 )
 
 const (
@@ -111,6 +112,7 @@ func StartCTCPServer() int {
 	defer cTCPServerMu.Unlock()
 
 	if cTCPServerImage != nil && cTCPServerStat != nil {
+		setCTCPServerLastMessage("CTCP servers already listening, %s", stGradeItemInfoSizeSummary())
 		return cTCPServerStatPort
 	}
 
@@ -132,13 +134,14 @@ func StartCTCPServer() int {
 	imageServer.start()
 	statServer.start()
 
-	setCTCPServerLastMessage("CTCP servers listening on %s:%d and %s:%d, HC_IP=%s, HC_ID=0x%04X",
+	setCTCPServerLastMessage("CTCP servers listening on %s:%d and %s:%d, HC_IP=%s, HC_ID=0x%04X, %s",
 		cTCPServerListenIP,
 		cTCPServerImagePort,
 		cTCPServerListenIP,
 		cTCPServerStatPort,
 		cTCPServerHCIP,
-		uint32(cTCPHcID))
+		uint32(cTCPHcID),
+		stGradeItemInfoSizeSummary())
 	return cTCPServerStatPort
 }
 
@@ -396,85 +399,46 @@ func readUntilIdle(conn net.Conn) ([]byte, error) {
 }
 
 func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerCommandHead, payload []byte) {
-	saveCTCPPayload(s.name, s.port, remoteAddr, head, payload)
+	saveCTCPPayload(s.name, s.port, remoteAddr, head, payload) //保存数据s.name服务器名字 s.port端口号 remoteAddr远程地址 head命令头 payload数据内容
 
 	switch head.NCmdId {
 	case cmdFSMConfig:
-		sysConfig, err := parseStGlobalSysConfig(payload)
+		//稍后完善
+
+	case cmdFSMStatistics: //0x1001
+		stats, err := parseStStatistics(payload)
 		if err != nil {
-			setCTCPServerLastMessage("CTCP parsed %s failed: %v, raw saved=%d bytes",
-				cTCPCommandName(head.NCmdId),
-				err,
-				len(payload))
+			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), %s, payload=%d bytes",
+				cTCPCommandName(head.NCmdId), err, stStatisticsSizeSummary(), len(payload))
 			return
 		}
-		gradeInfo, gradeErr := parseStGlobalGradeInfo(payload, sysConfig)
-		if gradeErr != nil {
-			setCTCPServerLastMessage("CTCP parsed %s: raw StGlobal saved=%d bytes, StSysConfig{maxExit=%d, channels=%v, imageUV=%v, width=%d, height=%d, packetSize=%d, systemInfo=0x%04X, subsysNum=%d, exitNum=%d, classification=0x%02X, cameraType=%d, checkExit=%d, checkNum=%d}; StGradeInfo parse failed: %v",
-				cTCPCommandName(head.NCmdId),
-				len(payload),
-				sysConfig.MaxExitNum,
-				sysConfig.NChannelInfo,
-				sysConfig.NImageUV,
-				sysConfig.Width,
-				sysConfig.Height,
-				sysConfig.PacketSize,
-				sysConfig.NSystemInfo,
-				sysConfig.NSubsysNum,
-				sysConfig.NExitNum,
-				sysConfig.NClassificationInfo,
-				sysConfig.NCameraType,
-				sysConfig.CheckExit,
-				sysConfig.CheckNum,
-				gradeErr)
-			return
-		}
-		configSnapshot := saveCTCPConfigSnapshot(s.name, s.port, remoteAddr, head, payload, sysConfig, gradeInfo)
-		setCTCPServerLastMessage("CTCP parsed %s: raw StGlobal saved=%d bytes, StSysConfig{maxExit=%d, channels=%v, imageUV=%v, width=%d, height=%d, packetSize=%d, systemInfo=0x%04X, subsysNum=%d, exitNum=%d, classification=0x%02X, cameraType=%d, checkExit=%d, checkNum=%d}; StGradeInfo{offset=%d, size=%d, maxExit=%d, gradeItemSize=%d, fruitType=%d, fruitName=%q, sizeGradeNum=%d, qualityGradeNum=%d, classifyType=0x%02X, checkNum=%d, forceChannel=%d, colorType=0x%02X, labelType=%d, exitEnabled=%v, colorIntervals=%v, firstGrade={exit=0x%X, min=%.2f, max=%.2f, fruitNum=%d, color=%d, shape=%d, flaw=%d}}",
+
+		statsSnapshot := saveCTCPStatisticsSnapshot(s.name, s.port, remoteAddr, head, stats)
+
+		setCTCPServerLastMessage(
+			"CTCP parsed %s: %s, payload=%d, NSubsysId=%d, NTotalCupNum=%d, NInterval=%d, NIntervalSumperminute=%d, NCupState=0x%04X, NPulseInterval=%d, NUnpushFruitCount=%d, NNetState=0x%04X, NWeightSetting=%d, NSCMState=%d, NIQSNetState=0x%04X, NLockState=%d",
 			cTCPCommandName(head.NCmdId),
+			stStatisticsSizeSummary(),
 			len(payload),
-			sysConfig.MaxExitNum,
-			sysConfig.NChannelInfo,
-			sysConfig.NImageUV,
-			sysConfig.Width,
-			sysConfig.Height,
-			sysConfig.PacketSize,
-			sysConfig.NSystemInfo,
-			sysConfig.NSubsysNum,
-			sysConfig.NExitNum,
-			sysConfig.NClassificationInfo,
-			sysConfig.NCameraType,
-			sysConfig.CheckExit,
-			sysConfig.CheckNum,
-			gradeInfo.Offset,
-			gradeInfo.RawSize,
-			gradeInfo.MaxExitNum,
-			gradeInfo.GradeItemSize,
-			gradeInfo.NFruitType,
-			gradeInfo.FruitName,
-			gradeInfo.NSizeGradeNum,
-			gradeInfo.NQualityGradeNum,
-			gradeInfo.NClassifyType,
-			gradeInfo.NCheckNum,
-			gradeInfo.ForceChannel,
-			gradeInfo.ColorType,
-			gradeInfo.NLabelType,
-			gradeInfo.ExitEnabled,
-			gradeInfo.ColorIntervals,
-			gradeInfo.FirstGrade.Exit,
-			gradeInfo.FirstGrade.NMinSize,
-			gradeInfo.FirstGrade.NMaxSize,
-			gradeInfo.FirstGrade.NFruitNum,
-			gradeInfo.FirstGrade.NColorGrade,
-			gradeInfo.FirstGrade.SBShapeSize,
-			gradeInfo.FirstGrade.SBFlawArea)
-		if configJSON, err := formatCTCPConfigSnapshotJSON(configSnapshot); err == nil {
-			setCTCPServerLastMessage("CTCP config JSON:\n%s", configJSON)
+			stats.NSubsysId,
+			stats.NTotalCupNum,
+			stats.NInterval,
+			stats.NIntervalSumperminute,
+			stats.NCupState,
+			stats.NPulseInterval,
+			stats.NUnpushFruitCount,
+			stats.NNetState,
+			stats.NWeightSetting,
+			stats.NSCMState,
+			stats.NIQSNetState,
+			stats.NLockState,
+		)
+		if statsJSON, jsonErr := formatCTCPStatisticsSnapshotJSON(statsSnapshot); jsonErr == nil {
+			setCTCPServerLastMessage("CTCP statistics JSON:\n%s", statsJSON)
 		} else {
-			setCTCPServerLastMessage("CTCP config JSON marshal failed: %v", err)
+			setCTCPServerLastMessage("CTCP statistics JSON marshal failed: %v", jsonErr)
 		}
-	case cmdFSMStatistics:
-		setCTCPServerLastMessage("CTCP handled %s: raw StStatistics saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
+	//------------------------------
 	case cmdFSMGradeInfo:
 		setCTCPServerLastMessage("CTCP handled %s: raw StFruitGradeInfo saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
 	case cmdFSMGetVersion, cmdWAMVersionInfo:
@@ -523,9 +487,9 @@ func saveCTCPPayload(serverName string, port int, remoteAddr string, head cTCPSe
 }
 
 func parseStGlobalSysConfig(payload []byte) (StSysConfig, error) {
-	if len(payload) == 0 {
-		return StSysConfig{}, errors.New("empty StGlobal payload")
-	}
+	// if len(payload) == 0 {
+	// 	return StSysConfig{}, errors.New("empty StGlobal payload")
+	// }
 
 	candidates := []int{cTCPServerStSysConfigExit48, cTCPServerStSysConfigExit64}
 	var best StSysConfig
@@ -549,72 +513,10 @@ func parseStGlobalSysConfig(payload []byte) (StSysConfig, error) {
 	return best, nil
 }
 
-func parseStSysConfig(payload []byte, maxExitNum int) (StSysConfig, error) {
-	offset := maxExitNum * 2 * 4
-	minSize := offset + cTCPServerMaxSubsysNum*5 + cTCPServerMaxCameraNum*2*4 + 4*3 + 2 + 14
-	if len(payload) < minSize {
-		return StSysConfig{}, fmt.Errorf("payload too short for maxExit=%d: need %d, got %d", maxExitNum, minSize, len(payload))
-	}
-
-	sysConfig := StSysConfig{
-		MaxExitNum: maxExitNum,
-	}
-
-	copy(sysConfig.NChannelInfo[:], payload[offset:offset+cTCPServerMaxSubsysNum])
-	offset += cTCPServerMaxSubsysNum
-	copy(sysConfig.NImageUV[:], payload[offset:offset+cTCPServerMaxSubsysNum])
-	offset += cTCPServerMaxSubsysNum
-	copy(sysConfig.NDataRegistration[:], payload[offset:offset+cTCPServerMaxSubsysNum])
-	offset += cTCPServerMaxSubsysNum
-	copy(sysConfig.NImageSugar[:], payload[offset:offset+cTCPServerMaxSubsysNum])
-	offset += cTCPServerMaxSubsysNum
-	copy(sysConfig.NImageUltrasonic[:], payload[offset:offset+cTCPServerMaxSubsysNum])
-	offset += cTCPServerMaxSubsysNum
-
-	for i := range sysConfig.NCameraDelay {
-		sysConfig.NCameraDelay[i] = int32(binary.LittleEndian.Uint32(payload[offset : offset+4]))
-		offset += 4
-	}
-
-	sysConfig.Width = int32(binary.LittleEndian.Uint32(payload[offset : offset+4]))
-	offset += 4
-	sysConfig.Height = int32(binary.LittleEndian.Uint32(payload[offset : offset+4]))
-	offset += 4
-	sysConfig.PacketSize = int32(binary.LittleEndian.Uint32(payload[offset : offset+4]))
-	offset += 4
-	sysConfig.NSystemInfo = binary.LittleEndian.Uint16(payload[offset : offset+2])
-	offset += 2
-	sysConfig.NSubsysNum = payload[offset]
-	offset++
-	sysConfig.NExitNum = payload[offset]
-	offset++
-	sysConfig.NClassificationInfo = payload[offset]
-	offset++
-	sysConfig.MultiFreq = payload[offset]
-	offset++
-	sysConfig.NCameraType = payload[offset]
-	offset++
-	sysConfig.CIRClassifyType = payload[offset]
-	offset++
-	sysConfig.UVClassifyType = payload[offset]
-	offset++
-	sysConfig.WeightClassifyType = payload[offset]
-	offset++
-	sysConfig.InternalClassifyType = payload[offset]
-	offset++
-	sysConfig.UltrasonicClassifyType = payload[offset]
-	offset++
-	sysConfig.IfWIFIEnable = payload[offset]
-	offset++
-	sysConfig.CheckExit = payload[offset]
-	offset++
-	sysConfig.CheckNum = payload[offset]
-	offset++
-	sysConfig.NIQSEnable = payload[offset]
-	offset++
-	sysConfig.RawSize = alignTCPServerOffset(offset, 4)
-
-	return sysConfig, nil
+func parseStSysConfig(payload []byte, maxExitNum int) (StSysConfig, error) { //传入一个payload 字节 和一个最大值的出口  返回stsyscfg
+	// TODO: 重新实现 StSysConfig 解析逻辑。
+	_ = payload
+	return StSysConfig{MaxExitNum: maxExitNum}, nil
 }
 
 func parseStGlobalGradeInfo(payload []byte, sysConfig StSysConfig) (StGradeInfo, error) {
@@ -655,112 +557,13 @@ func parseStGlobalGradeInfo(payload []byte, sysConfig StSysConfig) (StGradeInfo,
 	return best, nil
 }
 
-func parseStGradeInfoAt(payload []byte, base int, maxExitNum int, gradeItemSize int) (StGradeInfo, error) {
-	if base < 0 || base >= len(payload) {
-		return StGradeInfo{}, fmt.Errorf("invalid StGradeInfo offset %d", base)
-	}
-	if gradeItemSize != 36 {
-		return StGradeInfo{}, fmt.Errorf("unsupported StGradeItemInfo size %d", gradeItemSize)
-	}
-
-	offset := base
-	offset += cTCPServerMaxColorIntervalNum * 4
-	offset += cTCPServerMaxColorGradeNum * cTCPServerMaxColorIntervalNum * 2
-
-	gradesOffset := offset
-	offset += cTCPServerMaxQualityGradeNum * cTCPServerMaxSizeGradeNum * gradeItemSize
-	if len(payload) < offset+16 {
-		return StGradeInfo{}, fmt.Errorf("payload too short for StGradeInfo grades: need %d, got %d", offset+16, len(payload))
-	}
-
+func parseStGradeInfoAt(payload []byte, base int, maxExitNum int, gradeItemSize int) (StGradeInfo, error) { //解析逻辑
+	_ = payload
+	_ = base
 	gradeInfo := StGradeInfo{
-		Offset:        base,
 		MaxExitNum:    maxExitNum,
 		GradeItemSize: gradeItemSize,
-		FirstGrade:    parseStGradeItemInfo(payload[gradesOffset:], gradeItemSize),
 	}
-	for i := range gradeInfo.ExitEnabled {
-		gradeInfo.ExitEnabled[i] = int32(binary.LittleEndian.Uint32(payload[offset : offset+4]))
-		offset += 4
-	}
-	for i := range gradeInfo.ColorIntervals {
-		gradeInfo.ColorIntervals[i] = int32(binary.LittleEndian.Uint32(payload[offset : offset+4]))
-		offset += 4
-	}
-
-	offset += maxExitNum * 4
-	offset += cTCPServerParasTagInfoNum
-	offset = alignTCPServerOffset(offset, 4)
-	if len(payload) < offset+4 {
-		return StGradeInfo{}, fmt.Errorf("payload too short for StGradeInfo nFruitType: need %d, got %d", offset+4, len(payload))
-	}
-	gradeInfo.NFruitType = int32(binary.LittleEndian.Uint32(payload[offset : offset+4]))
-	offset += 4
-
-	if len(payload) < offset+cTCPServerMaxFruitNameLength {
-		return StGradeInfo{}, fmt.Errorf("payload too short for StGradeInfo strFruitName: need %d, got %d", offset+cTCPServerMaxFruitNameLength, len(payload))
-	}
-	gradeInfo.FruitName = cleanTCPServerCString(payload[offset : offset+cTCPServerMaxFruitNameLength])
-	offset += cTCPServerMaxFruitNameLength
-	offset = alignTCPServerOffset(offset, 4)
-
-	offset += cTCPServerMinorGradeNum * 2 * 4
-	offset += cTCPServerMinorGradeNum * 2 * 4
-	offset += cTCPServerMinorGradeNum * 2 * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-	offset += cTCPServerMinorGradeNum * 4
-
-	offset += cTCPServerMaxSizeGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMaxQualityGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMaxColorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-	offset += cTCPServerMinorGradeNum * cTCPServerMaxTextLength
-
-	needTail := offset + 2 + maxExitNum + maxExitNum + 3
-	if len(payload) < needTail {
-		return StGradeInfo{}, fmt.Errorf("payload too short for StGradeInfo tail: need %d, got %d", needTail, len(payload))
-	}
-	gradeInfo.ColorType = payload[offset]
-	offset++
-	gradeInfo.NLabelType = payload[offset]
-	offset++
-	offset += maxExitNum
-	offset += maxExitNum
-	gradeInfo.NSizeGradeNum = payload[offset]
-	offset++
-	gradeInfo.NQualityGradeNum = payload[offset]
-	offset++
-	gradeInfo.NClassifyType = payload[offset]
-	offset++
-	offset = alignTCPServerOffset(offset, 2)
-	if len(payload) < offset+4 {
-		return StGradeInfo{}, fmt.Errorf("payload too short for StGradeInfo check/force: need %d, got %d", offset+4, len(payload))
-	}
-	gradeInfo.NCheckNum = int16(binary.LittleEndian.Uint16(payload[offset : offset+2]))
-	offset += 2
-	gradeInfo.ForceChannel = int16(binary.LittleEndian.Uint16(payload[offset : offset+2]))
-	offset += 2
-	gradeInfo.RawSize = alignTCPServerOffset(offset-base, 4)
-
 	return gradeInfo, nil
 }
 
@@ -922,6 +725,16 @@ func alignTCPServerOffset(offset int, alignment int) int {
 		return offset
 	}
 	return offset + alignment - remainder
+}
+
+// 把(FSM_CMD_STATISTICS) payload 反序列化成 StStatistics。
+// 使用 unsafe 将 payload 首地址按本机布局直接解释为 StStatistics
+func parseStStatistics(payload []byte) (StStatistics, error) {
+	n := int(unsafe.Sizeof(StStatistics{}))
+	if len(payload) < n {
+		return StStatistics{}, fmt.Errorf("payload too short for StStatistics: need %d, got %d", n, len(payload))
+	}
+	return *(*StStatistics)(unsafe.Pointer(&payload[0])), nil
 }
 
 func cleanTCPServerCString(data []byte) string {
