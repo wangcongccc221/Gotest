@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -487,74 +486,19 @@ func saveCTCPPayload(serverName string, port int, remoteAddr string, head cTCPSe
 }
 
 func parseStGlobalSysConfig(payload []byte) (StSysConfig, error) {
-	// if len(payload) == 0 {
-	// 	return StSysConfig{}, errors.New("empty StGlobal payload")
-	// }
-
-	candidates := []int{cTCPServerStSysConfigExit48, cTCPServerStSysConfigExit64}
-	var best StSysConfig
-	bestScore := -1
-
-	for _, maxExitNum := range candidates {
-		sysConfig, err := parseStSysConfig(payload, maxExitNum)
-		if err != nil {
-			continue
-		}
-		score := scoreStSysConfig(sysConfig)
-		if score > bestScore {
-			best = sysConfig
-			bestScore = score
-		}
-	}
-
-	if bestScore < 0 {
-		return StSysConfig{}, fmt.Errorf("payload too short for StSysConfig, got %d bytes", len(payload))
-	}
-	return best, nil
+	return parseStSysConfig(payload, cTCPServerStSysConfigExit48)
 }
 
 func parseStSysConfig(payload []byte, maxExitNum int) (StSysConfig, error) { //传入一个payload 字节 和一个最大值的出口  返回stsyscfg
 	// TODO: 重新实现 StSysConfig 解析逻辑。
 	_ = payload
-	return StSysConfig{MaxExitNum: maxExitNum}, nil
+	_ = maxExitNum
+	return StSysConfig{}, nil
 }
 
 func parseStGlobalGradeInfo(payload []byte, sysConfig StSysConfig) (StGradeInfo, error) {
-	if len(payload) <= sysConfig.RawSize {
-		return StGradeInfo{}, fmt.Errorf("payload too short for StGradeInfo: sysSize=%d, got %d", sysConfig.RawSize, len(payload))
-	}
-
-	candidates := []struct {
-		offset        int
-		maxExitNum    int
-		gradeItemSize int
-	}{
-		{sysConfig.RawSize, sysConfig.MaxExitNum, 36},
-	}
-
-	var best StGradeInfo
-	bestScore := -1
-	var lastErr error
-	for _, candidate := range candidates {
-		gradeInfo, err := parseStGradeInfoAt(payload, candidate.offset, candidate.maxExitNum, candidate.gradeItemSize)
-		if err != nil {
-			lastErr = err
-			continue
-		}
-		score := scoreStGradeInfo(gradeInfo)
-		if score > bestScore {
-			best = gradeInfo
-			bestScore = score
-		}
-	}
-
-	if bestScore < 0 {
-		if lastErr != nil {
-			return StGradeInfo{}, lastErr
-		}
-		return StGradeInfo{}, errors.New("no valid StGradeInfo layout")
-	}
-	return best, nil
+	_ = sysConfig
+	return parseStGradeInfoAt(payload, 0, cTCPServerStSysConfigExit48, 36)
 }
 
 func parseStGradeInfoAt(payload []byte, base int, maxExitNum int, gradeItemSize int) (StGradeInfo, error) { //解析逻辑
@@ -569,162 +513,16 @@ func parseStGradeInfoAt(payload []byte, base int, maxExitNum int, gradeItemSize 
 
 func parseStGradeItemInfo(data []byte, itemSize int) StGradeItemInfo {
 	grade := StGradeItemInfo{}
-	if len(data) < itemSize {
-		return grade
-	}
-
-	offset := 0
-	grade.Exit = binary.LittleEndian.Uint64(data[offset : offset+8])
-	offset += 8
-	grade.NMinSize = math.Float32frombits(binary.LittleEndian.Uint32(data[offset : offset+4]))
-	offset += 4
-	grade.NMaxSize = math.Float32frombits(binary.LittleEndian.Uint32(data[offset : offset+4]))
-	offset += 4
-	grade.NFruitNum = int32(binary.LittleEndian.Uint32(data[offset : offset+4]))
-	offset += 4
-	grade.NColorGrade = int8(data[offset])
-	offset++
-	grade.SBShapeSize = int8(data[offset])
-	offset++
-	grade.SBDensity = int8(data[offset])
-	offset++
-	grade.SBFlawArea = int8(data[offset])
-	offset++
-	grade.SBBruise = int8(data[offset])
-	offset++
-	grade.SBRot = int8(data[offset])
-	offset++
-	grade.SBSugar = int8(data[offset])
-	offset++
-	grade.SBAcidity = int8(data[offset])
-	offset++
-	grade.SBHollow = int8(data[offset])
-	offset++
-	grade.SBSkin = int8(data[offset])
-	offset++
-	grade.SBBrown = int8(data[offset])
-	offset++
-	grade.SBTangxin = int8(data[offset])
-	offset++
-	grade.SBRigidity = int8(data[offset])
-	offset++
-	grade.SBWater = int8(data[offset])
-	offset++
-	grade.SBLabelByGrade = int8(data[offset])
-
 	return grade
 }
 
 func scoreStGradeInfo(gradeInfo StGradeInfo) int {
 	score := 0
-	if gradeInfo.MaxExitNum == cTCPServerStSysConfigExit48 || gradeInfo.MaxExitNum == cTCPServerStSysConfigExit64 {
-		score++
-	}
-	if gradeInfo.GradeItemSize == 36 {
-		score++
-	}
-	if gradeInfo.NSizeGradeNum <= cTCPServerMaxSizeGradeNum {
-		score += 2
-	}
-	if gradeInfo.NQualityGradeNum <= cTCPServerMaxQualityGradeNum {
-		score += 2
-	}
-	if gradeInfo.NFruitType >= 0 && gradeInfo.NFruitType <= 512 {
-		score += 3
-	} else {
-		score -= 4
-	}
-	if gradeInfo.NClassifyType <= 0x1F {
-		score++
-	}
-	if gradeInfo.NLabelType <= 2 {
-		score++
-	}
-	if !isTCPServerRepeated7F(gradeInfo.ExitEnabled[0]) && !isTCPServerRepeated7F(gradeInfo.ExitEnabled[1]) {
-		score += 2
-	} else {
-		score -= 4
-	}
-	if !isTCPServerRepeated7F(gradeInfo.ColorIntervals[0]) && !isTCPServerRepeated7F(gradeInfo.ColorIntervals[1]) {
-		score += 2
-	} else {
-		score -= 4
-	}
-	if gradeInfo.NCheckNum >= 0 && gradeInfo.NCheckNum <= 1000 {
-		score++
-	}
-	if gradeInfo.ForceChannel >= 0 && gradeInfo.ForceChannel <= 1 {
-		score++
-	}
-	if gradeInfo.FirstGrade.NFruitNum >= 0 && gradeInfo.FirstGrade.NFruitNum <= 1000000 {
-		score++
-	} else {
-		score -= 2
-	}
-	if !math.IsNaN(float64(gradeInfo.FirstGrade.NMinSize)) && !math.IsNaN(float64(gradeInfo.FirstGrade.NMaxSize)) {
-		score++
-	}
-	if gradeInfo.FirstGrade.NMinSize >= -1 && gradeInfo.FirstGrade.NMinSize <= 100000 &&
-		gradeInfo.FirstGrade.NMaxSize >= -1 && gradeInfo.FirstGrade.NMaxSize <= 100000 {
-		score++
-	}
 	return score
 }
 
 func isTCPServerRepeated7F(value int32) bool {
 	return uint32(value) == 0x7F7F7F7F
-}
-
-func scoreStSysConfig(sysConfig StSysConfig) int {
-	score := 0
-	if sysConfig.NSubsysNum <= cTCPServerMaxSubsysNum {
-		score += 2
-	}
-	if sysConfig.NExitNum <= uint8(sysConfig.MaxExitNum) {
-		score += 2
-	}
-	if sysConfig.Width >= 0 && sysConfig.Width <= 10000 {
-		score++
-	}
-	if sysConfig.Height >= 0 && sysConfig.Height <= 10000 {
-		score++
-	}
-	if sysConfig.PacketSize >= 0 && sysConfig.PacketSize <= cTCPServerMaxPayload {
-		score++
-	}
-	if allBytesAtMost(sysConfig.NChannelInfo[:], cTCPServerStSysConfigMaxChan) {
-		score += 2
-	}
-	if allBytesAtMost(sysConfig.NImageUV[:], cTCPServerStSysConfigMaxChan) {
-		score++
-	}
-	if sysConfig.NCameraType <= 10 {
-		score++
-	}
-	if sysConfig.CheckExit <= sysConfig.NExitNum || sysConfig.CheckExit == 0 {
-		score++
-	}
-	return score
-}
-
-func allBytesAtMost(values []uint8, max uint8) bool {
-	for _, value := range values {
-		if value > max {
-			return false
-		}
-	}
-	return true
-}
-
-func alignTCPServerOffset(offset int, alignment int) int {
-	if alignment <= 1 {
-		return offset
-	}
-	remainder := offset % alignment
-	if remainder == 0 {
-		return offset
-	}
-	return offset + alignment - remainder
 }
 
 // 把(FSM_CMD_STATISTICS) payload 反序列化成 StStatistics。

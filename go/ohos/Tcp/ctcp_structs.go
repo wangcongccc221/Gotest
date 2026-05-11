@@ -9,35 +9,6 @@ import (
 // Structures below mirror the CTCP payload structs in 48/RSS/Base/interface.h.
 // RawSize/Offset fields are local parser metadata, not part of the wire data.
 
-type StSysConfig struct {
-	MaxExitNum             int
-	NChannelInfo           [cTCPServerMaxSubsysNum]uint8
-	NImageUV               [cTCPServerMaxSubsysNum]uint8
-	NDataRegistration      [cTCPServerMaxSubsysNum]uint8
-	NImageSugar            [cTCPServerMaxSubsysNum]uint8
-	NImageUltrasonic       [cTCPServerMaxSubsysNum]uint8
-	NCameraDelay           [cTCPServerMaxCameraNum * 2]int32
-	Width                  int32
-	Height                 int32
-	PacketSize             int32
-	NSystemInfo            uint16
-	NSubsysNum             uint8
-	NExitNum               uint8
-	NClassificationInfo    uint8
-	MultiFreq              uint8
-	NCameraType            uint8
-	CIRClassifyType        uint8
-	UVClassifyType         uint8
-	WeightClassifyType     uint8
-	InternalClassifyType   uint8
-	UltrasonicClassifyType uint8
-	IfWIFIEnable           uint8
-	CheckExit              uint8
-	CheckNum               uint8
-	NIQSEnable             uint8
-	RawSize                int
-}
-
 type StGradeItemInfo struct {
 	Exit           uint64
 	NMinSize       float32
@@ -83,25 +54,6 @@ func stGradeItemInfoSizeSummary() string {
 	)
 }
 
-type StGradeInfo struct {
-	Offset           int
-	RawSize          int
-	MaxExitNum       int
-	GradeItemSize    int
-	ExitEnabled      [2]int32
-	ColorIntervals   [2]int32
-	NFruitType       int32
-	FruitName        string
-	ColorType        uint8
-	NLabelType       uint8
-	NSizeGradeNum    uint8
-	NQualityGradeNum uint8
-	NClassifyType    uint8
-	NCheckNum        int16
-	ForceChannel     int16
-	FirstGrade       StGradeItemInfo
-}
-
 type CTCPConfigSnapshot struct {
 	ServerName string
 	Port       int
@@ -125,13 +77,64 @@ uint8    // quint8       1
 
 */
 
-type StGlobalExitInfo struct { //全局出口
-	nPulse      uint8
-	versionFlag uint8
-	nLabelPulse uint16
-	nDriverPin  [cTCPServerStSysConfigExit48]uint8
-	Delay_time  [cTCPServerStSysConfigExit48]float32
-	Hold_time   [cTCPServerStSysConfigExit48]float32
+type StGlobal struct { //全局出口
+	sys StSysConfig
+}
+
+type StSysConfig struct {
+	exitstate              [48 * 2 * 4]uint8
+	nChannelInfo           [4]uint8
+	nImageUV               [4]uint8
+	nDataRegistration      [4]uint8
+	nImageSugar            [4]uint8
+	nImageUltrasonic       [4]uint8
+	nCameraDelay           [4 * 2]int32
+	width                  int32
+	height                 int32
+	packetSize             int32
+	nSystemInfo            uint16
+	nSubsysNum             uint8
+	nExitNum               uint8
+	nClassificationInfo    uint8
+	multiFreq              uint8
+	nCameraType            uint8
+	CIRClassifyType        uint8
+	UVClassifyType         uint8
+	WeightClassifyTpye     uint8
+	InternalClassifyType   uint8
+	UltrasonicClassifyType uint8
+	IfWIFIEnable           uint8
+	CheckExit              uint8
+	CheckNum               uint8
+
+	//#if defined
+	nIQSEnable uint8
+}
+
+type StGradeInfo struct {
+	Intervals        [3]StColorIntervalItem // 3个颜色
+	RawSize          int
+	MaxExitNum       int
+	GradeItemSize    int
+	ExitEnabled      [2]int32
+	ColorIntervals   [2]int32
+	NFruitType       int32
+	FruitName        string
+	ColorType        uint8
+	NLabelType       uint8
+	NSizeGradeNum    uint8
+	NQualityGradeNum uint8
+	NClassifyType    uint8
+	NCheckNum        int16
+	ForceChannel     int16
+	FirstGrade       StGradeItemInfo
+}
+
+type StColorIntervalItem struct { //等级设置信息,发送给每一个FSM (HC_ID, FSM, HC_CMD_GRADE_INFO, stGradeInfo)
+	nMinU uint8
+	nMaxU uint8
+	nMinV uint8
+	nMaxV uint8
 }
 
 const (
