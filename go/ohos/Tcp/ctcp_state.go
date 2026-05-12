@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"encoding/json"
+	"reflect"
 	"sync"
 	"time"
 )
@@ -12,6 +13,9 @@ var (
 
 	cTCPStatisticsSnapshotMu sync.Mutex
 	cTCPLastStatistics       *CTCPStatisticsSnapshot
+
+	cTCPLastStGlobalFullJSONMu sync.Mutex
+	cTCPLastStGlobalFullJSON   string
 )
 
 type CTCPStatisticsSnapshot struct {
@@ -69,6 +73,46 @@ func LastCTCPConfigJSON() string {
 		return "{}"
 	}
 	return text
+}
+
+// LastCTCPStGlobalFullJSON 返回最近一次收到的 StGlobal 完整 JSON；未收过 0x1000 前为空字符串。
+func LastCTCPStGlobalFullJSON() string {
+	cTCPLastStGlobalFullJSONMu.Lock()
+	defer cTCPLastStGlobalFullJSONMu.Unlock()
+	return cTCPLastStGlobalFullJSON
+}
+
+func saveCTCPGlobalSnapshot(serverName string, port int, remoteAddr string, head cTCPServerCommandHead, payload []byte, global StGlobal) (CTCPConfigSnapshot, string) {
+	payloadCopy := append([]byte(nil), payload...)
+	snapshot := CTCPConfigSnapshot{
+		ServerName: serverName,
+		Port:       port,
+		RemoteAddr: remoteAddr,
+		SrcID:      head.NSrcId,
+		DstID:      head.NDstId,
+		CmdID:      head.NCmdId,
+		ReceivedAt: time.Now().UnixMilli(),
+		RawPayload: payloadCopy,
+		Global:     global,
+	}
+
+	full, err := FormatStGlobalFullJSON(global)
+	cTCPLastStGlobalFullJSONMu.Lock()
+	if err != nil {
+		cTCPLastStGlobalFullJSON = ""
+	} else {
+		cTCPLastStGlobalFullJSON = full
+	}
+	cTCPLastStGlobalFullJSONMu.Unlock()
+
+	cTCPConfigSnapshotMu.Lock()
+	cTCPLastConfig = &snapshot
+	cTCPConfigSnapshotMu.Unlock()
+
+	if err != nil {
+		return snapshot, ""
+	}
+	return snapshot, full
 }
 
 func saveCTCPStatisticsSnapshot(serverName string, port int, remoteAddr string, head cTCPServerCommandHead, stats StStatistics) CTCPStatisticsSnapshot {
@@ -193,28 +237,18 @@ func formatCTCPStatisticsSnapshotJSON(snapshot CTCPStatisticsSnapshot) (string, 
 }
 
 func formatCTCPConfigSnapshotJSON(snapshot CTCPConfigSnapshot) (string, error) {
-	view := struct {
-		ServerName      string      `json:"serverName"`
-		Port            int         `json:"port"`
-		RemoteAddr      string      `json:"remoteAddr"`
-		SrcID           int32       `json:"srcId"`
-		DstID           int32       `json:"dstId"`
-		CmdID           int32       `json:"cmdId"`
-		ReceivedAt      int64       `json:"receivedAt"`
-		RawPayloadBytes int         `json:"rawPayloadBytes"`
-		SysConfig       StSysConfig `json:"sysConfig"`
-		GradeInfo       StGradeInfo `json:"gradeInfo"`
-	}{
-		ServerName:      snapshot.ServerName,
-		Port:            snapshot.Port,
-		RemoteAddr:      snapshot.RemoteAddr,
-		SrcID:           snapshot.SrcID,
-		DstID:           snapshot.DstID,
-		CmdID:           snapshot.CmdID,
-		ReceivedAt:      snapshot.ReceivedAt,
-		RawPayloadBytes: len(snapshot.RawPayload),
-		SysConfig:       snapshot.SysConfig,
-		GradeInfo:       snapshot.GradeInfo,
+	view := map[string]any{
+		"serverName":      snapshot.ServerName,
+		"port":            snapshot.Port,
+		"remoteAddr":      snapshot.RemoteAddr,
+		"srcId":           snapshot.SrcID,
+		"dstId":           snapshot.DstID,
+		"cmdId":           snapshot.CmdID,
+		"receivedAt":      snapshot.ReceivedAt,
+		"rawPayloadBytes": len(snapshot.RawPayload),
+		"sysConfig":       valueToReflectJSON(reflect.ValueOf(snapshot.SysConfig)),
+		"gradeInfo":       valueToReflectJSON(reflect.ValueOf(snapshot.GradeInfo)),
+		"global":          valueToReflectJSON(reflect.ValueOf(snapshot.Global)),
 	}
 
 	data, err := json.MarshalIndent(view, "", "  ")

@@ -11,7 +11,6 @@ const TCP_CMD = 0x0019; // HC_FSM_COMMAND_TYPE::HC_CMD_DISPLAY_ON
 
 export default class EntryAbility extends UIAbility {
   private tcpServerLogTimer: number = 0;
-  private lastTcpServerMessage: string = '';
 
   private startTcpServer(): void {
     if (!testNapi) {
@@ -39,13 +38,22 @@ export default class EntryAbility extends UIAbility {
       return;
     }
 
+    const hilogMaxPublic = 4000;
+
     this.tcpServerLogTimer = setInterval(() => {
-      const message = testNapi.tcpServerLastMessage();
-      if (message.length > 0 && message !== this.lastTcpServerMessage) {
-        this.lastTcpServerMessage = message;
-        hilog.info(DOMAIN, 'testTag', 'TCP server receive info: %{public}s', message);
+      let guard = 0;
+      while (guard < 5000) {
+        guard++;
+        const line = testNapi.tcpServerLastMessage();
+        if (line.length === 0) {
+          break;
+        }
+        for (let i = 0; i < line.length; i += hilogMaxPublic) {
+          const part = line.substring(i, Math.min(i + hilogMaxPublic, line.length));
+          hilog.info(DOMAIN, 'testTag', '%{public}s', part);
+        }
       }
-    }, 1000);
+    }, 250);
   }
 
   private stopTcpServer(): void {

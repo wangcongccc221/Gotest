@@ -359,6 +359,259 @@ type StStatistics struct {
 	ExitBoxNum [48]uint32
 }
 
+// 水果子系统信息
+type SysStStatistics struct {
+	nTotalCount  [4]uint64
+	nWeightCount [4]uint64
+}
+
+// 水果实时分级信息
+type StFruitVisionParam struct {
+	unColorRate0   uint32
+	unColorRate1   uint32
+	unColorRate2   uint32
+	unArea         uint32
+	unFlawArea     uint32
+	unVolume       uint32
+	unFlawNum      uint32
+	unMaxR         float32
+	unMinR         float32
+	unSelectBasis  float32
+	fDiameterRatio float32
+	fMinDRatio     float32
+}
+
+// 水果实时分级信息，紫外线相机的IPM发送给FSM，FSM转发过来
+type StFruitUVParam struct {
+	unBruiseArea uint32
+	unBruiseNum  uint32
+	unRotArea    uint32
+	unRotNumy    uint32
+	unRigidity   uint32
+	unWater      uint32
+	unTimeTag    uint32
+}
+
+// 水果实时分级信息，NIR(含糖量检测仪)发送给FSM,FSM转发过来
+type StNIRParam struct {
+	fSugar    float32
+	fAcidity  float32
+	fHollow   float32
+	fSkin     float32
+	fBrown    float32
+	fTangxin  float32
+	unTimeTag uint32
+}
+
+// 水果实时分级信息，FSM发送过来 (FSM, HC_ID, FSM_CMD_GRADEINFO, stFruitGradeInfo)
+type StFruitParam struct {
+	visionParam StFruitVisionParam
+	uvParam     StFruitUVParam
+	nirParam    StNIRParam
+	fWeight     float32
+	fDensity    float32
+	unGrade     uint32
+
+	unWhichExit uint8
+}
+
+type StFruitGradeInfo struct {
+	param    [2]StFruitParam //IPM的id号
+	nRouteId int32
+}
+
+// 重量统计信息,FSM发送过来 (WM, HC_ID, FSM_CMD_WEIGHTINFO, stWeightResult
+type StWeightStat struct {
+	fCupAverageWeight float32
+	nAD0              uint16
+	nAD1              uint16
+	nStandardAD0      uint16
+	nStandardAD1      uint16
+}
+
+type StTrackingData struct {
+	nVehicleId     int32
+	fFruitWeight   float32
+	fVehicleWeight float32
+
+	nADFruit   uint16
+	nADVehicle uint16
+}
+
+type StWeightResult struct {
+	data            StTrackingData //追踪数据
+	paras           StWeightStat   //统计信息
+	nChannelId      int32
+	fVehicleWeight0 float32
+	fVehicleWeight1 float32
+	state           uint8
+}
+
+// 波形数据,FSM发送过来 (WM, HC_ID, FSM_CMD_WAVEINFO, stWaveInfo)
+type StWaveInfo struct {
+	nChannelId  int32
+	waveform0   [256]uint16
+	waveform1   [256]uint16
+	fruitweight float32
+}
+
+// 自定义结构体
+type Rect struct {
+	Top      int32
+	Bottom   int32
+	Left     int32
+	Right    int32
+	nOffsetX int32
+	nOffsetY int32
+}
+
+type ColorRGB struct {
+	ucR uint8
+	ucG uint8
+	ucB uint8
+}
+
+type QaulGradeInfo struct {
+	QualName      [12]byte
+	ColorIndex    int32
+	ShapeIndex    int32
+	DensityIndex  int32
+	FlawIndex     int32
+	BruiseIndex   int32
+	RotIndex      int32
+	SugarIndex    int32
+	AcidityIndex  int32
+	HollowIndex   int32
+	SkinIndex     int32
+	BrownIndex    int32
+	TangxinIndex  int32
+	RigidityIndex int32
+	WaterIndex    int32
+}
+
+type QaulityGradeItem struct {
+	GradeName    [12]uint8
+	ColorGrade   int8
+	sbShapeGrade int8
+	sbDensity    int8
+	sbFlaw       int8
+	sbBruise     int8
+	sbRot        int8
+	sbSugar      int8
+	sbAcidity    int8
+	sbHollow     int8
+	sbSkin       int8
+	sbBrown      int8
+	sbTangxin    int8
+	sbRigidity   int8
+	sbWater      int8
+	FruitNum     int32
+}
+
+type QualityGradeInfo struct {
+	Item     [16]QaulityGradeItem
+	GradeCnt int32
+}
+
+type ExitState struct {
+	Index       int32
+	ColumnIndex int32
+	ItemIndex   int32
+}
+
+type TempExitState struct {
+	Index       int32
+	ColumnIndex int32
+	ItemIndex   int32
+}
+
+// / 颜色界面-》颜色列表背景颜色
+type StColorList struct {
+	color1 [12]uint8
+	color2 [12]uint8
+	color3 [12]uint8
+}
+
+type StClientInfo struct {
+	customerName [20]uint8
+	farmName     [20]uint8
+	fruitName    [20]uint8
+}
+
+type StClientNewInfo struct {
+	customerName string
+	farmName     string
+	fruitName    string
+}
+
+type StOldClientInfo struct {
+	customerName [50]uint8
+	farmName     [50]uint8
+	fruitName    [50]uint8
+}
+
+// / 水果种类成员（对应IPM算法）
+type StFruitTypeMember struct {
+	iFruitTypeID int32
+	bFruitName   [20]uint8
+}
+
+// / 水果种类（对应IPM算法）
+type StFruitType struct {
+	iCurrentFruitNumber int32
+	member              [32 * 8]StFruitTypeMember
+}
+
+// 基本统计信息,HC->平板
+type StBroadcastStatistics struct {
+	statistics            StStatistics
+	strStartTime          [12]uint8
+	fSeparationEfficiency float32
+	fRealWeightCount      float32
+	strProgramName        [12]uint8
+	strLabelName          [4 * 12]uint8
+}
+
+// 平板系统信息,HC->平板
+type StBroadcastSysConfig struct {
+	sysConfig       StSysConfig
+	nLanguage       int32
+	exitDisplayType int64
+	strDisplayName  [48 * 20]uint8
+}
+
+// 出口附加信息，HC->平板（在stBroadcastSysConfig数据包之后发送）
+type StExitAdditionalTextData struct {
+	Additionaldata [48 * 100]byte
+}
+
+// 出口等级信息,HC->触摸屏  1字节对齐
+type StExitGradeItemInfo struct { //先拆分 后面拼接 成完整的出口ID和等级信息
+	ExitIndexLow  uint16
+	ExitIndexHigh uint16
+	GradeName     [26]byte
+}
+
+type StExitGradeInfo struct {
+	ExitGrade [48]StExitGradeItemInfo
+}
+
+type StFruitGradeInfos struct {
+	FruitGradeInfos [12]StFruitGradeInfo
+}
+
+// 内部品质----------------------------------------------------------------------------------------------------
+
+// 语言包
+type LanguageType int32
+
+const (
+	Chinese LanguageType = 0x0
+	English LanguageType = 0x1
+	Spanish LanguageType = 0x2
+)
+
+// -----------------------------------------------------
 func stStatisticsWireSize() int {
 	return binary.Size(StStatistics{})
 }

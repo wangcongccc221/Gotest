@@ -8,6 +8,7 @@ import (
 
 func registerCTCPHTTPRoutes(router *gin.Engine) {
 	router.GET("/tcp/config", handleCTCPConfig)
+	router.GET("/tcp/stglobal", handleCTCPStGlobal)
 	router.GET("/tcp/statistics", handleCTCPStatistics)
 }
 
@@ -29,6 +30,18 @@ func handleCTCPConfig(ctx *gin.Context) {
 	}
 
 	ctx.Data(http.StatusOK, "application/json; charset=utf-8", []byte(configJSON))
+}
+
+// 返回最近一次 0x1000 强转后序列化的完整 StGlobal JSON
+func handleCTCPStGlobal(ctx *gin.Context) {
+	body := LastCTCPStGlobalFullJSON()
+	if body == "" {
+		ctx.JSON(http.StatusNotFound, gin.H{
+			"error": "StGlobal not received yet; need FSM_CMD_CONFIG (0x1000) once",
+		})
+		return
+	}
+	ctx.Data(http.StatusOK, "application/json; charset=utf-8", []byte(body))
 }
 
 func handleCTCPStatistics(ctx *gin.Context) {

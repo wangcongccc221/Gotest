@@ -154,4 +154,9 @@ func GoStGlobalLayoutReport() *C.char {
 	return C.CString(tcp.StGlobalLayoutReport())
 }
 
+//export GoLastCTCPStGlobalFullJSON
+func GoLastCTCPStGlobalFullJSON() *C.char {
+	return C.CString(tcp.LastCTCPStGlobalFullJSON())
+}
+
 func main() {}

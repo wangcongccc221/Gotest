@@ -50,6 +50,9 @@ const NativeMock: Record<string, Object> = {
   'stGlobalLayoutReport': () => {
     return 'runtime: GOOS=mock GOARCH=mock\n=== StGlobal (mock) ===\n';
   },
+  'lastStGlobalFullJSON': () => {
+    return '';
+  },
 };
 
 export const add = NativeMock.add as (a: number, b: number) => number;
@@ -69,5 +72,6 @@ export const tcpSend = NativeMock.tcpSend as (message: string) => string;
 export const nativeLastError = NativeMock.nativeLastError as () => string;
 export const tcpServerLastMessage = NativeMock.tcpServerLastMessage as () => string;
 export const stGlobalLayoutReport = NativeMock.stGlobalLayoutReport as () => string;
+export const lastStGlobalFullJSON = NativeMock.lastStGlobalFullJSON as () => string;
 
 export default NativeMock;

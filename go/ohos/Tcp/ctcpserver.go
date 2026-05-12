@@ -140,7 +140,53 @@ func StartCTCPServer() int {
 		cTCPServerStatPort,
 		cTCPServerHCIP,
 		uint32(cTCPHcID))
+
+	goSz := int(unsafe.Sizeof(StGlobal{}))
+	setCTCPServerLastMessage("CTCP startup: sizeof(StGlobal)=%d 字节, 线宽常量 cTCP48StGlobalExpectedSize=%d",
+		goSz, cTCP48StGlobalExpectedSize)
+	appendCTCPLogChunks("CTCP startup StGlobalLayoutReport", StGlobalLayoutReport())
+	setCTCPServerLastMessage("CTCP startup: 完整字段 JSON 仅在收到 FSM_CMD_CONFIG(0x1000) 后输出；ArkTS 可调用 lastStGlobalFullJSON() 取全文（若已实现 NAPI）。")
 	return cTCPServerStatPort
+}
+
+// appendCTCPLogChunks 将长文本切成多段写入 CTCP 日志环形缓冲，避免单条 HiLog 过长被截断。
+func appendCTCPLogChunks(tag string, content string) {
+	const maxChunk = 3800
+	n := len(content)
+	if n == 0 {
+		setCTCPServerLastMessage("%s: <empty>", tag)
+		return
+	}
+	total := (n + maxChunk - 1) / maxChunk
+	for part, at := 1, 0; at < n; part++ {
+		end := at + maxChunk
+		if end > n {
+			end = n
+		}
+		setCTCPServerLastMessage("%s part %d/%d chars [%d:%d)\n%s", tag, part, total, at, end, content[at:end])
+		at = end
+	}
+}
+
+// appendPayloadHexChunks 将原始 payload 以十六进制按行输出（16 字节/行），再按块写入日志。
+func appendPayloadHexChunks(tag string, payload []byte) {
+	if len(payload) == 0 {
+		setCTCPServerLastMessage("%s hexdump: <empty payload>", tag)
+		return
+	}
+	var b strings.Builder
+	for i := 0; i < len(payload); i += 16 {
+		end := i + 16
+		if end > len(payload) {
+			end = len(payload)
+		}
+		fmt.Fprintf(&b, "%08x:", i)
+		for j := i; j < end; j++ {
+			fmt.Fprintf(&b, " %02x", payload[j])
+		}
+		b.WriteByte('\n')
+	}
+	appendCTCPLogChunks(tag+" hexdump", b.String())
 }
 
 func StopCTCPServer() int {
@@ -162,16 +208,17 @@ func StopCTCPServer() int {
 	return 0
 }
 
+// LastCTCPServerMessage 每次只取出队列中的一条日志（FIFO）。
+// 原先曾把所有条目 join 成一条字符串，ArkTS 单次 hilog 有长度上限，会导致 StGlobal 十六进制等大段内容被截断。
 func LastCTCPServerMessage() string {
 	cTCPServerLastMu.Lock()
 	defer cTCPServerLastMu.Unlock()
 	if len(cTCPServerMessages) == 0 {
 		return ""
 	}
-
-	message := strings.Join(cTCPServerMessages, "\n")
-	cTCPServerMessages = cTCPServerMessages[:0]
-	return message
+	msg := cTCPServerMessages[0]
+	cTCPServerMessages = cTCPServerMessages[1:]
+	return msg
 }
 
 func newCTCPServer(name string, port int) (*cTCPServer, error) {
@@ -264,16 +311,18 @@ func (s *cTCPServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	setCTCPServerLastMessage("CTCP %s server received from %s on port %d: src=0x%04X, dst=0x%04X, cmd=%s, data=%d bytes, totalAfterHead=%d bytes, mode=%s",
-		s.name,
-		remoteAddr,
-		s.port,
-		uint32(head.NSrcId),
-		uint32(head.NDstId),
-		cTCPCommandName(head.NCmdId),
-		len(payload),
-		totalAfterHead,
-		readMode)
+	if head.NCmdId != cmdFSMStatistics {
+		setCTCPServerLastMessage("CTCP %s server received from %s on port %d: src=0x%04X, dst=0x%04X, cmd=%s, data=%d bytes, totalAfterHead=%d bytes, mode=%s",
+			s.name,
+			remoteAddr,
+			s.port,
+			uint32(head.NSrcId),
+			uint32(head.NDstId),
+			cTCPCommandName(head.NCmdId),
+			len(payload),
+			totalAfterHead,
+			readMode)
+	}
 
 	s.handleCommandPayload(remoteAddr, head, payload)
 }
@@ -395,52 +444,53 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 
 	switch head.NCmdId {
 	case cmdFSMConfig:
-		stats, err := parseStGlobal(payload)
+		stg, err := ParseData[StGlobal](payload)
 		if err != nil {
 			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), payload=%d bytes",
 				cTCPCommandName(head.NCmdId), err, len(payload))
+			appendPayloadHexChunks("CTCP StGlobal raw (parse fail)", payload)
 			return
 		}
-		statsSnapshot := saveCTCPGlobalSnapshot(s.name, s.port, remoteAddr, head, stats)
-
-		// 处理拿到之后的结果
-
-	case cmdFSMStatistics: //0x1001
-		stats, err := parseStStatistics(payload)
-		if err != nil {
-			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), %s, payload=%d bytes",
-				cTCPCommandName(head.NCmdId), err, stStatisticsSizeSummary(), len(payload))
-			return
-		}
-
-		statsSnapshot := saveCTCPStatisticsSnapshot(s.name, s.port, remoteAddr, head, stats)
-
+		_, fullJSON := saveCTCPGlobalSnapshot(s.name, s.port, remoteAddr, head, payload, stg)
+		goSz := int(unsafe.Sizeof(StGlobal{}))
 		setCTCPServerLastMessage(
-			"CTCP parsed %s: %s, payload=%d, NSubsysId=%d, NTotalCupNum=%d, NInterval=%d, NIntervalSumperminute=%d, NCupState=0x%04X, NPulseInterval=%d, NUnpushFruitCount=%d, NNetState=0x%04X, NWeightSetting=%d, NSCMState=%d, NIQSNetState=0x%04X, NLockState=%d",
+			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysId=%d, nVersion=%d",
 			cTCPCommandName(head.NCmdId),
-			stStatisticsSizeSummary(),
+			goSz,
 			len(payload),
-			stats.NSubsysId,
-			stats.NTotalCupNum,
-			stats.NInterval,
-			stats.NIntervalSumperminute,
-			stats.NCupState,
-			stats.NPulseInterval,
-			stats.NUnpushFruitCount,
-			stats.NNetState,
-			stats.NWeightSetting,
-			stats.NSCMState,
-			stats.NIQSNetState,
-			stats.NLockState,
+			stg.nSubsysId,
+			stg.nVersion,
 		)
-		if statsJSON, jsonErr := formatCTCPStatisticsSnapshotJSON(statsSnapshot); jsonErr == nil {
-			setCTCPServerLastMessage("CTCP statistics JSON:\n%s", statsJSON)
+		if fullJSON != "" {
+			setCTCPServerLastMessage("CTCP StGlobal ===== 全量解析(JSON，反射整棵结构体)开始，多段输出 =====")
+			appendCTCPLogChunks("CTCP StGlobal 全量", fullJSON)
+			setCTCPServerLastMessage("CTCP StGlobal ===== 全量解析(JSON)结束 =====")
 		} else {
-			setCTCPServerLastMessage("CTCP statistics JSON marshal failed: %v", jsonErr)
+			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败")
 		}
-	//------------------------------
-	case cmdFSMGradeInfo:
-		setCTCPServerLastMessage("CTCP handled %s: raw StFruitGradeInfo saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
+		setCTCPServerLastMessage("CTCP StGlobal ===== 以下为原始 payload 十六进制 =====")
+		appendPayloadHexChunks("CTCP StGlobal raw wire", payload)
+	case cmdFSMStatistics: //0x1001
+		stats, err := ParseData[StStatistics](payload)
+		if err != nil {
+			return
+		}
+		_ = saveCTCPStatisticsSnapshot(s.name, s.port, remoteAddr, head, stats)
+
+	case cmdFSMGradeInfo: // 0x1002
+		grade, err := ParseData[StFruitGradeInfos](payload)
+		if err != nil {
+			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), payload=%d bytes, need sizeof=%d",
+				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StFruitGradeInfos{})))
+			return
+		}
+		fmt.Println(grade)
+		setCTCPServerLastMessage("CTCP parsed %s: sizeof=%d payload=%d FruitGradeInfos[0].nRouteId=%d",
+			cTCPCommandName(head.NCmdId),
+			int(unsafe.Sizeof(StFruitGradeInfos{})),
+			len(payload),
+			grade.FruitGradeInfos[0].nRouteId,
+		)
 	case cmdFSMGetVersion, cmdWAMVersionInfo:
 		setCTCPServerLastMessage("CTCP handled %s: version bytes=%q", cTCPCommandName(head.NCmdId), strings.TrimRight(string(payload), "\x00\r\n "))
 	case cmdFSMWeightInfo, cmdWAMWeightInfo:
@@ -488,22 +538,32 @@ func saveCTCPPayload(serverName string, port int, remoteAddr string, head cTCPSe
 
 // ------------------------------数据处理----------------- 分开处理 后期修改成一个函数接口
 
-// 处理FSM_static  数据
-func parseStStatistics(payload []byte) (StStatistics, error) {
-	n := int(unsafe.Sizeof(StStatistics{}))
-	if len(payload) < n {
-		return StStatistics{}, fmt.Errorf("payload too short for StStatistics: need %d, got %d", n, len(payload))
-	}
-	return *(*StStatistics)(unsafe.Pointer(&payload[0])), nil
-}
+// // 处理FSM_static  数据
+// func parseStStatistics(payload []byte) (StStatistics, error) {
+// 	n := int(unsafe.Sizeof(StStatistics{}))
+// 	if len(payload) < n {
+// 		return StStatistics{}, fmt.Errorf("payload too short for StStatistics: need %d, got %d", n, len(payload))
+// 	}
+// 	return *(*StStatistics)(unsafe.Pointer(&payload[0])), nil
+// }
 
-// 处理StGlobal数据
-func parseStGlobal(payload []byte) (StGlobal, error) {
-	n := int(unsafe.Sizeof(StGlobal{}))
+// // 处理StGlobal数据
+// func parseStGlobal(payload []byte) (StGlobal, error) {
+// 	n := int(unsafe.Sizeof(StGlobal{}))
+// 	if len(payload) < n {
+// 		return StGlobal{}, fmt.Errorf("payload too short for StGlobal: need %d, got %d", n, len(payload))
+// 	}
+// 	return *(*StGlobal)(unsafe.Pointer(&payload[0])), nil
+// }
+
+func ParseData[T any](payload []byte) (T, error) {
+	var zero T
+	n := int(unsafe.Sizeof(zero))
 	if len(payload) < n {
-		return StGlobal{}, fmt.Errorf("payload too short for StGlobal: need %d, got %d", n, len(payload))
+		return zero, fmt.Errorf("payload too short for %T: need %d, got %d", zero, n, len(payload))
 	}
-	return *(*StGlobal)(unsafe.Pointer(&payload[0])), nil
+
+	return *(*T)(unsafe.Pointer(&payload[0])), nil
 }
 
 // 处理拿到的StGlobal数据，保存快照
@@ -593,8 +653,9 @@ func setCTCPServerLastMessage(format string, args ...any) { //格式化字符串
 	cTCPServerLastMu.Lock()
 	cTCPServerLastMessage = message
 	cTCPServerMessages = append(cTCPServerMessages, message)
-	if len(cTCPServerMessages) > 100 {
-		cTCPServerMessages = cTCPServerMessages[len(cTCPServerMessages)-100:]
+	const cTCPServerMaxBufferedMessages = 2048
+	if len(cTCPServerMessages) > cTCPServerMaxBufferedMessages {
+		cTCPServerMessages = cTCPServerMessages[len(cTCPServerMessages)-cTCPServerMaxBufferedMessages:]
 	}
 	cTCPServerLastMu.Unlock()
 	fmt.Println(message)

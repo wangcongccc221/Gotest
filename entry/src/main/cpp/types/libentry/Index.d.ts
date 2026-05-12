@@ -16,6 +16,8 @@ export const nativeLastError: () => string;
 export const tcpServerLastMessage: () => string;
 /** StGlobal 及嵌套结构体在当前 libohos.so 编译目标下的 sizeof/offset（需在设备上重新编译 Go 库后调用）。 */
 export const stGlobalLayoutReport: () => string;
+/** 最近一次 FSM_CMD_CONFIG(0x1000) 的 StGlobal 完整 JSON；未收到前为空串。字符串可能很大。 */
+export const lastStGlobalFullJSON: () => string;
 
 declare const testNapi: {
   add: typeof add;
@@ -35,6 +37,7 @@ declare const testNapi: {
   nativeLastError: typeof nativeLastError;
   tcpServerLastMessage: typeof tcpServerLastMessage;
   stGlobalLayoutReport: typeof stGlobalLayoutReport;
+  lastStGlobalFullJSON: typeof lastStGlobalFullJSON;
 };
 
 export default testNapi;
