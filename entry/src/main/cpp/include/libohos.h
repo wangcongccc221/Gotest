@@ -108,7 +108,6 @@ extern char* GoTCPClientSend(char* message);
 extern char* GoLastTCPServerMessage(void);
 extern char* GoLastCTCPConfigJSON(void);
 extern char* GoLastCTCPStatisticsJSON(void);
-extern char* GoStGradeItemInfoLayout(void);
 
 #ifdef __cplusplus
 }

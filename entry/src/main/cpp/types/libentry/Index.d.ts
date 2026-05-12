@@ -14,7 +14,6 @@ export const stopTcpClient: () => number;
 export const tcpSend: (message: string) => string;
 export const nativeLastError: () => string;
 export const tcpServerLastMessage: () => string;
-export const stGradeItemInfoLayout: () => string;
 
 declare const testNapi: {
   add: typeof add;
@@ -33,7 +32,6 @@ declare const testNapi: {
   tcpSend: typeof tcpSend;
   nativeLastError: typeof nativeLastError;
   tcpServerLastMessage: typeof tcpServerLastMessage;
-  stGradeItemInfoLayout: typeof stGradeItemInfoLayout;
 };
 
 export default testNapi;

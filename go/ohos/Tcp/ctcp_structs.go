@@ -24,10 +24,6 @@ const (
 	cTCP48MaxCameraDelayInts   = cTCPServerMaxCameraNum * 2
 )
 
-func stGradeItemInfoGoSize() uintptr {
-	return unsafe.Sizeof(StGradeItemInfo{})
-}
-
 type CTCPConfigSnapshot struct {
 	ServerName string
 	Port       int
@@ -53,100 +49,27 @@ uint8    // quint8       1
 
 */
 
-type StWhiteBalanceMean struct {
-	MeanR int32
-	MeanG int32
-	MeanB int32
-}
-
-type StFruitCup struct {
-	NLeft    [cTCP48ChannelNumPerIPM]int32
-	NTop     int32
-	NBottom  int32
-	NOffsetX int32
-	NOffsetY int32
-}
-
-type StCameraParas struct {
-	MeanValue           StWhiteBalanceMean
-	Cup                 [cTCP48ChannelNumPerIPM]StFruitCup
-	NROIOffsetY         [cTCP48ChannelNumPerIPM]int32
-	NTriggerDelay       int32
-	NShutter            int32
-	NDetectionThreshold [cTCP48ChannelNumPerIPM]int32
-	NDetectWhiteTh      [cTCP48ChannelNumPerIPM]int32
-	FGammaCorrection    float32
-	FPixelRatio         [cTCP48ChannelNumPerIPM]float32
-	FFruitCupRangeTh    [cTCP48ChannelNumPerIPM]float32
-	NXYEdgeBreakTh      [cTCP48ChannelNumPerIPM]uint8
-	CCameraNum          uint8
-	_                   [1]byte
-}
-
-type StIRCameraParas struct {
-	Cup                   [cTCP48ChannelNumPerIPM]StFruitCup
-	NROIOffsetY           [cTCP48ChannelNumPerIPM]int32
-	NTriggerDelay         int32
-	NShutter              int32
-	NIRDetectionThreshold [cTCP48ChannelNumPerIPM]int32
-	FGammaCorrection      float32
-	FPixelRatio           [cTCP48ChannelNumPerIPM]float32
-	FFruitCupRangeTh      [cTCP48ChannelNumPerIPM]float32
-	NXYEdgeBreakTh        [cTCP48ChannelNumPerIPM]uint8
-	CCameraNum            uint8
-	_                     [1]byte
-}
-
-type StParas struct {
-	CameraParas   [cTCP48MaxColorCamera]StCameraParas
-	IrCameraParas [cTCP48MaxNIRCamera]StIRCameraParas
-	NCupNum       int32
-}
-
-type StLabelItemInfo struct {
-	NDis       int16
-	NDriverPin int16
-}
-
-type StExitItemInfo struct {
-	NDis       int16
-	NOffset    int16
-	NDriverPin int16
-}
-
-type StExitInfo struct {
-	Labelexit [cTCP48MaxLabelNum]StLabelItemInfo
-	Exits     [cTCP48MaxExitNum]StExitItemInfo
-}
-
-type StGlobalExitInfo struct {
-	NPulse      uint8
-	VersionFlag uint8
-	NLabelPulse int16
-	NDriverPin  [cTCP48MaxExitNum]int16
-	DelayTime   [cTCP48MaxExitNum]float32
-	HoldTime    [cTCP48MaxExitNum]float32
-}
-
-type StAnalogDensity struct {
-	UAnalogDensity [cTCP48AnalogDensitySlots]float32
-}
-
-type StMotorInfo struct {
-	BExitId                  uint8
-	BMotorSwitch             uint8
-	_                        uint16
-	NMotorEnableSwitchNum    int32
-	NMotorEnableSwitchWeight int32
-	FDelayTime               float32
-	FHoldTime                float32
-}
-
 // struct Stglobal
-type StGlobal struct {
-	Sys   StSysConfig      // 系统配置
-	grade StGradeInfo      // 等级信息
-	gexit StGlobalExitInfo //全局出口信息
+type StGlobal struct { //应接受28712
+	Sys   StSysConfig      // 系统配置   已完成  504
+	grade StGradeInfo      // 等级信息  已完成  11600
+	gexit StGlobalExitInfo //全局出口信息  已完成 484
+
+	//#ifndef
+	gweight StGlobalWeightBaseInfo //全局重量信息
+
+	analogdensity StAnalogDensity // 水果设置界面  已完成 128
+	exit          [12]StExitInfo  // 出口信息  304   304*12= 3648
+	paras         [12]StParas     //IPM参数  11136
+	weights       [12]StWeightBaseInfo
+	motor         [48]StMotorInfo //20*48=960 电机信息
+	cFSMInfo      [12]uint8
+	cIPMInfo      [12]uint8
+	nSubsysId     int32
+	nVersion      int32 //版本号
+	//ebdif
+	nFsmRestart uint8
+	nFsmModule  uint8
 }
 
 type StSysConfig struct {
@@ -243,9 +166,7 @@ type StPercentInfo struct {
 }
 
 // 4字节对齐
-// #pack(4) --- IGNORE ---
 type StGradeItemInfo struct {
-	// 对应 C 端 ulong exit 的小端 8 字节：先低 32 位、再高 32 位（与线上一致）。
 	ExitLow  uint32 // offset 0
 	ExitHigh uint32 // offset 4
 
@@ -269,6 +190,101 @@ type StGradeItemInfo struct {
 	SbWater        int8 // offset 33
 	SbLabelbyGrade int8 // offset 34
 
+}
+
+type StGlobalExitInfo struct { //484字节
+	nPulse      uint8
+	versionFlag uint8
+	nLabelPulse int16
+	nDriverPin  [48]int16
+	Delay_time  [48]float32
+	Hold_time   [48]float32
+}
+
+type StGlobalWeightBaseInfo struct { // 12*4=48字节
+	uAnalogDensity [32]float32
+}
+
+type StAnalogDensity struct { //水果设置界面  //128
+	uAnalogDensity [32]float32
+}
+
+type StExitInfo struct {
+	labelexit [4]StLabelItemInfo
+	exits     [48]StExitItemInfo
+}
+
+type StLabelItemInfo struct { // 贴标信息
+	nDis       int16
+	nDriverPin int16
+}
+
+type StExitItemInfo struct { // 出口信息
+	nDis       int16
+	nOffset    int16
+	nDriverPin int16
+}
+
+type StParas struct { //IPM参数
+	cameraParas   [3]StCameraParas
+	irCameraParas [6]StIRCameraParas
+	nCupNum       int32
+}
+
+type StWeightBaseInfo struct { //IPM参数中的重量信息
+	fGADParam          [2]float32
+	fTemperatureParams float32
+	waveinterval       [2]uint16
+}
+type StCameraParas struct {
+	MeanValue           StWhiteBalanceMean
+	cup                 [2]StFruitCup
+	nROIOffsetY         [2]int32
+	nTriggerDelay       int32
+	nShutter            int32
+	nDetectionThreshold [2]int32
+	nDetectWhiteTh      [2]int32
+	fGammaCorrection    float32
+	fPixelRatio         [2]float32
+	fFruitCupRangeTh    [2]float32
+	nXYEdgeBreakTh      [2]uint8
+	cCameraNum          uint8
+}
+
+type StWhiteBalanceMean struct { //隶属于StCameraParas
+	MeanR int32
+	MeanG int32
+	MeanB int32
+}
+
+type StFruitCup struct { //隶属于StCameraParas
+	nLeft    [2]int32
+	nTop     int32
+	nBottom  int32
+	nOffsetX int32
+	nOffsetY int32
+}
+
+type StIRCameraParas struct { //红外参数
+	cup                   [2]StFruitCup
+	nROIOffsetY           [2]int32
+	nTriggerDelay         int32
+	nShutter              int32
+	nIRDetectionThreshold [2]int32
+	fGammaCorrection      float32
+	fPixelRatio           [2]float32
+	fFruitCupRangeTh      [2]float32
+	nXYEdgeBreakTh        [2]uint8
+	cCameraNum            uint8
+}
+
+type StMotorInfo struct {
+	bExitId                  uint8
+	bMotorSwitch             uint8
+	nMotorEnableSwitchNum    int32
+	nMotorEnableSwitchWeight int32
+	fDelay_time              float32
+	fHold_time               float32
 }
 
 // 拼接4 字节成为8

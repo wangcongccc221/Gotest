@@ -39,7 +39,6 @@ struct GoApi {
     GoIntFunc stopTCPClient = nullptr;
     GoTCPClientSendFunc tcpClientSend = nullptr;
     GoCStringFunc lastTCPServerMessage = nullptr;
-    GoCStringFunc stGradeItemInfoLayout = nullptr;
 };
 
 static std::mutex g_goApiMutex;
@@ -105,8 +104,7 @@ static bool LoadGoApi()
         !LoadGoSymbol(g_goApi.handle, "GoStartCTCPClient", &g_goApi.startCTCPClient) ||
         !LoadGoSymbol(g_goApi.handle, "GoStopTCPClient", &g_goApi.stopTCPClient) ||
         !LoadGoSymbol(g_goApi.handle, "GoTCPClientSend", &g_goApi.tcpClientSend) ||
-        !LoadGoSymbol(g_goApi.handle, "GoLastTCPServerMessage", &g_goApi.lastTCPServerMessage) ||
-        !LoadGoSymbol(g_goApi.handle, "GoStGradeItemInfoLayout", &g_goApi.stGradeItemInfoLayout)) {
+        !LoadGoSymbol(g_goApi.handle, "GoLastTCPServerMessage", &g_goApi.lastTCPServerMessage)) {
         return false;
     }
 
@@ -439,24 +437,6 @@ static napi_value NapiTCPServerLastMessage(napi_env env, napi_callback_info info
     return result;
 }
 
-static napi_value NapiStGradeItemInfoLayout(napi_env env, napi_callback_info info)
-{
-    char *text = nullptr;
-    if (LoadGoApi()) {
-        text = g_goApi.stGradeItemInfoLayout();
-    }
-    if (text == nullptr) {
-        napi_value empty;
-        napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &empty);
-        return empty;
-    }
-
-    napi_value result;
-    napi_create_string_utf8(env, text, NAPI_AUTO_LENGTH, &result);
-    g_goApi.freeCString(text);
-    return result;
-}
-
 EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports)
 {
@@ -476,8 +456,7 @@ static napi_value Init(napi_env env, napi_value exports)
         { "stopTcpClient", nullptr, NapiStopTCPClient, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "tcpSend", nullptr, NapiTCPSend, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "nativeLastError", nullptr, NapiNativeLastError, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "tcpServerLastMessage", nullptr, NapiTCPServerLastMessage, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "stGradeItemInfoLayout", nullptr, NapiStGradeItemInfoLayout, nullptr, nullptr, nullptr, napi_default, nullptr }
+        { "tcpServerLastMessage", nullptr, NapiTCPServerLastMessage, nullptr, nullptr, nullptr, napi_default, nullptr }
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

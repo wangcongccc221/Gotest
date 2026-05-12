@@ -111,7 +111,7 @@ func StartCTCPServer() int {
 	defer cTCPServerMu.Unlock()
 
 	if cTCPServerImage != nil && cTCPServerStat != nil {
-		setCTCPServerLastMessage("CTCP servers already listening, %s", stGradeItemInfoSizeSummary())
+		setCTCPServerLastMessage("CTCP servers already listening")
 		return cTCPServerStatPort
 	}
 
@@ -133,14 +133,13 @@ func StartCTCPServer() int {
 	imageServer.start()
 	statServer.start()
 
-	setCTCPServerLastMessage("CTCP servers listening on %s:%d and %s:%d, HC_IP=%s, HC_ID=0x%04X, %s",
+	setCTCPServerLastMessage("CTCP servers listening on %s:%d and %s:%d, HC_IP=%s, HC_ID=0x%04X",
 		cTCPServerListenIP,
 		cTCPServerImagePort,
 		cTCPServerListenIP,
 		cTCPServerStatPort,
 		cTCPServerHCIP,
-		uint32(cTCPHcID),
-		stGradeItemInfoSizeSummary())
+		uint32(cTCPHcID))
 	return cTCPServerStatPort
 }
 
