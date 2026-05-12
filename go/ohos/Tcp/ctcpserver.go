@@ -462,9 +462,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			stg.nVersion,
 		)
 		if fullJSON != "" {
-			setCTCPServerLastMessage("CTCP StGlobal ===== 全量解析(JSON，反射整棵结构体)开始，多段输出 =====")
 			appendCTCPLogChunks("CTCP StGlobal 全量", fullJSON)
-			setCTCPServerLastMessage("CTCP StGlobal ===== 全量解析(JSON)结束 =====")
 		} else {
 			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败")
 		}
@@ -562,7 +560,6 @@ func ParseData[T any](payload []byte) (T, error) {
 	if len(payload) < n {
 		return zero, fmt.Errorf("payload too short for %T: need %d, got %d", zero, n, len(payload))
 	}
-
 	return *(*T)(unsafe.Pointer(&payload[0])), nil
 }
 
