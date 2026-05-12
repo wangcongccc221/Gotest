@@ -1,9 +1,11 @@
 package tcp
 
 import (
-	"bytes"
 	"encoding/binary"
 	"fmt"
+	"reflect"
+	"runtime"
+	"strings"
 	"unsafe"
 )
 
@@ -31,6 +33,30 @@ func stGradeItemInfoSizeSummary() string {
 		stGradeItemInfoWireSize(),
 		stGradeItemInfoQtLinux64Pack4Size(),
 	)
+}
+
+// StGradeItemInfoLayoutReport 返回当前编译目标下 StGradeItemInfo 的真实 sizeof/alignof 及各字段 offset（调试用）。
+func StGradeItemInfoLayoutReport() string {
+	var z StGradeItemInfo
+	var w StGradeItemInfoWire
+	t := reflect.TypeOf(z)
+	var b strings.Builder
+	fmt.Fprintf(&b, "=== StGradeItemInfo（Exit 已拆为 ExitLow+ExitHigh）真实内存布局 ===\n")
+	fmt.Fprintf(&b, "GOOS=%s GOARCH=%s（当前这份 libohos 的编译目标）\n", runtime.GOOS, runtime.GOARCH)
+	fmt.Fprintf(&b, "真实 unsafe.Sizeof(StGradeItemInfo)=%d 字节\n", unsafe.Sizeof(z))
+	fmt.Fprintf(&b, "真实 unsafe.Alignof(StGradeItemInfo)=%d\n", unsafe.Alignof(z))
+	fmt.Fprintf(&b, "encoding/binary.Size(StGradeItemInfo)=%d\n", binary.Size(z))
+	fmt.Fprintf(&b, "StGradeItemInfoWire=[%d]byte sizeof=%d（线长，应与上式一致）\n", len(w), unsafe.Sizeof(w))
+	if unsafe.Sizeof(z) != unsafe.Sizeof(w) {
+		fmt.Fprintf(&b, "警告: sizeof(结构体) != sizeof(Wire)，binary.Read/Write 与 C 36 字节对齐可能有问题\n")
+	}
+	fmt.Fprintf(&b, "stGradeItemInfoWireSize()=%d\n", stGradeItemInfoWireSize())
+	fmt.Fprintf(&b, "字段 reflect offset/size:\n")
+	for i := 0; i < t.NumField(); i++ {
+		f := t.Field(i)
+		fmt.Fprintf(&b, "  %s offset=%d size=%d\n", f.Name, f.Offset, f.Type.Size())
+	}
+	return b.String()
 }
 
 type CTCPConfigSnapshot struct {
@@ -93,8 +119,8 @@ type StSysConfig struct {
 }
 
 type StGradeInfo struct {
-	Intervals        [3]StColorIntervalItem  // 3个颜色
-	percent          [16 * 3]StPercentInfo   //16个等级，每个等级3种颜色
+	Intervals        [3]StColorIntervalItem      // 3个颜色
+	percent          [16 * 3]StPercentInfo       //16个等级，每个等级3种颜色
 	grades           [16 * 3]StGradeItemInfoWire // C 侧 #pragma pack(4)，每项固定 36 字节
 	ExitEnabled      [2]int32
 	ColorIntervals   [2]int32
@@ -152,45 +178,9 @@ type StGradeItemInfo struct {
 	TailPad byte // offset 35
 }
 
-// Exit 将 ExitLow/ExitHigh 拼成与 C `ulong exit` 等价的 uint64（小端：低 32 位在前）。
+// 拼接4 字节成为8
 func (s StGradeItemInfo) Exit() uint64 {
 	return uint64(s.ExitLow) | (uint64(s.ExitHigh) << 32)
-}
-
-// StGradeItemInfoWire 对应 C 端 #pragma pack(4) 的 StGradeItemInfo 在信道上的 36 字节布局（sizeof 恒为 36）。
-type StGradeItemInfoWire [stGradeItemInfoQtLinux64Pack4ReferenceSize]byte
-
-func init() {
-	if unsafe.Sizeof(StGradeItemInfo{}) != unsafe.Sizeof(StGradeItemInfoWire{}) {
-		panic(fmt.Sprintf("StGradeItemInfo sizeof %d must equal StGradeItemInfoWire %d (与 C 36 字节线布局一致)",
-			unsafe.Sizeof(StGradeItemInfo{}), unsafe.Sizeof(StGradeItemInfoWire{})))
-	}
-}
-
-// StGradeItemInfoWireFromSlice 从缓冲区拷贝 36 字节包体。
-func StGradeItemInfoWireFromSlice(data []byte) (StGradeItemInfoWire, error) {
-	var w StGradeItemInfoWire
-	if len(data) < len(w) {
-		return w, fmt.Errorf("StGradeItemInfoWire: need %d bytes, got %d", len(w), len(data))
-	}
-	copy(w[:], data[:len(w)])
-	return w, nil
-}
-
-// UnpackStGradeItemInfo 将 36 字节 pack(4) 包体解成 StGradeItemInfo（直接 binary.Read 到本结构体）。
-func UnpackStGradeItemInfo(w StGradeItemInfoWire) StGradeItemInfo {
-	var g StGradeItemInfo
-	_ = binary.Read(bytes.NewReader(w[:]), binary.LittleEndian, &g)
-	return g
-}
-
-// PackStGradeItemInfo 将 StGradeItemInfo 打成 36 字节包体（直接 binary.Write）。
-func PackStGradeItemInfo(g StGradeItemInfo) StGradeItemInfoWire {
-	var buf bytes.Buffer
-	_ = binary.Write(&buf, binary.LittleEndian, &g)
-	var w StGradeItemInfoWire
-	copy(w[:], buf.Bytes())
-	return w
 }
 
 const (
@@ -214,6 +204,7 @@ uint8    // quint8       1
 
 */
 
+// ---------------------------------------------------------------------------------------------------
 type StStatistics struct {
 	NGradeCount         [256]uint64
 	NWeightGradeCount   [256]uint64
@@ -256,3 +247,5 @@ func stStatisticsSizeSummary() string {
 		stStatisticsExpectedSize,
 	)
 }
+
+//---------------------------------------------------------------------------------------------------

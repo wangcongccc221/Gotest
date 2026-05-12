@@ -260,16 +260,8 @@ func (s *cTCPServer) handleConnection(conn net.Conn) {
 	}
 
 	payload, totalAfterHead, readMode, err := recvCTCPPayload(conn, head)
+
 	if err != nil {
-		setCTCPServerLastMessage("CTCP %s server payload read failed from %s on port %d: src=0x%04X, cmd=%s, mode=%s, received=%d, err=%v",
-			s.name,
-			remoteAddr,
-			s.port,
-			uint32(head.NSrcId),
-			cTCPCommandName(head.NCmdId),
-			readMode,
-			len(payload),
-			err)
 		return
 	}
 
@@ -283,6 +275,7 @@ func (s *cTCPServer) handleConnection(conn net.Conn) {
 		len(payload),
 		totalAfterHead,
 		readMode)
+
 	s.handleCommandPayload(remoteAddr, head, payload)
 }
 
@@ -298,6 +291,7 @@ func recvCTCPSync(conn net.Conn) error {
 }
 
 func recvCTCPCommand(conn net.Conn) (cTCPServerCommandHead, error) {
+
 	data := make([]byte, 12)
 	if _, err := io.ReadFull(conn, data); err != nil {
 		return cTCPServerCommandHead{}, err
@@ -314,7 +308,7 @@ func recvCTCPCommand(conn net.Conn) (cTCPServerCommandHead, error) {
 	return head, nil
 }
 
-func recvCTCPPayload(conn net.Conn, head cTCPServerCommandHead) ([]byte, int, string, error) {
+func recvCTCPPayload(conn net.Conn, head cTCPServerCommandHead) ([]byte, int, string, error) { //根据命令头读取数据
 	if cTCPCommandHasPacketLength(head.NCmdId) {
 		lengthData := make([]byte, 4)
 		if _, err := io.ReadFull(conn, lengthData); err != nil {
@@ -402,8 +396,12 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 
 	switch head.NCmdId {
 	case cmdFSMConfig:
-		// TODO: StGlobal 强转解析后在此处理
+		// // TODO: StGlobal 强转解析后在此处理
+		// stats, err := parseStGlobal(payload)
+		// if err != nil {
 		setCTCPServerLastMessage("CTCP handled %s: raw StGlobal saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
+		// 	return
+		// }
 
 	case cmdFSMStatistics: //0x1001
 		stats, err := parseStStatistics(payload)
@@ -508,15 +506,6 @@ func parseStGradeInfoAt(payload []byte, base int, maxExitNum int, gradeItemSize 
 	_ = maxExitNum
 	_ = gradeItemSize
 	return StGradeInfo{}, nil
-}
-
-func parseStGradeItemInfo(data []byte, itemSize int) StGradeItemInfo {
-	_ = itemSize
-	w, err := StGradeItemInfoWireFromSlice(data)
-	if err != nil {
-		return StGradeItemInfo{}
-	}
-	return UnpackStGradeItemInfo(w)
 }
 
 func scoreStGradeInfo(gradeInfo StGradeInfo) int {
@@ -624,7 +613,7 @@ func cTCPCommandName(cmd int32) string {
 	}
 }
 
-func setCTCPServerLastMessage(format string, args ...any) {
+func setCTCPServerLastMessage(format string, args ...any) { //格式化字符串并保存最后的消息
 	message := time.Now().Format("15:04:05.000 ") + fmt.Sprintf(format, args...)
 	cTCPServerLastMu.Lock()
 	cTCPServerLastMessage = message
