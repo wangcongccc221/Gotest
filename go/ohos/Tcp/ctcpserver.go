@@ -395,12 +395,15 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 
 	switch head.NCmdId {
 	case cmdFSMConfig:
-		// // TODO: StGlobal 强转解析后在此处理
-		// stats, err := parseStGlobal(payload)
-		// if err != nil {
-		setCTCPServerLastMessage("CTCP handled %s: raw StGlobal saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
-		// 	return
-		// }
+		stats, err := parseStGlobal(payload)
+		if err != nil {
+			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), payload=%d bytes",
+				cTCPCommandName(head.NCmdId), err, len(payload))
+			return
+		}
+		statsSnapshot := saveCTCPGlobalSnapshot(s.name, s.port, remoteAddr, head, stats)
+
+		// 处理拿到之后的结果
 
 	case cmdFSMStatistics: //0x1001
 		stats, err := parseStStatistics(payload)
@@ -483,41 +486,9 @@ func saveCTCPPayload(serverName string, port int, remoteAddr string, head cTCPSe
 	cTCPPayloadMu.Unlock()
 }
 
-func parseStGlobalSysConfig(payload []byte) (StSysConfig, error) {
-	return parseStSysConfig(payload, cTCPServerStSysConfigExit48)
-}
+// ------------------------------数据处理----------------- 分开处理 后期修改成一个函数接口
 
-func parseStSysConfig(payload []byte, maxExitNum int) (StSysConfig, error) { //传入一个payload 字节 和一个最大值的出口  返回stsyscfg
-	// TODO: 重新实现 StSysConfig 解析逻辑。
-	_ = payload
-	_ = maxExitNum
-	return StSysConfig{}, nil
-}
-
-func parseStGlobalGradeInfo(payload []byte, sysConfig StSysConfig) (StGradeInfo, error) {
-	_ = sysConfig
-	return parseStGradeInfoAt(payload, 0, cTCPServerStSysConfigExit48, 36)
-}
-
-func parseStGradeInfoAt(payload []byte, base int, maxExitNum int, gradeItemSize int) (StGradeInfo, error) { //解析逻辑
-	_ = payload
-	_ = base
-	_ = maxExitNum
-	_ = gradeItemSize
-	return StGradeInfo{}, nil
-}
-
-func scoreStGradeInfo(gradeInfo StGradeInfo) int {
-	score := 0
-	return score
-}
-
-func isTCPServerRepeated7F(value int32) bool {
-	return uint32(value) == 0x7F7F7F7F
-}
-
-// 把(FSM_CMD_STATISTICS) payload 反序列化成 StStatistics。
-// 使用 unsafe 将 payload 首地址按本机布局直接解释为 StStatistics
+// 处理FSM_static  数据
 func parseStStatistics(payload []byte) (StStatistics, error) {
 	n := int(unsafe.Sizeof(StStatistics{}))
 	if len(payload) < n {
@@ -526,11 +497,16 @@ func parseStStatistics(payload []byte) (StStatistics, error) {
 	return *(*StStatistics)(unsafe.Pointer(&payload[0])), nil
 }
 
+// 处理StGlobal数据
 func parseStGlobal(payload []byte) (StGlobal, error) {
-	_ = payload
-	return StGlobal{}, nil
+	n := int(unsafe.Sizeof(StGlobal{}))
+	if len(payload) < n {
+		return StGlobal{}, fmt.Errorf("payload too short for StGlobal: need %d, got %d", n, len(payload))
+	}
+	return *(*StGlobal)(unsafe.Pointer(&payload[0])), nil
 }
 
+// 处理拿到的StGlobal数据，保存快照
 func cleanTCPServerCString(data []byte) string {
 	end := len(data)
 	for i, value := range data {

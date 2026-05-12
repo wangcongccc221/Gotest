@@ -14,6 +14,8 @@ export const stopTcpClient: () => number;
 export const tcpSend: (message: string) => string;
 export const nativeLastError: () => string;
 export const tcpServerLastMessage: () => string;
+/** StGlobal 及嵌套结构体在当前 libohos.so 编译目标下的 sizeof/offset（需在设备上重新编译 Go 库后调用）。 */
+export const stGlobalLayoutReport: () => string;
 
 declare const testNapi: {
   add: typeof add;
@@ -32,6 +34,7 @@ declare const testNapi: {
   tcpSend: typeof tcpSend;
   nativeLastError: typeof nativeLastError;
   tcpServerLastMessage: typeof tcpServerLastMessage;
+  stGlobalLayoutReport: typeof stGlobalLayoutReport;
 };
 
 export default testNapi;

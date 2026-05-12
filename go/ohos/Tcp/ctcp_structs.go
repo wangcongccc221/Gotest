@@ -11,8 +11,8 @@ import (
 
 // 48/RSS（interface.h 注释区 ConstPreDefine）硬编码线宽，与下位机 StGlobal 对齐用。
 const (
-	cTCP48StGradeInfoWireSize  = 11600 // sizeof(StGradeInfo)
-	cTCP48StGlobalExpectedSize = 28496 // sizeof(StGlobal)，48 口、非 LS8/MAX64
+	cTCP48StGradeInfoWireSize  = 11600
+	cTCP48StGlobalExpectedSize = 28712
 	cTCP48MaxChannelNum        = 12
 	cTCP48MaxIPMNum            = 12
 	cTCP48MaxExitNum           = 48
@@ -49,31 +49,35 @@ uint8    // quint8       1
 
 */
 
-// struct Stglobal
-type StGlobal struct { //应接受28712
+type StGlobal struct {
 	Sys   StSysConfig      // 系统配置   已完成  504
 	grade StGradeInfo      // 等级信息  已完成  11600
 	gexit StGlobalExitInfo //全局出口信息  已完成 484
 
 	//#ifndef
-	gweight StGlobalWeightBaseInfo //全局重量信息
+	gweight StGlobalWeightBaseInfo // 全局重量信息
 
 	analogdensity StAnalogDensity // 水果设置界面  已完成 128
 	exit          [12]StExitInfo  // 出口信息  304   304*12= 3648
 	paras         [12]StParas     //IPM参数  11136
-	weights       [12]StWeightBaseInfo
-	motor         [48]StMotorInfo //20*48=960 电机信息
-	cFSMInfo      [12]uint8
-	cIPMInfo      [12]uint8
-	nSubsysId     int32
-	nVersion      int32 //版本号
-	//ebdif
-	nFsmRestart uint8
-	nFsmModule  uint8
+
+	weights [12]StWeightBaseInfo //192
+
+	motor    [48]StMotorInfo //20*48=960 电机信息
+	cFSMInfo [12]uint8
+	cIPMInfo [12]uint8
+
+	nSubsysId int32
+	nVersion  int32 //版本号
+
+	// 先注释 后面在使用 查找一下问题
+	// nNetState   uint8
+	// nFsmRestart uint8
+	// nFsmModule  uint8
 }
 
 type StSysConfig struct {
-	exitstate              [48 * 2 * 4]uint8
+	exitstate              [384]uint8
 	nChannelInfo           [4]uint8
 	nImageUV               [4]uint8
 	nDataRegistration      [4]uint8
@@ -122,6 +126,7 @@ type StGradeInfo struct {
 	fSkinFactor      [6]float32
 	fBrownFactor     [6]float32
 	fTangxinFactor   [6]float32
+	fRigidityFactor  [6]float32
 	fWaterFactor     [6]float32
 	fShapeFactor     [6]float32
 
@@ -135,8 +140,10 @@ type StGradeInfo struct {
 	stRotGradeName      [72]uint8
 	stSugarGradeName    [72]uint8
 	stAcidityGradeName  [72]uint8
+	stHollowGradeName   [72]uint8
 	stSkinGradeName     [72]uint8
 	stBrownGradeName    [72]uint8
+	stTangxinGradeName  [72]uint8
 	stRigidityGradeName [72]uint8
 	stWaterGradeName    [72]uint8
 
@@ -201,8 +208,17 @@ type StGlobalExitInfo struct { //484字节
 	Hold_time   [48]float32
 }
 
-type StGlobalWeightBaseInfo struct { // 12*4=48字节
-	uAnalogDensity [32]float32
+type StGlobalWeightBaseInfo struct {
+	fFilterParam           float32 // 4
+	AD_Filter_ALG          uint8   // 1
+	nEffectCupThreshold    int16
+	nMinGradeThreshold     int16
+	nCupDeviationThreshold int16
+	nCupBreakageThreshold  int16
+	nBaseCupNum            int16
+	nTotalCupNums          [4]int16
+	RefWeight              int16
+	WeightTh               uint8
 }
 
 type StAnalogDensity struct { //水果设置界面  //128
@@ -231,7 +247,7 @@ type StParas struct { //IPM参数
 	nCupNum       int32
 }
 
-type StWeightBaseInfo struct { //IPM参数中的重量信息
+type StWeightBaseInfo struct { //IPM参数中的重量信息 16字节
 	fGADParam          [2]float32
 	fTemperatureParams float32
 	waveinterval       [2]uint16

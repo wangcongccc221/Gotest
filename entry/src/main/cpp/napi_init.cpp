@@ -39,6 +39,7 @@ struct GoApi {
     GoIntFunc stopTCPClient = nullptr;
     GoTCPClientSendFunc tcpClientSend = nullptr;
     GoCStringFunc lastTCPServerMessage = nullptr;
+    GoCStringFunc stGlobalLayoutReport = nullptr;
 };
 
 static std::mutex g_goApiMutex;
@@ -106,6 +107,14 @@ static bool LoadGoApi()
         !LoadGoSymbol(g_goApi.handle, "GoTCPClientSend", &g_goApi.tcpClientSend) ||
         !LoadGoSymbol(g_goApi.handle, "GoLastTCPServerMessage", &g_goApi.lastTCPServerMessage)) {
         return false;
+    }
+
+    dlerror();
+    void *layoutSym = dlsym(g_goApi.handle, "GoStGlobalLayoutReport");
+    if (layoutSym != nullptr) {
+        g_goApi.stGlobalLayoutReport = reinterpret_cast<GoCStringFunc>(layoutSym);
+    } else {
+        g_goApi.stGlobalLayoutReport = nullptr;
     }
 
     g_goApi.ready = true;
@@ -437,6 +446,36 @@ static napi_value NapiTCPServerLastMessage(napi_env env, napi_callback_info info
     return result;
 }
 
+static napi_value NapiStGlobalLayoutReport(napi_env env, napi_callback_info info)
+{
+    if (!LoadGoApi()) {
+        napi_value empty;
+        napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &empty);
+        return empty;
+    }
+    if (g_goApi.stGlobalLayoutReport == nullptr) {
+        napi_value msg;
+        napi_create_string_utf8(
+            env,
+            "GoStGlobalLayoutReport 未导出：请运行 go/ohos/build_ohos.ps1 重新编译 libohos.so",
+            NAPI_AUTO_LENGTH,
+            &msg);
+        return msg;
+    }
+
+    char *report = g_goApi.stGlobalLayoutReport();
+    if (report == nullptr) {
+        napi_value empty;
+        napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &empty);
+        return empty;
+    }
+
+    napi_value result;
+    napi_create_string_utf8(env, report, NAPI_AUTO_LENGTH, &result);
+    g_goApi.freeCString(report);
+    return result;
+}
+
 EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports)
 {
@@ -456,7 +495,8 @@ static napi_value Init(napi_env env, napi_value exports)
         { "stopTcpClient", nullptr, NapiStopTCPClient, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "tcpSend", nullptr, NapiTCPSend, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "nativeLastError", nullptr, NapiNativeLastError, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "tcpServerLastMessage", nullptr, NapiTCPServerLastMessage, nullptr, nullptr, nullptr, napi_default, nullptr }
+        { "tcpServerLastMessage", nullptr, NapiTCPServerLastMessage, nullptr, nullptr, nullptr, napi_default, nullptr },
+        { "stGlobalLayoutReport", nullptr, NapiStGlobalLayoutReport, nullptr, nullptr, nullptr, napi_default, nullptr }
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

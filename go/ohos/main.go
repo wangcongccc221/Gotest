@@ -149,4 +149,9 @@ func GoLastCTCPStatisticsJSON() *C.char {
 	return C.CString(tcp.LastCTCPStatisticsJSON())
 }
 
+//export GoStGlobalLayoutReport
+func GoStGlobalLayoutReport() *C.char {
+	return C.CString(tcp.StGlobalLayoutReport())
+}
+
 func main() {}
