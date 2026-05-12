@@ -3,60 +3,29 @@ package tcp
 import (
 	"encoding/binary"
 	"fmt"
-	"reflect"
-	"runtime"
-	"strings"
 	"unsafe"
 )
 
 // Structures below mirror the CTCP payload structs in 48/RSS/Base/interface.h.
 // RawSize/Offset fields are local parser metadata, not part of the wire data.
 
-const stGradeItemInfoQtLinux64Pack4ReferenceSize = 36
+// 48/RSS（interface.h 注释区 ConstPreDefine）硬编码线宽，与下位机 StGlobal 对齐用。
+const (
+	cTCP48StGradeInfoWireSize  = 11600 // sizeof(StGradeInfo)
+	cTCP48StGlobalExpectedSize = 28496 // sizeof(StGlobal)，48 口、非 LS8/MAX64
+	cTCP48MaxChannelNum        = 12
+	cTCP48MaxIPMNum            = 12
+	cTCP48MaxExitNum           = 48
+	cTCP48MaxLabelNum          = 4
+	cTCP48ChannelNumPerIPM     = 2
+	cTCP48MaxColorCamera       = 3
+	cTCP48MaxNIRCamera         = 6
+	cTCP48AnalogDensitySlots   = 32 // MAX_FRUIT_TYPE_MAJOR_CLASS_NUM
+	cTCP48MaxCameraDelayInts   = cTCPServerMaxCameraNum * 2
+)
 
 func stGradeItemInfoGoSize() uintptr {
 	return unsafe.Sizeof(StGradeItemInfo{})
-}
-
-func stGradeItemInfoWireSize() int {
-	return len(StGradeItemInfoWire{})
-}
-
-func stGradeItemInfoQtLinux64Pack4Size() int {
-	return stGradeItemInfoQtLinux64Pack4ReferenceSize
-}
-
-func stGradeItemInfoSizeSummary() string {
-	return fmt.Sprintf(
-		"StGradeItemInfo size(go=%d, wire=%d, qt_linux64_pack4=%d)",
-		stGradeItemInfoGoSize(),
-		stGradeItemInfoWireSize(),
-		stGradeItemInfoQtLinux64Pack4Size(),
-	)
-}
-
-// StGradeItemInfoLayoutReport 返回当前编译目标下 StGradeItemInfo 的真实 sizeof/alignof 及各字段 offset（调试用）。
-func StGradeItemInfoLayoutReport() string {
-	var z StGradeItemInfo
-	var w StGradeItemInfoWire
-	t := reflect.TypeOf(z)
-	var b strings.Builder
-	fmt.Fprintf(&b, "=== StGradeItemInfo（Exit 已拆为 ExitLow+ExitHigh）真实内存布局 ===\n")
-	fmt.Fprintf(&b, "GOOS=%s GOARCH=%s（当前这份 libohos 的编译目标）\n", runtime.GOOS, runtime.GOARCH)
-	fmt.Fprintf(&b, "真实 unsafe.Sizeof(StGradeItemInfo)=%d 字节\n", unsafe.Sizeof(z))
-	fmt.Fprintf(&b, "真实 unsafe.Alignof(StGradeItemInfo)=%d\n", unsafe.Alignof(z))
-	fmt.Fprintf(&b, "encoding/binary.Size(StGradeItemInfo)=%d\n", binary.Size(z))
-	fmt.Fprintf(&b, "StGradeItemInfoWire=[%d]byte sizeof=%d（线长，应与上式一致）\n", len(w), unsafe.Sizeof(w))
-	if unsafe.Sizeof(z) != unsafe.Sizeof(w) {
-		fmt.Fprintf(&b, "警告: sizeof(结构体) != sizeof(Wire)，binary.Read/Write 与 C 36 字节对齐可能有问题\n")
-	}
-	fmt.Fprintf(&b, "stGradeItemInfoWireSize()=%d\n", stGradeItemInfoWireSize())
-	fmt.Fprintf(&b, "字段 reflect offset/size:\n")
-	for i := 0; i < t.NumField(); i++ {
-		f := t.Field(i)
-		fmt.Fprintf(&b, "  %s offset=%d size=%d\n", f.Name, f.Offset, f.Type.Size())
-	}
-	return b.String()
 }
 
 type CTCPConfigSnapshot struct {
@@ -70,6 +39,7 @@ type CTCPConfigSnapshot struct {
 	RawPayload []byte
 	SysConfig  StSysConfig
 	GradeInfo  StGradeInfo
+	Global     StGlobal
 }
 
 /*
@@ -83,9 +53,100 @@ uint8    // quint8       1
 
 */
 
-type StGlobal struct { //全局出口
-	sys   StSysConfig
-	grade StGradeInfo
+type StWhiteBalanceMean struct {
+	MeanR int32
+	MeanG int32
+	MeanB int32
+}
+
+type StFruitCup struct {
+	NLeft    [cTCP48ChannelNumPerIPM]int32
+	NTop     int32
+	NBottom  int32
+	NOffsetX int32
+	NOffsetY int32
+}
+
+type StCameraParas struct {
+	MeanValue           StWhiteBalanceMean
+	Cup                 [cTCP48ChannelNumPerIPM]StFruitCup
+	NROIOffsetY         [cTCP48ChannelNumPerIPM]int32
+	NTriggerDelay       int32
+	NShutter            int32
+	NDetectionThreshold [cTCP48ChannelNumPerIPM]int32
+	NDetectWhiteTh      [cTCP48ChannelNumPerIPM]int32
+	FGammaCorrection    float32
+	FPixelRatio         [cTCP48ChannelNumPerIPM]float32
+	FFruitCupRangeTh    [cTCP48ChannelNumPerIPM]float32
+	NXYEdgeBreakTh      [cTCP48ChannelNumPerIPM]uint8
+	CCameraNum          uint8
+	_                   [1]byte
+}
+
+type StIRCameraParas struct {
+	Cup                   [cTCP48ChannelNumPerIPM]StFruitCup
+	NROIOffsetY           [cTCP48ChannelNumPerIPM]int32
+	NTriggerDelay         int32
+	NShutter              int32
+	NIRDetectionThreshold [cTCP48ChannelNumPerIPM]int32
+	FGammaCorrection      float32
+	FPixelRatio           [cTCP48ChannelNumPerIPM]float32
+	FFruitCupRangeTh      [cTCP48ChannelNumPerIPM]float32
+	NXYEdgeBreakTh        [cTCP48ChannelNumPerIPM]uint8
+	CCameraNum            uint8
+	_                     [1]byte
+}
+
+type StParas struct {
+	CameraParas   [cTCP48MaxColorCamera]StCameraParas
+	IrCameraParas [cTCP48MaxNIRCamera]StIRCameraParas
+	NCupNum       int32
+}
+
+type StLabelItemInfo struct {
+	NDis       int16
+	NDriverPin int16
+}
+
+type StExitItemInfo struct {
+	NDis       int16
+	NOffset    int16
+	NDriverPin int16
+}
+
+type StExitInfo struct {
+	Labelexit [cTCP48MaxLabelNum]StLabelItemInfo
+	Exits     [cTCP48MaxExitNum]StExitItemInfo
+}
+
+type StGlobalExitInfo struct {
+	NPulse      uint8
+	VersionFlag uint8
+	NLabelPulse int16
+	NDriverPin  [cTCP48MaxExitNum]int16
+	DelayTime   [cTCP48MaxExitNum]float32
+	HoldTime    [cTCP48MaxExitNum]float32
+}
+
+type StAnalogDensity struct {
+	UAnalogDensity [cTCP48AnalogDensitySlots]float32
+}
+
+type StMotorInfo struct {
+	BExitId                  uint8
+	BMotorSwitch             uint8
+	_                        uint16
+	NMotorEnableSwitchNum    int32
+	NMotorEnableSwitchWeight int32
+	FDelayTime               float32
+	FHoldTime                float32
+}
+
+// struct Stglobal
+type StGlobal struct {
+	Sys   StSysConfig      // 系统配置
+	grade StGradeInfo      // 等级信息
+	gexit StGlobalExitInfo //全局出口信息
 }
 
 type StSysConfig struct {
@@ -95,7 +156,7 @@ type StSysConfig struct {
 	nDataRegistration      [4]uint8
 	nImageSugar            [4]uint8
 	nImageUltrasonic       [4]uint8
-	nCameraDelay           [4 * 2]int32
+	nCameraDelay           [18]int32
 	width                  int32
 	height                 int32
 	packetSize             int32
@@ -119,9 +180,9 @@ type StSysConfig struct {
 }
 
 type StGradeInfo struct {
-	Intervals        [3]StColorIntervalItem      // 3个颜色
-	percent          [16 * 3]StPercentInfo       //16个等级，每个等级3种颜色
-	grades           [16 * 3]StGradeItemInfoWire // C 侧 #pragma pack(4)，每项固定 36 字节
+	Intervals        [3]StColorIntervalItem // 3个颜色
+	percent          [48]StPercentInfo      //48个等级，每个等级3种颜色
+	grades           [256]StGradeItemInfo   // 36字节
 	ExitEnabled      [2]int32
 	ColorIntervals   [2]int32
 	nExitSwitchNum   [48]int32
@@ -131,8 +192,42 @@ type StGradeInfo struct {
 	unFlawAreaFactor [12]uint32
 	unBruiseFactor   [12]uint32
 	unRotFactor      [12]uint32
-	fDensityFactor   [12]float32
-	fSugarFactor     [12]float32
+	fDensityFactor   [6]float32
+	fSugarFactor     [6]float32
+	fAcidityFactor   [6]float32
+	fHollowFactor    [6]float32
+	fSkinFactor      [6]float32
+	fBrownFactor     [6]float32
+	fTangxinFactor   [6]float32
+	fWaterFactor     [6]float32
+	fShapeFactor     [6]float32
+
+	strSizeGradeName    [192]uint8
+	strQualityGradeName [192]uint8
+	stDensityGradeName  [72]uint8
+	strColorGradeName   [192]uint8
+	strShapeGradeName   [72]uint8
+	stFlawareaGradeName [72]uint8
+	stBruiseGradeName   [72]uint8
+	stRotGradeName      [72]uint8
+	stSugarGradeName    [72]uint8
+	stAcidityGradeName  [72]uint8
+	stSkinGradeName     [72]uint8
+	stBrownGradeName    [72]uint8
+	stRigidityGradeName [72]uint8
+	stWaterGradeName    [72]uint8
+
+	ColorType        uint8
+	nLabelType       uint8
+	nLabelbyExit     [48]uint8
+	nSwitchLabel     [48]uint8
+	nSizeGradeNum    uint8
+	nQualityGradeNum uint8
+	nClassifyType    uint8
+
+	nCheckNum int16
+	//ifdef
+	ForceChannel int16
 }
 
 type StColorIntervalItem struct { //等级设置信息,发送给每一个FSM (HC_ID, FSM, HC_CMD_GRADE_INFO, stGradeInfo)
@@ -174,8 +269,6 @@ type StGradeItemInfo struct {
 	SbWater        int8 // offset 33
 	SbLabelbyGrade int8 // offset 34
 
-	// TailPad C 端 #pragma pack(4) 第 36 字节（编译器尾填充）；与 StGradeItemInfoWire 最后一字节对应。
-	TailPad byte // offset 35
 }
 
 // 拼接4 字节成为8
@@ -188,7 +281,6 @@ const (
 	cTCPServerMaxNoticeLength      = 30
 	cTCPServerMaxQualityGradeNum   = 16
 
-	// 与当前 StStatistics 定义一致（unsafe.Sizeof）；binary.Size 可能因尾部 padding 少几字节。
 	stStatisticsExpectedSize = 7152
 )
 
