@@ -41,6 +41,7 @@ func newRouter() http.Handler {
 			"message":   "pong from Go",
 		})
 	})
+	registerWebSocketRoutes(router)
 	return router
 }
 

@@ -459,6 +459,10 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			stg.NVersion,
 		)
 		if jsonErr == nil && fullJSON != "" {
+			setCTCPLastStGlobalFullJSON(fullJSON)
+			if err := PublishWebSocketJSON(webSocketTopicStGlobal, fullJSON); err != nil {
+				setCTCPServerLastMessage("CTCP StGlobal WebSocket 推送失败: %v", err)
+			}
 			appendCTCPLogChunks("CTCP StGlobal 全量", fullJSON)
 		} else {
 			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败: %v", jsonErr)
@@ -470,12 +474,13 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		if err != nil {
 			return
 		}
-		StateJson, jsonErr := FormatDataFullJSON(state) //转成json字符串
-		if StateJson != "" && jsonErr == nil {
-			//发送给websocket
+		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
+		if stateJSON != "" && jsonErr == nil {
+			if err := PublishWebSocketJSON(webSocketTopicStatistics, stateJSON); err != nil {
+				setCTCPServerLastMessage("CTCP StStatistics WebSocket 推送失败: %v", err)
+			}
 			return
-		}
-		else{
+		} else {
 			setCTCPServerLastMessage("CTCP StStatistics JSON 生成失败: %v", jsonErr) //生成失败记录日志
 		}
 
@@ -486,8 +491,14 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StFruitGradeInfos{})))
 			return
 		}
-		FormatDataFullJSON(grade) //转成json 字符串
-		//调用websocket 发送数据
+		gradeJSON, jsonErr := FormatDataFullJSON(grade) //转成json 字符串
+		if gradeJSON != "" && jsonErr == nil {
+			if err := PublishWebSocketJSON(webSocketTopicGrade, gradeJSON); err != nil {
+				setCTCPServerLastMessage("CTCP StFruitGradeInfos WebSocket 推送失败: %v", err)
+			}
+			return
+		}
+		setCTCPServerLastMessage("CTCP StFruitGradeInfos JSON 生成失败: %v", jsonErr)
 
 	case cmdFSMGetVersion, cmdWAMVersionInfo:
 		setCTCPServerLastMessage("CTCP handled %s: version bytes=%q", cTCPCommandName(head.NCmdId), strings.TrimRight(string(payload), "\x00\r\n "))
