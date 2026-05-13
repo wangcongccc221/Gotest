@@ -8,12 +8,7 @@ import (
 	"strings"
 )
 
-// StGlobalLayoutReport 输出 StGlobal 及其可达的嵌套结构体在「当前编译目标」下的
-// sizeof、align 以及各字段 offset/size。
-//
-// 鸿蒙工程与本仓库 build_ohos 脚本一致时使用 GOOS=android GOARCH=arm64；
-// 在 PC 上直接 go run/go test 会得到 windows/amd64 等布局，与设备上的 .so 可能不同。
-// 以设备上编译的 libohos.so 为准时，请调用 GoStGlobalLayoutReport 在真机/模拟器上取报告。
+// StGlobalLayoutReport 输出 StGlobal 及其可达的嵌套结构体
 func StGlobalLayoutReport() string {
 	root := reflect.TypeOf(StGlobal{})
 	all := make(map[reflect.Type]struct{})

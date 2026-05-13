@@ -10,7 +10,6 @@ const DOMAIN = 0x0000;
 struct Index {
   @State message: string = 'Hello World';
   @State stGlobalLayout: string = '点击「StGlobal 布局」从 Go(libohos.so) 读取';
-  @State stGlobalParsedFullJson: string = '点击「StGlobal 全量解析 JSON」从 NAPI 读取（约几十万字符；界面仅预览一段，完整看 console / HiLog）';
 
   private async requestGin(port: number): Promise<string> {
     const client = http.createHttp();
@@ -38,15 +37,6 @@ struct Index {
       console.log(lines[i]);
     }
     console.log('=== StGlobalLayoutReport end ===');
-  }
-
-  private dumpLargeTextToConsole(tag: string, text: string): void {
-    console.log(`=== ${tag} begin ===`);
-    const lines = text.split('\n');
-    for (let i = 0; i < lines.length; i++) {
-      console.log(lines[i]);
-    }
-    console.log(`=== ${tag} end，共 ${text.length} 字符 ===`);
   }
 
   build() {
@@ -89,38 +79,6 @@ struct Index {
             this.dumpLayoutToConsole(report);
             hilog.info(DOMAIN, 'testTag', 'StGlobal layout chars = %{public}d', report.length);
           })
-        Button('StGlobal 全量解析 JSON（收到 0x1000 后）')
-          .margin({ top: 8 })
-          .onClick(() => {
-            if (!testNapi.lastStGlobalFullJSON) {
-              this.stGlobalParsedFullJson = 'NAPI 未导出 lastStGlobalFullJSON，请重新编译 libohos.so + entry';
-              return;
-            }
-            let j = testNapi.lastStGlobalFullJSON();
-            if (j.length === 0) {
-              j = '空：请先收到 FSM_CMD_CONFIG，或 nativeLastError：' + testNapi.nativeLastError();
-              this.stGlobalParsedFullJson = j;
-              return;
-            }
-            this.dumpLargeTextToConsole('StGlobal 全量解析 JSON', j);
-            hilog.info(DOMAIN, 'testTag', 'StGlobal 全量 JSON chars = %{public}d', j.length);
-            const maxPreview = 20000;
-            if (j.length > maxPreview) {
-              this.stGlobalParsedFullJson = j.substring(0, maxPreview) +
-                `\n\n... （界面只预览前 ${maxPreview} 字符；完整已在 console 按行输出，HiLog 搜「CTCP StGlobal 全量」）`;
-            } else {
-              this.stGlobalParsedFullJson = j;
-            }
-          })
-        Scroll() {
-          Text(this.stGlobalParsedFullJson)
-            .fontSize(9)
-            .fontFamily('monospace')
-            .width('100%')
-        }
-        .width('100%')
-        .height(200)
-        .margin({ top: 4 })
         Scroll() {
           Text(this.stGlobalLayout)
             .fontSize(9)

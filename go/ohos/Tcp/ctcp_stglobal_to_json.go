@@ -4,10 +4,38 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"sync"
 )
 
-// valueToReflectJSON 将任意值转为可被 encoding/json 序列化的树（含未导出字段的数值/嵌套），
-// 用于在鸿蒙侧输出完整 StGlobal 快照；不处理循环引用。
+var (
+	cTCPLastStGlobalFullJSONMu sync.Mutex
+	cTCPLastStGlobalFullJSON   string
+)
+
+// LastCTCPStGlobalFullJSON 返回最近一次 save 写入的 StGlobal 全量 JSON；未调用过 save 或失败清空后为 ""。
+func LastCTCPStGlobalFullJSON() string {
+	cTCPLastStGlobalFullJSONMu.Lock()
+	defer cTCPLastStGlobalFullJSONMu.Unlock()
+	return cTCPLastStGlobalFullJSON
+}
+
+// saveCTCPStGlobalFullJSON 将 StGlobal 序列化后写入全局缓存（供 HTTP/NAPI 等读取）。返回 JSON 或 ""。
+func saveCTCPStGlobalFullJSON(global StGlobal) string {
+	full, err := FormatDataFullJSON(global)
+	cTCPLastStGlobalFullJSONMu.Lock()
+	if err != nil {
+		cTCPLastStGlobalFullJSON = ""
+	} else {
+		cTCPLastStGlobalFullJSON = full
+	}
+	cTCPLastStGlobalFullJSONMu.Unlock()
+	if err != nil {
+		return ""
+	}
+	return full
+}
+
+// valueToReflectJSON 将任意值转为可被 encoding/json 序列化的树（含未导出字段的数值/嵌套）。
 func valueToReflectJSON(v reflect.Value) any {
 	if !v.IsValid() {
 		return nil
@@ -73,9 +101,9 @@ func valueToReflectJSON(v reflect.Value) any {
 	}
 }
 
-// FormatStGlobalFullJSON 输出 StGlobal 的完整 JSON（缩进），含所有嵌套字段。
-func FormatStGlobalFullJSON(g StGlobal) (string, error) {
-	tree := valueToReflectJSON(reflect.ValueOf(g))
+// FormatDataFullJSON 反射全字段转缩进 JSON 字符串（与下位机布局对齐的 struct 可直接传入）。
+func FormatDataFullJSON[T any](data T) (string, error) {
+	tree := valueToReflectJSON(reflect.ValueOf(data))
 	b, err := json.MarshalIndent(tree, "", "  ")
 	if err != nil {
 		return "", err

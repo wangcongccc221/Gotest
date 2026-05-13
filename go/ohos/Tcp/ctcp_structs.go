@@ -9,7 +9,6 @@ import (
 // Structures below mirror the CTCP payload structs in 48/RSS/Base/interface.h.
 // RawSize/Offset fields are local parser metadata, not part of the wire data.
 
-// 48/RSS（interface.h 注释区 ConstPreDefine）硬编码线宽，与下位机 StGlobal 对齐用。
 const (
 	cTCP48StGradeInfoWireSize  = 11600
 	cTCP48StGlobalExpectedSize = 28712
@@ -24,20 +23,6 @@ const (
 	cTCP48MaxCameraDelayInts   = cTCPServerMaxCameraNum * 2
 )
 
-type CTCPConfigSnapshot struct {
-	ServerName string
-	Port       int
-	RemoteAddr string
-	SrcID      int32
-	DstID      int32
-	CmdID      int32
-	ReceivedAt int64
-	RawPayload []byte
-	SysConfig  StSysConfig
-	GradeInfo  StGradeInfo
-	Global     StGlobal
-}
-
 /*
 go           QT  linux 64
 uint64   // ulong    8字节
@@ -51,48 +36,48 @@ uint8    // quint8       1
 
 type StGlobal struct {
 	Sys   StSysConfig      // 系统配置   已完成  504
-	grade StGradeInfo      // 等级信息  已完成  11600
-	gexit StGlobalExitInfo //全局出口信息  已完成 484
+	Grade StGradeInfo      // 等级信息  已完成  11600
+	GExit StGlobalExitInfo //全局出口信息  已完成  484
 
 	//#ifndef
-	gweight StGlobalWeightBaseInfo // 全局重量信息
+	GWeight StGlobalWeightBaseInfo // 全局重量信息
 
-	analogdensity StAnalogDensity // 水果设置界面  已完成 128
-	exit          [12]StExitInfo  // 出口信息  304   304*12= 3648
-	paras         [12]StParas     //IPM参数  11136
+	AnalogDensity StAnalogDensity // 水果设置界面  已完成 128
+	Exit          [12]StExitInfo  // 出口信息  304   304*12= 3648
+	Paras         [12]StParas     //IPM参数  11136
 
-	weights [12]StWeightBaseInfo //192
+	Weights [12]StWeightBaseInfo //192
 
-	motor    [48]StMotorInfo //20*48=960 电机信息
-	cFSMInfo [12]uint8
-	cIPMInfo [12]uint8
+	Motor    [48]StMotorInfo //20*48=960 电机信息
+	CFSMInfo [12]uint8
+	CIPMInfo [12]uint8
 
-	nSubsysId int32
-	nVersion  int32 //版本号
+	NSubsysId int32
+	NVersion  int32 //版本号
 
 	// 先注释 后面在使用 查找一下问题
-	// nNetState   uint8
-	// nFsmRestart uint8
-	// nFsmModule  uint8
+	// NNetState   uint8
+	// NFsmRestart uint8
+	// NFsmModule  uint8
 }
 
 type StSysConfig struct {
-	exitstate              [384]uint8
-	nChannelInfo           [4]uint8
-	nImageUV               [4]uint8
-	nDataRegistration      [4]uint8
-	nImageSugar            [4]uint8
-	nImageUltrasonic       [4]uint8
-	nCameraDelay           [18]int32
-	width                  int32
-	height                 int32
-	packetSize             int32
-	nSystemInfo            uint16
-	nSubsysNum             uint8
-	nExitNum               uint8
-	nClassificationInfo    uint8
-	multiFreq              uint8
-	nCameraType            uint8
+	ExitState              [384]uint8
+	NChannelInfo           [4]uint8
+	NImageUV               [4]uint8
+	NDataRegistration      [4]uint8
+	NImageSugar            [4]uint8
+	NImageUltrasonic       [4]uint8
+	NCameraDelay           [18]int32
+	Width                  int32
+	Height                 int32
+	PacketSize             int32
+	NSystemInfo            uint16
+	NSubsysNum             uint8
+	NExitNum               uint8
+	NClassificationInfo    uint8
+	MultiFreq              uint8
+	NCameraType            uint8
 	CIRClassifyType        uint8
 	UVClassifyType         uint8
 	WeightClassifyTpye     uint8
@@ -103,73 +88,73 @@ type StSysConfig struct {
 	CheckNum               uint8
 
 	//#if defined
-	nIQSEnable uint8
+	NIQSEnable uint8
 }
 
 type StGradeInfo struct {
 	Intervals        [3]StColorIntervalItem // 3个颜色
-	percent          [48]StPercentInfo      //48个等级，每个等级3种颜色
-	grades           [256]StGradeItemInfo   // 36字节
+	Percent          [48]StPercentInfo      //48个等级，每个等级3种颜色
+	Grades           [256]StGradeItemInfo   // 36字节
 	ExitEnabled      [2]int32
 	ColorIntervals   [2]int32
-	nExitSwitchNum   [48]int32
-	nTagInfo         [6]uint8
-	nFruitType       int32
-	strFruitName     [50]uint8
-	unFlawAreaFactor [12]uint32
-	unBruiseFactor   [12]uint32
-	unRotFactor      [12]uint32
-	fDensityFactor   [6]float32
-	fSugarFactor     [6]float32
-	fAcidityFactor   [6]float32
-	fHollowFactor    [6]float32
-	fSkinFactor      [6]float32
-	fBrownFactor     [6]float32
-	fTangxinFactor   [6]float32
-	fRigidityFactor  [6]float32
-	fWaterFactor     [6]float32
-	fShapeFactor     [6]float32
+	NExitSwitchNum   [48]int32
+	NTagInfo         [6]uint8
+	NFruitType       int32
+	StrFruitName     [50]uint8
+	UnFlawAreaFactor [12]uint32
+	UnBruiseFactor   [12]uint32
+	UnRotFactor      [12]uint32
+	FDensityFactor   [6]float32
+	FSugarFactor     [6]float32
+	FAcidityFactor   [6]float32
+	FHollowFactor    [6]float32
+	FSkinFactor      [6]float32
+	FBrownFactor     [6]float32
+	FTangxinFactor   [6]float32
+	FRigidityFactor  [6]float32
+	FWaterFactor     [6]float32
+	FShapeFactor     [6]float32
 
-	strSizeGradeName    [192]uint8
-	strQualityGradeName [192]uint8
-	stDensityGradeName  [72]uint8
-	strColorGradeName   [192]uint8
-	strShapeGradeName   [72]uint8
-	stFlawareaGradeName [72]uint8
-	stBruiseGradeName   [72]uint8
-	stRotGradeName      [72]uint8
-	stSugarGradeName    [72]uint8
-	stAcidityGradeName  [72]uint8
-	stHollowGradeName   [72]uint8
-	stSkinGradeName     [72]uint8
-	stBrownGradeName    [72]uint8
-	stTangxinGradeName  [72]uint8
-	stRigidityGradeName [72]uint8
-	stWaterGradeName    [72]uint8
+	StrSizeGradeName    [192]uint8
+	StrQualityGradeName [192]uint8
+	StDensityGradeName  [72]uint8
+	StrColorGradeName   [192]uint8
+	StrShapeGradeName   [72]uint8
+	StFlawareaGradeName [72]uint8
+	StBruiseGradeName   [72]uint8
+	StRotGradeName      [72]uint8
+	StSugarGradeName    [72]uint8
+	StAcidityGradeName  [72]uint8
+	StHollowGradeName   [72]uint8
+	StSkinGradeName     [72]uint8
+	StBrownGradeName    [72]uint8
+	StTangxinGradeName  [72]uint8
+	StRigidityGradeName [72]uint8
+	StWaterGradeName    [72]uint8
 
 	ColorType        uint8
-	nLabelType       uint8
-	nLabelbyExit     [48]uint8
-	nSwitchLabel     [48]uint8
-	nSizeGradeNum    uint8
-	nQualityGradeNum uint8
-	nClassifyType    uint8
+	NLabelType       uint8
+	NLabelbyExit     [48]uint8
+	NSwitchLabel     [48]uint8
+	NSizeGradeNum    uint8
+	NQualityGradeNum uint8
+	NClassifyType    uint8
 
-	nCheckNum int16
+	NCheckNum int16
 	//ifdef
 	ForceChannel int16
 }
 
 type StColorIntervalItem struct { //等级设置信息,发送给每一个FSM (HC_ID, FSM, HC_CMD_GRADE_INFO, stGradeInfo)
-	nMinU uint8
-	nMaxU uint8
-	nMinV uint8
-	nMaxV uint8
+	NMinU uint8
+	NMaxU uint8
+	NMinV uint8
+	NMaxV uint8
 }
 
 type StPercentInfo struct {
-	nMax uint8
-	nMin uint8
+	NMax uint8
+	NMin uint8
 }
 
 // 4字节对齐
@@ -200,71 +185,71 @@ type StGradeItemInfo struct {
 }
 
 type StGlobalExitInfo struct { //484字节
-	nPulse      uint8
-	versionFlag uint8
-	nLabelPulse int16
-	nDriverPin  [48]int16
-	Delay_time  [48]float32
-	Hold_time   [48]float32
+	NPulse      uint8
+	VersionFlag uint8
+	NLabelPulse int16
+	NDriverPin  [48]int16
+	DelayTime   [48]float32
+	HoldTime    [48]float32
 }
 
 type StGlobalWeightBaseInfo struct {
-	fFilterParam           float32 // 4
+	FFilterParam           float32 // 4
 	AD_Filter_ALG          uint8   // 1
-	nEffectCupThreshold    int16
-	nMinGradeThreshold     int16
-	nCupDeviationThreshold int16
-	nCupBreakageThreshold  int16
-	nBaseCupNum            int16
-	nTotalCupNums          [4]int16
+	NEffectCupThreshold    int16
+	NMinGradeThreshold     int16
+	NCupDeviationThreshold int16
+	NCupBreakageThreshold  int16
+	NBaseCupNum            int16
+	NTotalCupNums          [4]int16
 	RefWeight              int16
 	WeightTh               uint8
 }
 
 type StAnalogDensity struct { //水果设置界面  //128
-	uAnalogDensity [32]float32
+	UAnalogDensity [32]float32
 }
 
 type StExitInfo struct {
-	labelexit [4]StLabelItemInfo
-	exits     [48]StExitItemInfo
+	LabelExit [4]StLabelItemInfo
+	Exits     [48]StExitItemInfo
 }
 
 type StLabelItemInfo struct { // 贴标信息
-	nDis       int16
-	nDriverPin int16
+	NDis       int16
+	NDriverPin int16
 }
 
 type StExitItemInfo struct { // 出口信息
-	nDis       int16
-	nOffset    int16
-	nDriverPin int16
+	NDis       int16
+	NOffset    int16
+	NDriverPin int16
 }
 
 type StParas struct { //IPM参数
-	cameraParas   [3]StCameraParas
-	irCameraParas [6]StIRCameraParas
-	nCupNum       int32
+	CameraParas   [3]StCameraParas
+	IRCameraParas [6]StIRCameraParas
+	NCupNum       int32
 }
 
 type StWeightBaseInfo struct { //IPM参数中的重量信息 16字节
-	fGADParam          [2]float32
-	fTemperatureParams float32
-	waveinterval       [2]uint16
+	FGADParam          [2]float32
+	FTemperatureParams float32
+	WaveInterval       [2]uint16
 }
 type StCameraParas struct {
 	MeanValue           StWhiteBalanceMean
-	cup                 [2]StFruitCup
-	nROIOffsetY         [2]int32
-	nTriggerDelay       int32
-	nShutter            int32
-	nDetectionThreshold [2]int32
-	nDetectWhiteTh      [2]int32
-	fGammaCorrection    float32
-	fPixelRatio         [2]float32
-	fFruitCupRangeTh    [2]float32
-	nXYEdgeBreakTh      [2]uint8
-	cCameraNum          uint8
+	Cup                 [2]StFruitCup
+	NROIOffsetY         [2]int32
+	NTriggerDelay       int32
+	NShutter            int32
+	NDetectionThreshold [2]int32
+	NDetectWhiteTh      [2]int32
+	FGammaCorrection    float32
+	FPixelRatio         [2]float32
+	FFruitCupRangeTh    [2]float32
+	NXYEdgeBreakTh      [2]uint8
+	CCameraNum          uint8
 }
 
 type StWhiteBalanceMean struct { //隶属于StCameraParas
@@ -274,33 +259,33 @@ type StWhiteBalanceMean struct { //隶属于StCameraParas
 }
 
 type StFruitCup struct { //隶属于StCameraParas
-	nLeft    [2]int32
-	nTop     int32
-	nBottom  int32
-	nOffsetX int32
-	nOffsetY int32
+	NLeft    [2]int32
+	NTop     int32
+	NBottom  int32
+	NOffsetX int32
+	NOffsetY int32
 }
 
 type StIRCameraParas struct { //红外参数
-	cup                   [2]StFruitCup
-	nROIOffsetY           [2]int32
-	nTriggerDelay         int32
-	nShutter              int32
-	nIRDetectionThreshold [2]int32
-	fGammaCorrection      float32
-	fPixelRatio           [2]float32
-	fFruitCupRangeTh      [2]float32
-	nXYEdgeBreakTh        [2]uint8
-	cCameraNum            uint8
+	Cup                   [2]StFruitCup
+	NROIOffsetY           [2]int32
+	NTriggerDelay         int32
+	NShutter              int32
+	NIRDetectionThreshold [2]int32
+	FGammaCorrection      float32
+	FPixelRatio           [2]float32
+	FFruitCupRangeTh      [2]float32
+	NXYEdgeBreakTh        [2]uint8
+	CCameraNum            uint8
 }
 
 type StMotorInfo struct {
-	bExitId                  uint8
-	bMotorSwitch             uint8
-	nMotorEnableSwitchNum    int32
-	nMotorEnableSwitchWeight int32
-	fDelay_time              float32
-	fHold_time               float32
+	BExitId                  uint8
+	BMotorSwitch             uint8
+	NMotorEnableSwitchNum    int32
+	NMotorEnableSwitchWeight int32
+	FDelayTime               float32
+	FHoldTime                float32
 }
 
 // 拼接4 字节成为8
@@ -309,7 +294,6 @@ func (s StGradeItemInfo) Exit() uint64 {
 }
 
 const (
-	cTCPServerStatisticsMaxExitNum = cTCPServerStSysConfigExit48
 	cTCPServerMaxNoticeLength      = 30
 	cTCPServerMaxQualityGradeNum   = 16
 
@@ -330,129 +314,129 @@ uint8    // quint8       1
 
 // ---------------------------------------------------------------------------------------------------
 type StStatistics struct {
-	NGradeCount         [256]uint64
-	NWeightGradeCount   [256]uint64
-	NExitCount          [48]uint64
-	NExitWeightCount    [48]uint64
-	NChannelTotalCount  uint64
-	NChannelWeightCount uint64
-	NSubsysId           int32
-	NBoxGradeCount      [256]int32
+	NGradeCount         [256]uint64 `json:"nGradeCount"`
+	NWeightGradeCount   [256]uint64 `json:"nWeightGradeCount"`
+	NExitCount          [48]uint64  `json:"nExitCount"`
+	NExitWeightCount    [48]uint64  `json:"nExitWeightCount"`
+	NChannelTotalCount  uint64      `json:"nChannelTotalCount"`
+	NChannelWeightCount uint64      `json:"nChannelWeightCount"`
+	NSubsysId           int32       `json:"nSubsysId"`
+	NBoxGradeCount      [256]int32  `json:"nBoxGradeCount"`
 	// Pad1                  [4]byte
-	NBoxGradeWeight [256]int32
+	NBoxGradeWeight [256]int32 `json:"nBoxGradeWeight"`
 	//------------
-	NTotalCupNum          int32
-	NInterval             int32
-	NIntervalSumperminute int32
-	NCupState             uint16
-	NPulseInterval        uint16
-	NUnpushFruitCount     uint16
+	NTotalCupNum          int32  `json:"nTotalCupNum"`
+	NInterval             int32  `json:"nInterval"`
+	NIntervalSumperminute int32  `json:"nIntervalSumperminute"`
+	NCupState             uint16 `json:"nCupState"`
+	NPulseInterval        uint16 `json:"nPulseInterval"`
+	NUnpushFruitCount     uint16 `json:"nUnpushFruitCount"`
 
 	//#if defined
-	NNetState      uint8 //1字节
-	NWeightSetting uint8
+	NNetState      uint8 `json:"nNetState"` //1字节
+	NWeightSetting uint8 `json:"nWeightSetting"`
 
-	NSCMState    uint8
-	NIQSNetState uint8
-	NLockState   uint8
+	NSCMState    uint8 `json:"nSCMState"`
+	NIQSNetState uint8 `json:"nIQSNetState"`
+	NLockState   uint8 `json:"nLockState"`
 
-	ExitBoxNum [48]uint32
+	ExitBoxNum [48]uint32 `json:"exitBoxNum"`
 }
 
 // 水果子系统信息
 type SysStStatistics struct {
-	nTotalCount  [4]uint64
-	nWeightCount [4]uint64
+	NTotalCount  [4]uint64
+	NWeightCount [4]uint64
 }
 
 // 水果实时分级信息
 type StFruitVisionParam struct {
-	unColorRate0   uint32
-	unColorRate1   uint32
-	unColorRate2   uint32
-	unArea         uint32
-	unFlawArea     uint32
-	unVolume       uint32
-	unFlawNum      uint32
-	unMaxR         float32
-	unMinR         float32
-	unSelectBasis  float32
-	fDiameterRatio float32
-	fMinDRatio     float32
+	UnColorRate0   uint32
+	UnColorRate1   uint32
+	UnColorRate2   uint32
+	UnArea         uint32
+	UnFlawArea     uint32
+	UnVolume       uint32
+	UnFlawNum      uint32
+	UnMaxR         float32
+	UnMinR         float32
+	UnSelectBasis  float32
+	FDiameterRatio float32
+	FMinDRatio     float32
 }
 
 // 水果实时分级信息，紫外线相机的IPM发送给FSM，FSM转发过来
 type StFruitUVParam struct {
-	unBruiseArea uint32
-	unBruiseNum  uint32
-	unRotArea    uint32
-	unRotNumy    uint32
-	unRigidity   uint32
-	unWater      uint32
-	unTimeTag    uint32
+	UnBruiseArea uint32
+	UnBruiseNum  uint32
+	UnRotArea    uint32
+	UnRotNumy    uint32
+	UnRigidity   uint32
+	UnWater      uint32
+	UnTimeTag    uint32
 }
 
 // 水果实时分级信息，NIR(含糖量检测仪)发送给FSM,FSM转发过来
 type StNIRParam struct {
-	fSugar    float32
-	fAcidity  float32
-	fHollow   float32
-	fSkin     float32
-	fBrown    float32
-	fTangxin  float32
-	unTimeTag uint32
+	FSugar    float32
+	FAcidity  float32
+	FHollow   float32
+	FSkin     float32
+	FBrown    float32
+	FTangxin  float32
+	UnTimeTag uint32
 }
 
 // 水果实时分级信息，FSM发送过来 (FSM, HC_ID, FSM_CMD_GRADEINFO, stFruitGradeInfo)
 type StFruitParam struct {
-	visionParam StFruitVisionParam
-	uvParam     StFruitUVParam
-	nirParam    StNIRParam
-	fWeight     float32
-	fDensity    float32
-	unGrade     uint32
+	VisionParam StFruitVisionParam
+	UVParam     StFruitUVParam
+	NIRParam    StNIRParam
+	FWeight     float32
+	FDensity    float32
+	UnGrade     uint32
 
-	unWhichExit uint8
+	UnWhichExit uint8
 }
 
 type StFruitGradeInfo struct {
-	param    [2]StFruitParam //IPM的id号
-	nRouteId int32
+	Param    [2]StFruitParam //IPM的id号
+	NRouteId int32
 }
 
 // 重量统计信息,FSM发送过来 (WM, HC_ID, FSM_CMD_WEIGHTINFO, stWeightResult
 type StWeightStat struct {
-	fCupAverageWeight float32
-	nAD0              uint16
-	nAD1              uint16
-	nStandardAD0      uint16
-	nStandardAD1      uint16
+	FCupAverageWeight float32
+	NAD0              uint16
+	NAD1              uint16
+	NStandardAD0      uint16
+	NStandardAD1      uint16
 }
 
 type StTrackingData struct {
-	nVehicleId     int32
-	fFruitWeight   float32
-	fVehicleWeight float32
+	NVehicleId     int32
+	FFruitWeight   float32
+	FVehicleWeight float32
 
-	nADFruit   uint16
-	nADVehicle uint16
+	NADFruit   uint16
+	NADVehicle uint16
 }
 
 type StWeightResult struct {
-	data            StTrackingData //追踪数据
-	paras           StWeightStat   //统计信息
-	nChannelId      int32
-	fVehicleWeight0 float32
-	fVehicleWeight1 float32
-	state           uint8
+	Data            StTrackingData //追踪数据
+	Paras           StWeightStat   //统计信息
+	NChannelId      int32
+	FVehicleWeight0 float32
+	FVehicleWeight1 float32
+	State           uint8
 }
 
 // 波形数据,FSM发送过来 (WM, HC_ID, FSM_CMD_WAVEINFO, stWaveInfo)
 type StWaveInfo struct {
-	nChannelId  int32
-	waveform0   [256]uint16
-	waveform1   [256]uint16
-	fruitweight float32
+	NChannelId  int32
+	Waveform0   [256]uint16
+	Waveform1   [256]uint16
+	FruitWeight float32
 }
 
 // 自定义结构体
@@ -461,14 +445,14 @@ type Rect struct {
 	Bottom   int32
 	Left     int32
 	Right    int32
-	nOffsetX int32
-	nOffsetY int32
+	NOffsetX int32
+	NOffsetY int32
 }
 
 type ColorRGB struct {
-	ucR uint8
-	ucG uint8
-	ucB uint8
+	UCR uint8
+	UCG uint8
+	UCB uint8
 }
 
 type QaulGradeInfo struct {
@@ -492,19 +476,19 @@ type QaulGradeInfo struct {
 type QaulityGradeItem struct {
 	GradeName    [12]uint8
 	ColorGrade   int8
-	sbShapeGrade int8
-	sbDensity    int8
-	sbFlaw       int8
-	sbBruise     int8
-	sbRot        int8
-	sbSugar      int8
-	sbAcidity    int8
-	sbHollow     int8
-	sbSkin       int8
-	sbBrown      int8
-	sbTangxin    int8
-	sbRigidity   int8
-	sbWater      int8
+	SbShapeGrade int8
+	SbDensity    int8
+	SbFlaw       int8
+	SbBruise     int8
+	SbRot        int8
+	SbSugar      int8
+	SbAcidity    int8
+	SbHollow     int8
+	SbSkin       int8
+	SbBrown      int8
+	SbTangxin    int8
+	SbRigidity   int8
+	SbWater      int8
 	FruitNum     int32
 }
 
@@ -527,57 +511,57 @@ type TempExitState struct {
 
 // / 颜色界面-》颜色列表背景颜色
 type StColorList struct {
-	color1 [12]uint8
-	color2 [12]uint8
-	color3 [12]uint8
+	Color1 [12]uint8
+	Color2 [12]uint8
+	Color3 [12]uint8
 }
 
 type StClientInfo struct {
-	customerName [20]uint8
-	farmName     [20]uint8
-	fruitName    [20]uint8
+	CustomerName [20]uint8
+	FarmName     [20]uint8
+	FruitName    [20]uint8
 }
 
 type StClientNewInfo struct {
-	customerName string
-	farmName     string
-	fruitName    string
+	CustomerName string
+	FarmName     string
+	FruitName    string
 }
 
 type StOldClientInfo struct {
-	customerName [50]uint8
-	farmName     [50]uint8
-	fruitName    [50]uint8
+	CustomerName [50]uint8
+	FarmName     [50]uint8
+	FruitName    [50]uint8
 }
 
 // / 水果种类成员（对应IPM算法）
 type StFruitTypeMember struct {
-	iFruitTypeID int32
-	bFruitName   [20]uint8
+	IFruitTypeID int32
+	BFruitName   [20]uint8
 }
 
 // / 水果种类（对应IPM算法）
 type StFruitType struct {
-	iCurrentFruitNumber int32
-	member              [32 * 8]StFruitTypeMember
+	ICurrentFruitNumber int32
+	Member              [32 * 8]StFruitTypeMember
 }
 
 // 基本统计信息,HC->平板
 type StBroadcastStatistics struct {
-	statistics            StStatistics
-	strStartTime          [12]uint8
-	fSeparationEfficiency float32
-	fRealWeightCount      float32
-	strProgramName        [12]uint8
-	strLabelName          [4 * 12]uint8
+	Statistics            StStatistics
+	StrStartTime          [12]uint8
+	FSeparationEfficiency float32
+	FRealWeightCount      float32
+	StrProgramName        [12]uint8
+	StrLabelName          [4 * 12]uint8
 }
 
 // 平板系统信息,HC->平板
 type StBroadcastSysConfig struct {
-	sysConfig       StSysConfig
-	nLanguage       int32
-	exitDisplayType int64
-	strDisplayName  [48 * 20]uint8
+	SysConfig       StSysConfig
+	NLanguage       int32
+	ExitDisplayType int64
+	StrDisplayName  [48 * 20]uint8
 }
 
 // 出口附加信息，HC->平板（在stBroadcastSysConfig数据包之后发送）

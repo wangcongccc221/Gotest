@@ -40,7 +40,6 @@ struct GoApi {
     GoTCPClientSendFunc tcpClientSend = nullptr;
     GoCStringFunc lastTCPServerMessage = nullptr;
     GoCStringFunc stGlobalLayoutReport = nullptr;
-    GoCStringFunc lastCTCPStGlobalFullJSON = nullptr;
 };
 
 static std::mutex g_goApiMutex;
@@ -116,14 +115,6 @@ static bool LoadGoApi()
         g_goApi.stGlobalLayoutReport = reinterpret_cast<GoCStringFunc>(layoutSym);
     } else {
         g_goApi.stGlobalLayoutReport = nullptr;
-    }
-
-    dlerror();
-    void *stGlobalJSONSym = dlsym(g_goApi.handle, "GoLastCTCPStGlobalFullJSON");
-    if (stGlobalJSONSym != nullptr) {
-        g_goApi.lastCTCPStGlobalFullJSON = reinterpret_cast<GoCStringFunc>(stGlobalJSONSym);
-    } else {
-        g_goApi.lastCTCPStGlobalFullJSON = nullptr;
     }
 
     g_goApi.ready = true;
@@ -485,36 +476,6 @@ static napi_value NapiStGlobalLayoutReport(napi_env env, napi_callback_info info
     return result;
 }
 
-static napi_value NapiLastStGlobalFullJSON(napi_env env, napi_callback_info info)
-{
-    if (!LoadGoApi()) {
-        napi_value empty;
-        napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &empty);
-        return empty;
-    }
-    if (g_goApi.lastCTCPStGlobalFullJSON == nullptr) {
-        napi_value msg;
-        napi_create_string_utf8(
-            env,
-            "GoLastCTCPStGlobalFullJSON 未导出：请重新编译 libohos.so",
-            NAPI_AUTO_LENGTH,
-            &msg);
-        return msg;
-    }
-
-    char *json = g_goApi.lastCTCPStGlobalFullJSON();
-    if (json == nullptr) {
-        napi_value empty;
-        napi_create_string_utf8(env, "", NAPI_AUTO_LENGTH, &empty);
-        return empty;
-    }
-
-    napi_value result;
-    napi_create_string_utf8(env, json, NAPI_AUTO_LENGTH, &result);
-    g_goApi.freeCString(json);
-    return result;
-}
-
 EXTERN_C_START
 static napi_value Init(napi_env env, napi_value exports)
 {
@@ -535,8 +496,7 @@ static napi_value Init(napi_env env, napi_value exports)
         { "tcpSend", nullptr, NapiTCPSend, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "nativeLastError", nullptr, NapiNativeLastError, nullptr, nullptr, nullptr, napi_default, nullptr },
         { "tcpServerLastMessage", nullptr, NapiTCPServerLastMessage, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "stGlobalLayoutReport", nullptr, NapiStGlobalLayoutReport, nullptr, nullptr, nullptr, napi_default, nullptr },
-        { "lastStGlobalFullJSON", nullptr, NapiLastStGlobalFullJSON, nullptr, nullptr, nullptr, napi_default, nullptr }
+        { "stGlobalLayoutReport", nullptr, NapiStGlobalLayoutReport, nullptr, nullptr, nullptr, napi_default, nullptr }
     };
     napi_define_properties(env, exports, sizeof(desc) / sizeof(desc[0]), desc);
     return exports;

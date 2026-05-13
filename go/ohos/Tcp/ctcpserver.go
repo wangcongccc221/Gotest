@@ -145,7 +145,7 @@ func StartCTCPServer() int {
 	setCTCPServerLastMessage("CTCP startup: sizeof(StGlobal)=%d 字节, 线宽常量 cTCP48StGlobalExpectedSize=%d",
 		goSz, cTCP48StGlobalExpectedSize)
 	appendCTCPLogChunks("CTCP startup StGlobalLayoutReport", StGlobalLayoutReport())
-	setCTCPServerLastMessage("CTCP startup: 完整字段 JSON 仅在收到 FSM_CMD_CONFIG(0x1000) 后输出；ArkTS 可调用 lastStGlobalFullJSON() 取全文（若已实现 NAPI）。")
+	setCTCPServerLastMessage("CTCP startup: StGlobal 全量 JSON 在收到 FSM_CMD_CONFIG(0x1000) 后写入日志（HiLog 搜「CTCP StGlobal 全量」）。")
 	return cTCPServerStatPort
 }
 
@@ -446,34 +446,38 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 	case cmdFSMConfig:
 		stg, err := ParseData[StGlobal](payload)
 		if err != nil {
-			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), payload=%d bytes",
-				cTCPCommandName(head.NCmdId), err, len(payload))
-			appendPayloadHexChunks("CTCP StGlobal raw (parse fail)", payload)
 			return
 		}
-		_, fullJSON := saveCTCPGlobalSnapshot(s.name, s.port, remoteAddr, head, payload, stg)
+		fullJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
 		setCTCPServerLastMessage(
 			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysId=%d, nVersion=%d",
 			cTCPCommandName(head.NCmdId),
 			goSz,
 			len(payload),
-			stg.nSubsysId,
-			stg.nVersion,
+			stg.NSubsysId,
+			stg.NVersion,
 		)
-		if fullJSON != "" {
+		if jsonErr == nil && fullJSON != "" {
 			appendCTCPLogChunks("CTCP StGlobal 全量", fullJSON)
 		} else {
-			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败")
+			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败: %v", jsonErr)
 		}
 		setCTCPServerLastMessage("CTCP StGlobal ===== 以下为原始 payload 十六进制 =====")
 		appendPayloadHexChunks("CTCP StGlobal raw wire", payload)
 	case cmdFSMStatistics: //0x1001
-		stats, err := ParseData[StStatistics](payload)
+		state, err := ParseData[StStatistics](payload)
 		if err != nil {
 			return
 		}
-		_ = saveCTCPStatisticsSnapshot(s.name, s.port, remoteAddr, head, stats)
+		StateJson, jsonErr := FormatDataFullJSON(state) //转成json字符串
+		if StateJson != "" && jsonErr == nil {
+			//发送给websocket
+			return
+		}
+		else{
+			setCTCPServerLastMessage("CTCP StStatistics JSON 生成失败: %v", jsonErr) //生成失败记录日志
+		}
 
 	case cmdFSMGradeInfo: // 0x1002
 		grade, err := ParseData[StFruitGradeInfos](payload)
@@ -482,13 +486,9 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StFruitGradeInfos{})))
 			return
 		}
-		fmt.Println(grade)
-		setCTCPServerLastMessage("CTCP parsed %s: sizeof=%d payload=%d FruitGradeInfos[0].nRouteId=%d",
-			cTCPCommandName(head.NCmdId),
-			int(unsafe.Sizeof(StFruitGradeInfos{})),
-			len(payload),
-			grade.FruitGradeInfos[0].nRouteId,
-		)
+		FormatDataFullJSON(grade) //转成json 字符串
+		//调用websocket 发送数据
+
 	case cmdFSMGetVersion, cmdWAMVersionInfo:
 		setCTCPServerLastMessage("CTCP handled %s: version bytes=%q", cTCPCommandName(head.NCmdId), strings.TrimRight(string(payload), "\x00\r\n "))
 	case cmdFSMWeightInfo, cmdWAMWeightInfo:

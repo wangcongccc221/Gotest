@@ -139,24 +139,9 @@ func GoLastTCPServerMessage() *C.char {
 	return C.CString(tcp.LastCTCPServerMessage())
 }
 
-//export GoLastCTCPConfigJSON
-func GoLastCTCPConfigJSON() *C.char {
-	return C.CString(tcp.LastCTCPConfigJSON())
-}
-
-//export GoLastCTCPStatisticsJSON
-func GoLastCTCPStatisticsJSON() *C.char {
-	return C.CString(tcp.LastCTCPStatisticsJSON())
-}
-
 //export GoStGlobalLayoutReport
 func GoStGlobalLayoutReport() *C.char {
 	return C.CString(tcp.StGlobalLayoutReport())
-}
-
-//export GoLastCTCPStGlobalFullJSON
-func GoLastCTCPStGlobalFullJSON() *C.char {
-	return C.CString(tcp.LastCTCPStGlobalFullJSON())
 }
 
 func main() {}
