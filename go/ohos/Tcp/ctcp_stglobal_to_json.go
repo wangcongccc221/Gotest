@@ -23,7 +23,6 @@ func setCTCPLastStGlobalFullJSON(jsonText string) {
 	cTCPLastStGlobalFullJSONMu.Unlock()
 }
 
-// saveCTCPStGlobalFullJSON 将 StGlobal 序列化后写入全局缓存（供 HTTP/NAPI 等读取）。返回 JSON 或 ""。
 func saveCTCPStGlobalFullJSON(global StGlobal) string {
 	full, err := FormatDataFullJSON(global)
 	if err != nil {
@@ -38,7 +37,6 @@ func saveCTCPStGlobalFullJSON(global StGlobal) string {
 }
 
 // 解析传入的data转换成字符串  前提是 结构体中的字段开头必须是大写的 才可以用这个 不然需要导出
-
 func FormatDataFullJSON[T any](data T) (string, error) {
 	b, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {

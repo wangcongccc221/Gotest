@@ -14,7 +14,7 @@ import (
 const (
 	serverHost = "127.0.0.1"
 	serverPort = 18080
-	serverAddr = "127.0.0.1:18080"
+	serverAddr = "127.0.0.1:18080" //http 和websocket 端口
 )
 
 var (

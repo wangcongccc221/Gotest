@@ -140,23 +140,23 @@ func handleWebSocket(ctx *gin.Context) {
 	client.readPump()
 }
 
-func PublishWebSocketJSON(topic string, jsonText string) error {
-	topic = normalizeWebSocketTopic(topic)
+func PublishWebSocketJSON(topic string, jsonText string) error { //
+	topic = normalizeTopic(topic, webSocketTopicData)
 	raw, err := normalizeWebSocketJSON(jsonText)
 	if err != nil {
 		return err
 	}
 
-	frame, err := newWebSocketDataFrame(topic, raw)
+	frame, err := newWebSocketDataFrame(topic, raw) //把数据打包成json字符串
 	if err != nil {
 		return err
 	}
 
-	defaultWebSocketHub.publish(topic, raw, frame)
+	defaultWebSocketHub.publish(topic, raw, frame) //发布数据 先保存快照 再广播
 	return nil
 }
 
-func (h *webSocketHub) start() {
+func (h *webSocketHub) start() { //启动
 	h.once.Do(func() {
 		go h.run()
 	})
@@ -306,25 +306,26 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		return
 	}
 
-	var request webSocketRequest
-	if err := json.Unmarshal([]byte(text), &request); err != nil {
+	request, ok, err := parseWebSocketControlRequest(text)
+	if err != nil {
 		c.sendError("", "", fmt.Sprintf("invalid websocket request: %v", err))
+		return
+	}
+	if !ok {
+		c.sendFrame(webSocketFrame{
+			Type: "echo",
+			Data: cloneRawMessage(json.RawMessage(text)),
+		})
 		return
 	}
 
 	requestType := strings.ToLower(strings.TrimSpace(request.Type))
 	switch requestType {
-	case "":
-		c.sendFrame(webSocketFrame{
-			Type:      "echo",
-			RequestID: request.RequestID,
-			Data:      cloneRawMessage(json.RawMessage(text)),
-		})
 	case "echo":
 		c.sendFrame(webSocketFrame{
 			Type:      "echo",
 			RequestID: request.RequestID,
-			Topic:     normalizeOptionalWebSocketTopic(request.Topic),
+			Topic:     normalizeTopic(request.Topic, ""),
 			Payload:   cloneRawMessage(request.Payload),
 		})
 	case "ping":
@@ -355,6 +356,41 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 	}
 }
 
+func parseWebSocketControlRequest(text string) (webSocketRequest, bool, error) { //处理前端发送的信息
+	var object map[string]json.RawMessage
+	if err := json.Unmarshal([]byte(text), &object); err != nil {
+		return webSocketRequest{}, false, err
+	}
+
+	rawType, ok := object["type"]
+	if !ok {
+		return webSocketRequest{}, false, nil
+	}
+
+	var requestType string
+	if err := json.Unmarshal(rawType, &requestType); err != nil {
+		return webSocketRequest{}, false, nil
+	} //如果失败了就直接返回 websocket 这个0长度的结构体
+	if !isWebSocketControlType(requestType) {
+		return webSocketRequest{}, false, nil
+	}
+
+	var request webSocketRequest
+	if err := json.Unmarshal([]byte(text), &request); err != nil {
+		return webSocketRequest{}, false, err
+	}
+	return request, true, nil
+}
+
+func isWebSocketControlType(requestType string) bool { //判断webkcocket消息类型是否合法
+	switch strings.ToLower(strings.TrimSpace(requestType)) {
+	case "echo", "ping", "status", "snapshot", "subscribe", "unsubscribe":
+		return true
+	default:
+		return false
+	}
+}
+
 func (c *webSocketClient) sendStatus(requestID string) {
 	c.sendFrame(webSocketFrame{
 		Type:      "status",
@@ -366,8 +402,8 @@ func (c *webSocketClient) sendStatus(requestID string) {
 	})
 }
 
-func (c *webSocketClient) sendSnapshot(requestID string, topic string) {
-	if strings.TrimSpace(topic) == "" || strings.EqualFold(strings.TrimSpace(topic), webSocketTopicAll) {
+func (c *webSocketClient) sendSnapshot(requestID string, topic string) { //发送当前数据快照
+	if strings.TrimSpace(topic) == "" || strings.EqualFold(strings.TrimSpace(topic), webSocketTopicAll) { //如果为空就发送数据
 		snapshots := c.hub.allSnapshots()
 		if len(snapshots) == 0 {
 			c.sendError(requestID, webSocketTopicAll, "no websocket snapshot available")
@@ -390,7 +426,7 @@ func (c *webSocketClient) sendSnapshot(requestID string, topic string) {
 		return
 	}
 
-	topic = normalizeWebSocketTopic(topic)
+	topic = normalizeTopic(topic, webSocketTopicData)
 	data, ok := c.hub.snapshot(topic)
 	if !ok {
 		c.sendError(requestID, topic, "no websocket snapshot available")
@@ -404,7 +440,7 @@ func (c *webSocketClient) sendSnapshot(requestID string, topic string) {
 	})
 }
 
-func (c *webSocketClient) sendFrame(frame webSocketFrame) {
+func (c *webSocketClient) sendFrame(frame webSocketFrame) { //发送数据  已经把对应的订阅和主题内容包裹在这个结构体里面了
 	if frame.At == 0 {
 		frame.At = time.Now().UnixMilli()
 	}
@@ -415,16 +451,16 @@ func (c *webSocketClient) sendFrame(frame webSocketFrame) {
 	c.trySend(payload)
 }
 
-func (c *webSocketClient) sendError(requestID string, topic string, message string) {
+func (c *webSocketClient) sendError(requestID string, topic string, message string) { //发送错误
 	c.sendFrame(webSocketFrame{
 		Type:      "error",
 		RequestID: requestID,
-		Topic:     normalizeOptionalWebSocketTopic(topic),
+		Topic:     normalizeTopic(topic, ""),
 		Error:     message,
 	})
 }
 
-func (c *webSocketClient) trySend(payload []byte) bool {
+func (c *webSocketClient) trySend(payload []byte) bool { //尝试发送
 	select {
 	case c.send <- payload:
 		return true
@@ -433,29 +469,32 @@ func (c *webSocketClient) trySend(payload []byte) bool {
 	}
 }
 
-func (c *webSocketClient) accepts(topic string) bool {
+func (c *webSocketClient) accepts(topic string) bool { //判断这个客户端要不要接受这个订阅
 	c.subMu.RLock()
-	_, all := c.subscriptions[webSocketTopicAll]
-	_, exact := c.subscriptions[topic]
+	_, all := c.subscriptions[webSocketTopicAll] //如果订阅了all 就接受所有消息
+	_, exact := c.subscriptions[topic]           //如果订阅了这个主题 就接受
 	c.subMu.RUnlock()
-	return all || exact
+	return all || exact // 返回Ture 或者 False
 }
 
+/*
+用来前端需要哪个数据
+*/
 func (c *webSocketClient) subscribe(topic string) string {
-	topic = normalizeSubscriptionTopic(topic)
+	topic = normalizeTopic(topic, webSocketTopicAll) //如果订阅了all 就接受所有消息 订阅了all 就不需要再订阅其他主题了 直接把订阅列表重置成只有all就行了
 	c.subMu.Lock()
 	if topic == webSocketTopicAll {
 		c.subscriptions = map[string]struct{}{webSocketTopicAll: {}}
 	} else {
-		delete(c.subscriptions, webSocketTopicAll)
+		delete(c.subscriptions, webSocketTopicAll) //如果之前订阅了ALL 先删掉
 		c.subscriptions[topic] = struct{}{}
 	}
 	c.subMu.Unlock()
 	return topic
 }
 
-func (c *webSocketClient) unsubscribe(topic string) string {
-	topic = normalizeSubscriptionTopic(topic)
+func (c *webSocketClient) unsubscribe(topic string) string { //取消订阅
+	topic = normalizeTopic(topic, webSocketTopicAll)
 	c.subMu.Lock()
 	if topic == webSocketTopicAll {
 		c.subscriptions = map[string]struct{}{webSocketTopicAll: {}}
@@ -469,6 +508,9 @@ func (c *webSocketClient) unsubscribe(topic string) string {
 	return topic
 }
 
+/*
+打包成json 字符串 发送给前端
+*/
 func newWebSocketDataFrame(topic string, raw json.RawMessage) ([]byte, error) {
 	if !json.Valid(raw) {
 		return nil, errInvalidWebSocketJSON
@@ -481,36 +523,23 @@ func newWebSocketDataFrame(topic string, raw json.RawMessage) ([]byte, error) {
 	})
 }
 
-func normalizeWebSocketJSON(jsonText string) (json.RawMessage, error) {
+func normalizeWebSocketJSON(jsonText string) (json.RawMessage, error) { //标准化JSON
 	text := strings.TrimSpace(jsonText)
 	if text == "" {
 		return nil, errEmptyWebSocketJSON
 	}
 
-	raw := json.RawMessage(text)
+	raw := json.RawMessage(text) //raw = 初始的text数据
 	if !json.Valid(raw) {
 		return nil, errInvalidWebSocketJSON
 	}
 	return cloneRawMessage(raw), nil
 }
 
-func normalizeWebSocketTopic(topic string) string {
+func normalizeTopic(topic string, defaultTopic string) string { //标准化主题
 	topic = strings.ToLower(strings.TrimSpace(topic))
 	if topic == "" {
-		return webSocketTopicData
-	}
-	return topic
-}
-
-func normalizeOptionalWebSocketTopic(topic string) string {
-	topic = strings.ToLower(strings.TrimSpace(topic))
-	return topic
-}
-
-func normalizeSubscriptionTopic(topic string) string {
-	topic = strings.ToLower(strings.TrimSpace(topic))
-	if topic == "" {
-		return webSocketTopicAll
+		return defaultTopic
 	}
 	return topic
 }
@@ -524,7 +553,7 @@ func cloneRawMessage(raw json.RawMessage) json.RawMessage { //克隆当前数据
 	return out
 }
 
-func rawJSONFromValue(value any) json.RawMessage {
+func rawJSONFromValue(value any) json.RawMessage { //把结构体转换成json字符串
 	payload, err := json.Marshal(value)
 	if err != nil {
 		return nil

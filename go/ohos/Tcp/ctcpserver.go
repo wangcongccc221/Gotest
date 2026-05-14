@@ -169,25 +169,25 @@ func appendCTCPLogChunks(tag string, content string) {
 }
 
 // appendPayloadHexChunks 将原始 payload 以十六进制按行输出（16 字节/行），再按块写入日志。
-func appendPayloadHexChunks(tag string, payload []byte) {
-	if len(payload) == 0 {
-		setCTCPServerLastMessage("%s hexdump: <empty payload>", tag)
-		return
-	}
-	var b strings.Builder
-	for i := 0; i < len(payload); i += 16 {
-		end := i + 16
-		if end > len(payload) {
-			end = len(payload)
-		}
-		fmt.Fprintf(&b, "%08x:", i)
-		for j := i; j < end; j++ {
-			fmt.Fprintf(&b, " %02x", payload[j])
-		}
-		b.WriteByte('\n')
-	}
-	appendCTCPLogChunks(tag+" hexdump", b.String())
-}
+// func appendPayloadHexChunks(tag string, payload []byte) {
+// 	if len(payload) == 0 {
+// 		setCTCPServerLastMessage("%s hexdump: <empty payload>", tag)
+// 		return
+// 	}
+// 	var b strings.Builder
+// 	for i := 0; i < len(payload); i += 16 {
+// 		end := i + 16
+// 		if end > len(payload) {
+// 			end = len(payload)
+// 		}
+// 		fmt.Fprintf(&b, "%08x:", i)
+// 		for j := i; j < end; j++ {
+// 			fmt.Fprintf(&b, " %02x", payload[j])
+// 		}
+// 		b.WriteByte('\n')
+// 	}
+// 	appendCTCPLogChunks(tag+" hexdump", b.String())
+// }
 
 func StopCTCPServer() int {
 	cTCPServerMu.Lock()
@@ -467,8 +467,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		} else {
 			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败: %v", jsonErr)
 		}
-		setCTCPServerLastMessage("CTCP StGlobal ===== 以下为原始 payload 十六进制 =====")
-		appendPayloadHexChunks("CTCP StGlobal raw wire", payload)
+
 	case cmdFSMStatistics: //0x1001
 		state, err := ParseData[StStatistics](payload)
 		if err != nil {

@@ -56,6 +56,39 @@ func TestWebSocketRouteRespondsToPing(t *testing.T) {
 	}
 }
 
+func TestWebSocketRouteDoesNotTreatBusinessJSONAsControlRequest(t *testing.T) {
+	server := httptest.NewServer(newRouter())
+	defer server.Close()
+
+	conn, _, err := websocket.DefaultDialer.Dial(testWebSocketURL(server.URL), nil)
+	if err != nil {
+		t.Fatalf("dial websocket route: %v", err)
+	}
+	defer conn.Close()
+
+	ready := readWebSocketFrame(t, conn)
+	if ready.Type != "ready" {
+		t.Fatalf("first frame type = %q, want ready", ready.Type)
+	}
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(`{"Type":"MachineData","Speed":42}`)); err != nil {
+		t.Fatalf("write business json frame: %v", err)
+	}
+
+	echo := readWebSocketFrame(t, conn)
+	if echo.Type != "echo" {
+		t.Fatalf("response type = %q, want echo", echo.Type)
+	}
+
+	var data map[string]any
+	if err := json.Unmarshal(echo.Data, &data); err != nil {
+		t.Fatalf("echo data is not raw json object: %v", err)
+	}
+	if data["Type"] != "MachineData" {
+		t.Fatalf("Type = %v, want MachineData", data["Type"])
+	}
+}
+
 func TestPublishWebSocketJSONPushesRawJSONData(t *testing.T) {
 	server := httptest.NewServer(newRouter())
 	defer server.Close()
