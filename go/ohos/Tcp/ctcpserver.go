@@ -448,7 +448,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		if err != nil {
 			return
 		}
-		fullJSON, jsonErr := FormatDataFullJSON(stg)
+		stgJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
 		setCTCPServerLastMessage(
 			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysId=%d, nVersion=%d",
@@ -458,12 +458,12 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			stg.NSubsysId,
 			stg.NVersion,
 		)
-		if jsonErr == nil && fullJSON != "" {
-			setCTCPLastStGlobalFullJSON(fullJSON)
-			if err := PublishWebSocketJSON(webSocketTopicStGlobal, fullJSON); err != nil {
+		if jsonErr == nil && stgJSON != "" {
+			setCTCPLastStGlobalFullJSON(stgJSON)
+			if err := PublishWebSocketJSON(webSocketTopicStGlobal, stgJSON); err != nil { //发送给前端
 				setCTCPServerLastMessage("CTCP StGlobal WebSocket 推送失败: %v", err)
 			}
-			appendCTCPLogChunks("CTCP StGlobal 全量", fullJSON)
+			appendCTCPLogChunks("CTCP StGlobal 全量", stgJSON)
 		} else {
 			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败: %v", jsonErr)
 		}
@@ -475,7 +475,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
 		if stateJSON != "" && jsonErr == nil {
-			if err := PublishWebSocketJSON(webSocketTopicStatistics, stateJSON); err != nil {
+			if err := PublishWebSocketJSON(webSocketTopicStatistics, stateJSON); err != nil { //通过websocket 发送到前端
 				setCTCPServerLastMessage("CTCP StStatistics WebSocket 推送失败: %v", err)
 			}
 			return
@@ -484,14 +484,17 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 
 	case cmdFSMGradeInfo: // 0x1002
+		// -------------
 		grade, err := ParseData[StFruitGradeInfos](payload)
 		if err != nil {
 			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), payload=%d bytes, need sizeof=%d",
 				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StFruitGradeInfos{})))
 			return
 		}
+		//--------
 		gradeJSON, jsonErr := FormatDataFullJSON(grade) //转成json 字符串
 		if gradeJSON != "" && jsonErr == nil {
+			//----------------
 			if err := PublishWebSocketJSON(webSocketTopicGrade, gradeJSON); err != nil {
 				setCTCPServerLastMessage("CTCP StFruitGradeInfos WebSocket 推送失败: %v", err)
 			}

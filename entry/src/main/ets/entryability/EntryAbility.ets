@@ -4,10 +4,6 @@ import { window } from '@kit.ArkUI';
 import testNapi from 'libentry.so';
 
 const DOMAIN = 0x0000;
-const TCP_REMOTE_IP = '192.168.0.16';
-const TCP_REMOTE_PORT = 1279;
-const TCP_DEST_ID = 0x0100; // CommonFunction::EncodeSubsys(0)
-const TCP_CMD = 0x0019; // HC_FSM_COMMAND_TYPE::HC_CMD_DISPLAY_ON
 
 export default class EntryAbility extends UIAbility {
   private tcpServerLogTimer: number = 0;
@@ -70,27 +66,6 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', 'TCP server stop result = %{public}d', tcpServerResult);
   }
 
-  private startTcpClient(): void {
-
-    if (!testNapi) { //判断有没有动态库
-      hilog.error(DOMAIN, 'testTag', 'Native module libentry.so export object is undefined, skip TCP client start.');
-      return;
-    }
-
-    if (!testNapi.startTcpClient) { //判断有没有这个函数
-      hilog.error(DOMAIN, 'testTag', 'Native module libentry.so has no startTcpClient export, skip TCP client start.');
-      return;
-    }
-
-    const tcpClientResult = testNapi.startTcpClient(TCP_REMOTE_IP, TCP_REMOTE_PORT, TCP_DEST_ID, TCP_CMD); //调用函数
-    
-    hilog.info(DOMAIN, 'testTag', 'TCP client sync result = %{public}d, target = %{public}s:%{public}d, dest = %{public}d, cmd = %{public}d',
-      tcpClientResult, TCP_REMOTE_IP, TCP_REMOTE_PORT, TCP_DEST_ID, TCP_CMD);
-    if (tcpClientResult < 0 && testNapi.nativeLastError) {
-      hilog.error(DOMAIN, 'testTag', 'TCP client native error: %{public}s', testNapi.nativeLastError());
-    }
-  }
-
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     try {
       this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
@@ -118,7 +93,9 @@ export default class EntryAbility extends UIAbility {
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
       this.startTcpServer();
       this.startTcpServerLogPolling();
-      this.startTcpClient();
+      // 不在 Ability 启动时主动给下位机发 DISPLAY_ON。
+      // 现在由前端 WebSocket 连接成功后发送 requestStGlobal，
+      // Go 后端收到该信号后再触发 CTCP client，避免前端还没连上就错过 StGlobal。
     });
   }
 

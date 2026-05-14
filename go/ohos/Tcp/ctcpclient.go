@@ -16,6 +16,7 @@ import (
 const (
 	cTCPHcID                = int32(0x1000)      // ConstPreDefine::HC_ID
 	cTCPSync                = uint32(0x434e5953) // "SYNC"
+	cTCPDefaultFSMID        = int32(0x0100)      // 默认请求 1 号 FSM；用于前端 WebSocket 准备好后触发一次配置回传
 	cTCPDefaultConnectCount = 1
 	cTCPDefaultSendTime     = 1000
 )
@@ -358,6 +359,13 @@ func StartCTCPClient(remoteIP string, remotePort int, destID int32, cmd int32, d
 		return -1
 	}
 	return 0
+}
+
+func RequestStGlobalFromDefaultFSM() int {
+	// 前端 WebSocket 已连接后调用这个入口。
+	// DISPLAY_ON 是原有“连接”命令，下位机收到后会回传 FSM_CMD_CONFIG(0x1000)，
+	// ctcpserver.go 再把这个 payload 解析成 StGlobal 并通过 WebSocket 推给前端。
+	return StartCTCPClient("", 0, cTCPDefaultFSMID, cTCPHCDisplayOn, nil)
 }
 
 func writeAll(conn net.Conn, data []byte) error {
