@@ -471,10 +471,15 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 	case cmdFSMStatistics: //0x1001
 		state, err := ParseData[StStatistics](payload)
 		if err != nil {
+			setCTCPServerLastMessage("CTCP StStatistics 解析失败: %v", err)
 			return
 		}
+
+		appendCTCPLogChunks("CTCP StStatistics Go结构体", fmt.Sprintf("%+v", state))
+
 		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
 		if stateJSON != "" && jsonErr == nil {
+			appendCTCPLogChunks("CTCP StStatistics JSON字符串", stateJSON)
 			if err := PublishWebSocketJSON(webSocketTopicStatistics, stateJSON); err != nil { //通过websocket 发送到前端
 				setCTCPServerLastMessage("CTCP StStatistics WebSocket 推送失败: %v", err)
 			}
@@ -575,6 +580,17 @@ func ParseData[T any](payload []byte) (T, error) {
 	}
 	return *(*T)(unsafe.Pointer(&payload[0])), nil
 }
+
+// func parseStStatistics(payload []byte) (StStatistics, error) {
+// 	if len(payload) < 7152 {
+// 		return StStatistics{}, fmt.Errorf("payload too short for StStatistics: need %d, got %d", 7152, len(payload))
+// 	}
+
+// 	var state StStatistics
+// 	dst := unsafe.Slice((*byte)(unsafe.Pointer(&state)), int(unsafe.Sizeof(state)))
+// 	copy(dst, payload)
+// 	return state, nil
+// }
 
 // 处理拿到的StGlobal数据，保存快照
 func cleanTCPServerCString(data []byte) string {

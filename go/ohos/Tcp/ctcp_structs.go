@@ -157,6 +157,11 @@ type StPercentInfo struct {
 	NMin uint8
 }
 
+type stRange struct {
+	NMax float32
+	NMix float32
+}
+
 // 4字节对齐
 type StGradeItemInfo struct {
 	ExitLow  uint32 // offset 0
@@ -184,6 +189,11 @@ type StGradeItemInfo struct {
 
 }
 
+type StExitFlowInfo struct {
+	No   int32
+	Time int32
+}
+
 type StGlobalExitInfo struct { //484字节
 	NPulse      uint8
 	VersionFlag uint8
@@ -208,6 +218,17 @@ type StGlobalWeightBaseInfo struct {
 
 type StAnalogDensity struct { //水果设置界面  //128
 	UAnalogDensity [32]float32
+}
+
+type StOldGlobalWeightBaseInfo struct {
+	fFilterParam           float32
+	nMinGradeThreshold     int16
+	nCupDeviationThreshold int16
+	nCupBreakageThreshold  int16
+	nBaseCupNum            int16
+	nTotalCupNums          [4]int16
+	RefWeight              int16
+	WeightTh               uint8
 }
 
 type StExitInfo struct {
@@ -237,6 +258,13 @@ type StWeightBaseInfo struct { //IPM参数中的重量信息 16字节
 	FTemperatureParams float32
 	WaveInterval       [2]uint16
 }
+
+type StOldWeightBaseInfo struct { //IPM参数中的重量信息 16字节
+	fGADParam          [2]float32
+	fTemperatureParams float32
+	waveinterval       [2]uint8
+}
+
 type StCameraParas struct {
 	MeanValue           StWhiteBalanceMean
 	Cup                 [2]StFruitCup
@@ -294,13 +322,12 @@ func (s StGradeItemInfo) Exit() uint64 {
 }
 
 const (
-	cTCPServerMaxNoticeLength      = 30
-	cTCPServerMaxQualityGradeNum   = 16
+	cTCPServerMaxNoticeLength    = 30
+	cTCPServerMaxQualityGradeNum = 16
 
 	stStatisticsExpectedSize = 7152
 )
 
-// StStatistics 对应 struct StStatistics。
 
 /*
 go           QT  linux 64
@@ -314,33 +341,33 @@ uint8    // quint8       1
 
 // ---------------------------------------------------------------------------------------------------
 type StStatistics struct {
-	NGradeCount         [256]uint64 `json:"nGradeCount"`
-	NWeightGradeCount   [256]uint64 `json:"nWeightGradeCount"`
-	NExitCount          [48]uint64  `json:"nExitCount"`
-	NExitWeightCount    [48]uint64  `json:"nExitWeightCount"`
-	NChannelTotalCount  uint64      `json:"nChannelTotalCount"`
-	NChannelWeightCount uint64      `json:"nChannelWeightCount"`
-	NSubsysId           int32       `json:"nSubsysId"`
-	NBoxGradeCount      [256]int32  `json:"nBoxGradeCount"`
+	NGradeCount         [256]uint64
+	NWeightGradeCount   [256]uint64
+	NExitCount          [48]uint64
+	NExitWeightCount    [48]uint64
+	NChannelTotalCount  uint64
+	NChannelWeightCount uint64
+	NSubsysId           int32
+	NBoxGradeCount      [256]int32
 	// Pad1                  [4]byte
-	NBoxGradeWeight [256]int32 `json:"nBoxGradeWeight"`
+	NBoxGradeWeight [256]int32
 	//------------
-	NTotalCupNum          int32  `json:"nTotalCupNum"`
-	NInterval             int32  `json:"nInterval"`
-	NIntervalSumperminute int32  `json:"nIntervalSumperminute"`
-	NCupState             uint16 `json:"nCupState"`
-	NPulseInterval        uint16 `json:"nPulseInterval"`
-	NUnpushFruitCount     uint16 `json:"nUnpushFruitCount"`
+	NTotalCupNum          int32
+	NInterval             int32
+	NIntervalSumperminute int32
+	NCupState             uint16
+	NPulseInterval        uint16
+	NUnpushFruitCount     uint16
 
 	//#if defined
-	NNetState      uint8 `json:"nNetState"` //1字节
-	NWeightSetting uint8 `json:"nWeightSetting"`
+	NNetState      uint8 //1字节
+	NWeightSetting uint8
 
-	NSCMState    uint8 `json:"nSCMState"`
-	NIQSNetState uint8 `json:"nIQSNetState"`
-	NLockState   uint8 `json:"nLockState"`
+	NSCMState    uint8
+	NIQSNetState uint8
+	NLockState   uint8
 
-	ExitBoxNum [48]uint32 `json:"exitBoxNum"`
+	ExitBoxNum [48]uint32
 }
 
 // 水果子系统信息

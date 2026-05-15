@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	webSocketTopicData       = "data"     // 默认主题，表示一般数据更新
+	webSocketTopicData       = "data"     //
 	webSocketTopicStGlobal   = "stglobal" // StGlobal 全量数据
 	webSocketTopicStatistics = "statistics"
 	webSocketTopicGrade      = "grade"

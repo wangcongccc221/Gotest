@@ -362,9 +362,7 @@ func StartCTCPClient(remoteIP string, remotePort int, destID int32, cmd int32, d
 }
 
 func RequestStGlobalFromDefaultFSM() int {
-	// 前端 WebSocket 已连接后调用这个入口。
-	// DISPLAY_ON 是原有“连接”命令，下位机收到后会回传 FSM_CMD_CONFIG(0x1000)，
-	// ctcpserver.go 再把这个 payload 解析成 StGlobal 并通过 WebSocket 推给前端。
+	// 前端 WebSocket 已连接后调用这个入口。发送SYNC
 	return StartCTCPClient("", 0, cTCPDefaultFSMID, cTCPHCDisplayOn, nil)
 }
 
