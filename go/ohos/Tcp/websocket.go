@@ -3,10 +3,12 @@ package tcp
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
+	"unsafe"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -30,6 +32,8 @@ var (
 	errEmptyWebSocketJSON   = errors.New("websocket json is empty")
 	errInvalidWebSocketJSON = errors.New("websocket json is invalid")
 	defaultWebSocketHub     = newWebSocketHub() //
+	gradeInfoCacheMu        sync.RWMutex
+	gradeInfoCache          = make(map[int32]StGradeInfo)
 )
 
 var webSocketUpgrader = websocket.Upgrader{
@@ -48,7 +52,16 @@ type webSocketFrame struct { //数据帧
 }
 
 type webSocketControlMessage struct {
-	Type string `json:"type"`
+	Type       string               `json:"type"`
+	FSMID      int32                `json:"fsmId,omitempty"`
+	DestID     int32                `json:"destId,omitempty"`
+	Grade      *StGradeInfo         `json:"grade,omitempty"`
+	GradeExits []webSocketGradeExit `json:"gradeExits,omitempty"`
+}
+
+type webSocketGradeExit struct {
+	Index int     `json:"index"`
+	Exit  float64 `json:"exit"`
 }
 
 type webSocketHub struct {
@@ -231,7 +244,20 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 	switch control.Type {
 	case "requestStGlobal":
 		c.handleRequestStGlobal()
+
+	case "close_client":
+		fmt.Println("123")
+
+	case "dropdata":
+		c.handleDropData(control)
+
+	case "saveLevelData":
+		c.handleGradeInfoData("saveLevelData", cTCPHCGradeInfo, control)
+	case "saveQualityData":
+		c.handleGradeInfoData("saveQualityData", cTCPHCColorGradeInfo, control)
+
 	}
+
 }
 
 func parseWebSocketControlMessage(text string) (webSocketControlMessage, bool) {
@@ -241,6 +267,7 @@ func parseWebSocketControlMessage(text string) (webSocketControlMessage, bool) {
 
 	var message webSocketControlMessage
 	if err := json.Unmarshal([]byte(text), &message); err != nil {
+		setCTCPServerLastMessage("WebSocket control JSON 解析失败: %v", err)
 		return webSocketControlMessage{}, false
 	}
 	message.Type = strings.TrimSpace(message.Type)
@@ -255,6 +282,43 @@ func (c *webSocketClient) handleRequestStGlobal() {
 			setCTCPServerLastMessage("WebSocket requestStGlobal failed: result=%d", result)
 		}
 	}()
+}
+
+func (c *webSocketClient) handleDropData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := DragLevelData(control)
+		c.sendCommandAck("dropdata", cTCPHCGradeInfo, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleGradeInfoData(topic string, commandID int32, control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendGradeInfoData(topic, commandID, control)
+		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) sendCommandAck(topic string, commandID int32, destID int32, payloadBytes int, result int) {
+	c.sendFrame(webSocketFrame{
+		Type:  "commandAck",
+		Topic: topic,
+		Data: rawJSONFromValue(map[string]any{
+			"result":       result,
+			"ok":           result == 0,
+			"command":      topic,
+			"cmdId":        commandID,
+			"destId":       destID,
+			"payloadBytes": payloadBytes,
+			"message":      commandAckMessage(result),
+		}),
+	})
+}
+
+func commandAckMessage(result int) string {
+	if result == 0 {
+		return "sent"
+	}
+	return "send failed"
 }
 
 func (c *webSocketClient) sendFrame(frame webSocketFrame) { //发送数据
@@ -317,4 +381,151 @@ func cloneRawMessage(raw json.RawMessage) json.RawMessage { //克隆当前数据
 	out := make(json.RawMessage, len(raw))
 	copy(out, raw)
 	return out
+}
+
+func rawJSONFromValue(value any) json.RawMessage { //将任意值转换为原始JSON消息
+	payload, err := json.Marshal(value)
+	if err != nil {
+		return nil
+	}
+	return json.RawMessage(payload)
+}
+
+// 处理拖拽数据下发
+func DragLevelData(control webSocketControlMessage) (int, int32, int) {
+	if control.Grade != nil {
+		return SendGradeInfoData("dropdata", cTCPHCGradeInfo, control)
+	}
+
+	destID := normalizeDropDataDestID(control)
+	if len(control.GradeExits) == 0 {
+		setCTCPServerLastMessage("WebSocket dropdata failed: empty gradeExits, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	grade, ok := latestGradeInfo(destID)
+	if !ok {
+		setCTCPServerLastMessage("WebSocket dropdata failed: no cached StGradeInfo, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	if err := applyGradeExitMapping(&grade, control.GradeExits); err != nil {
+		setCTCPServerLastMessage("WebSocket dropdata failed: %v", err)
+		return -1, destID, 0
+	}
+
+	payload, err := encodeGradeInfoPayload(grade)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket dropdata failed: encode StGradeInfo: %v", err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCGradeInfo, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket dropdata: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes",
+		uint32(cTCPHCGradeInfo),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCGradeInfo, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket dropdata failed: HC_CMD_GRADE_INFO result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	cacheLatestGradeInfo(destID, grade)
+	setCTCPServerLastMessage("WebSocket dropdata success: HC_CMD_GRADE_INFO sent, dest=0x%04X", uint32(destID))
+	return 0, destID, len(payload)
+}
+
+func SendGradeInfoData(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	if control.Grade == nil {
+		setCTCPServerLastMessage("WebSocket %s failed: empty StGradeInfo, dest=0x%04X", topic, uint32(destID))
+		return -1, destID, 0
+	}
+
+	grade := *control.Grade
+	payload, err := encodeGradeInfoPayload(grade)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket %s failed: encode StGradeInfo: %v", topic, err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes, sizeGrade=%d, qualityGrade=%d",
+		topic,
+		uint32(commandID),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		grade.NSizeGradeNum,
+		grade.NQualityGradeNum,
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, commandID, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket %s failed: cmd=0x%04X result=%d", topic, uint32(commandID), result)
+		return result, destID, len(payload)
+	}
+
+	cacheLatestGradeInfo(destID, grade)
+	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X", topic, uint32(commandID), uint32(destID))
+	return 0, destID, len(payload)
+}
+
+func cacheLatestGradeInfo(destID int32, grade StGradeInfo) {
+	if destID == 0 {
+		return
+	}
+	gradeInfoCacheMu.Lock()
+	gradeInfoCache[destID] = grade
+	gradeInfoCacheMu.Unlock()
+}
+
+func latestGradeInfo(destID int32) (StGradeInfo, bool) {
+	gradeInfoCacheMu.RLock()
+	grade, ok := gradeInfoCache[destID]
+	gradeInfoCacheMu.RUnlock()
+	return grade, ok
+}
+
+func normalizeDropDataDestID(control webSocketControlMessage) int32 { //标准化目标ID
+	if control.DestID != 0 {
+		return control.DestID
+	}
+	if control.FSMID != 0 {
+		return control.FSMID
+	}
+	return cTCPDefaultFSMID
+}
+
+func applyGradeExitMapping(grade *StGradeInfo, exits []webSocketGradeExit) error {
+	for _, item := range exits {
+		if item.Index < 0 || item.Index >= len(grade.Grades) {
+			return fmt.Errorf("grade index out of range: %d", item.Index)
+		}
+
+		exitMask := uint64(item.Exit)
+		grade.Grades[item.Index].ExitLow = uint32(exitMask)
+		grade.Grades[item.Index].ExitHigh = uint32(exitMask >> 32)
+	}
+	return nil
+}
+
+func encodeGradeInfoPayload(grade StGradeInfo) ([]byte, error) {
+	size := int(unsafe.Sizeof(grade))
+	if size != cTCP48StGradeInfoWireSize {
+		return nil, fmt.Errorf("sizeof(StGradeInfo)=%d, expected=%d", size, cTCP48StGradeInfoWireSize)
+	}
+
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&grade)), size)
+	copy(payload, src)
+	return payload, nil
 }

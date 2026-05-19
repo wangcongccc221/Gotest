@@ -36,9 +36,11 @@ const (
 	cTCPMaxChannelNum = 12
 	cTCPMaxExitNum    = 48
 
-	cTCPHCDisplayOff = int32(0x0000)
-	cTCPHCDisplayOn  = int32(0x0019)
-	cTCPHCSysConfig  = int32(0x0050)
+	cTCPHCDisplayOff     = int32(0x0000) // 关闭显示
+	cTCPHCDisplayOn      = int32(0x0019) // 打开显示
+	cTCPHCSysConfig      = int32(0x0050) // 系统配置
+	cTCPHCGradeInfo      = int32(0x0051) // 等级设置 StGradeInfo
+	cTCPHCColorGradeInfo = int32(0x005D) // 品质等级设置 StGradeInfo
 )
 
 var cTCPMutex sync.Mutex

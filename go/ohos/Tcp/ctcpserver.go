@@ -168,26 +168,49 @@ func appendCTCPLogChunks(tag string, content string) {
 	}
 }
 
-// appendPayloadHexChunks 将原始 payload 以十六进制按行输出（16 字节/行），再按块写入日志。
-// func appendPayloadHexChunks(tag string, payload []byte) {
-// 	if len(payload) == 0 {
-// 		setCTCPServerLastMessage("%s hexdump: <empty payload>", tag)
-// 		return
-// 	}
-// 	var b strings.Builder
-// 	for i := 0; i < len(payload); i += 16 {
-// 		end := i + 16
-// 		if end > len(payload) {
-// 			end = len(payload)
-// 		}
-// 		fmt.Fprintf(&b, "%08x:", i)
-// 		for j := i; j < end; j++ {
-// 			fmt.Fprintf(&b, " %02x", payload[j])
-// 		}
-// 		b.WriteByte('\n')
-// 	}
-// 	appendCTCPLogChunks(tag+" hexdump", b.String())
-// }
+// appendPayloadHexChunks 将原始 payload 以十六进制输出，不带 offset，方便直接看下位机发来的字节内容。
+func appendPayloadHexChunks(tag string, payload []byte) {
+	if len(payload) == 0 {
+		setCTCPServerLastMessage("%s 原始字节HEX: <empty payload>", tag)
+		return
+	}
+	var b strings.Builder
+	for i := 0; i < len(payload); i++ {
+		if i > 0 {
+			if i%32 == 0 {
+				b.WriteByte('\n')
+			} else {
+				b.WriteByte(' ')
+			}
+		}
+		fmt.Fprintf(&b, "%02X", payload[i])
+	}
+	appendCTCPLogChunks(tag+" 原始字节HEX", b.String())
+}
+
+func stStatisticsPreview(state StStatistics, payload []byte) string {
+	return fmt.Sprintf(
+		"payload=%d bytes, sizeof(StStatistics)=%d bytes, nSubsysId=%d, "+
+			"nChannelTotalCount=%d, nChannelWeightCount=%d, nTotalCupNum=%d, "+
+			"nInterval=%d, nIntervalSumperminute=%d, nNetState=%d, nWeightSetting=%d, "+
+			"gradeCount[0:8]=%v, weightGradeCount[0:8]=%v, exitCount[0:12]=%v, exitWeightCount[0:12]=%v, exitBoxNum[0:12]=%v",
+		len(payload),
+		int(unsafe.Sizeof(StStatistics{})),
+		state.NSubsysId,
+		state.NChannelTotalCount,
+		state.NChannelWeightCount,
+		state.NTotalCupNum,
+		state.NInterval,
+		state.NIntervalSumperminute,
+		state.NNetState,
+		state.NWeightSetting,
+		state.NGradeCount[:8],
+		state.NWeightGradeCount[:8],
+		state.NExitCount[:12],
+		state.NExitWeightCount[:12],
+		state.ExitBoxNum[:12],
+	)
+}
 
 func StopCTCPServer() int {
 	cTCPServerMu.Lock()
@@ -448,6 +471,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		if err != nil {
 			return
 		}
+		cacheLatestGradeInfo(head.NSrcId, stg.Grade)
 		stgJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
 		setCTCPServerLastMessage(
@@ -475,11 +499,13 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			return
 		}
 
-		appendCTCPLogChunks("CTCP StStatistics Go结构体", fmt.Sprintf("%+v", state))
+		// appendPayloadHexChunks("CTCP StStatistics 原始payload", payload)
+		// setCTCPServerLastMessage("CTCP StStatistics 解析预览: %s", stStatisticsPreview(state, payload))
+		// appendCTCPLogChunks("CTCP StStatistics Go结构体", fmt.Sprintf("%+v", state))
 
 		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
 		if stateJSON != "" && jsonErr == nil {
-			appendCTCPLogChunks("CTCP StStatistics JSON字符串", stateJSON)
+			// appendCTCPLogChunks("CTCP StStatistics JSON字符串", stateJSON)
 			if err := PublishWebSocketJSON(webSocketTopicStatistics, stateJSON); err != nil { //通过websocket 发送到前端
 				setCTCPServerLastMessage("CTCP StStatistics WebSocket 推送失败: %v", err)
 			}
