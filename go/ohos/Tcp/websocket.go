@@ -422,12 +422,13 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 
 	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCGradeInfo, "", 0)
 	setCTCPServerLastMessage(
-		"WebSocket dropdata: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes",
+		"WebSocket dropdata: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, activeExits=%s",
 		uint32(cTCPHCGradeInfo),
 		uint32(destID),
 		targetIP,
 		targetPort,
 		len(payload),
+		summarizeGradeExitMappings(grade),
 	)
 
 	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCGradeInfo, payload)
@@ -457,7 +458,7 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 
 	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
 	setCTCPServerLastMessage(
-		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes, sizeGrade=%d, qualityGrade=%d",
+		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes, sizeGrade=%d, qualityGrade=%d, activeExits=%s",
 		topic,
 		uint32(commandID),
 		uint32(destID),
@@ -466,6 +467,7 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 		len(payload),
 		grade.NSizeGradeNum,
 		grade.NQualityGradeNum,
+		summarizeGradeExitMappings(grade),
 	)
 
 	result := StartCTCPClient(targetIP, targetPort, destID, commandID, payload)
@@ -480,6 +482,7 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 }
 
 func cacheLatestGradeInfo(destID int32, grade StGradeInfo) {
+	setLastStGradeInfoSnapshot(grade)
 	if destID == 0 {
 		return
 	}
@@ -493,6 +496,35 @@ func latestGradeInfo(destID int32) (StGradeInfo, bool) {
 	grade, ok := gradeInfoCache[destID]
 	gradeInfoCacheMu.RUnlock()
 	return grade, ok
+}
+
+func summarizeGradeExitMappings(grade StGradeInfo) string {
+	const maxSummaryItems = 12
+
+	parts := make([]string, 0, maxSummaryItems)
+	total := 0
+	for index, item := range grade.Grades {
+		if item.ExitLow == 0 && item.ExitHigh == 0 {
+			continue
+		}
+		total++
+		if len(parts) < maxSummaryItems {
+			parts = append(parts, fmt.Sprintf(
+				"%d:low=0x%08X,high=0x%08X,exit=%d",
+				index,
+				item.ExitLow,
+				item.ExitHigh,
+				item.Exit(),
+			))
+		}
+	}
+	if total == 0 {
+		return "none"
+	}
+	if total > len(parts) {
+		return fmt.Sprintf("%s (+%d more)", strings.Join(parts, ","), total-len(parts))
+	}
+	return strings.Join(parts, ",")
 }
 
 func normalizeDropDataDestID(control webSocketControlMessage) int32 { //标准化目标ID

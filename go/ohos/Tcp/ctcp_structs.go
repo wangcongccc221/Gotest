@@ -142,7 +142,7 @@ type StGradeInfo struct {
 
 	NCheckNum int16
 	//ifdef
-	ForceChannel int16
+	ForceChannel int16 // 强制通道
 }
 
 type StColorIntervalItem struct { //等级设置信息,发送给每一个FSM (HC_ID, FSM, HC_CMD_GRADE_INFO, stGradeInfo)
@@ -327,7 +327,6 @@ const (
 
 	stStatisticsExpectedSize = 7152
 )
-
 
 /*
 go           QT  linux 64
