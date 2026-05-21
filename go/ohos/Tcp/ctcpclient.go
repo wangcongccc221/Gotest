@@ -37,6 +37,7 @@ const (
 	cTCPMaxExitNum    = 48
 
 	cTCPHCDisplayOff     = int32(0x0000) // 关闭显示
+	cTCPHCClearData      = int32(0x0001) // 数据清零
 	cTCPHCDisplayOn      = int32(0x0019) // 打开显示
 	cTCPHCSysConfig      = int32(0x0050) // 系统配置
 	cTCPHCGradeInfo      = int32(0x0051) // 等级设置 StGradeInfo

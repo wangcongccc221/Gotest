@@ -261,6 +261,12 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 	case "dropdata":
 		c.handleDropData(control)
 
+	case "clearExitGrades", "clearAllExitGrades": //清空等级出口数据
+		c.handleClearGradeExitData(control)
+
+	case "clearData": //数据清零
+		c.handleSimpleFSMCommand("clearData", cTCPHCClearData, control)
+
 	case "saveLevelData":
 		c.handleGradeInfoData("saveLevelData", cTCPHCGradeInfo, control)
 	case "saveQualityData":
@@ -301,9 +307,23 @@ func (c *webSocketClient) handleDropData(control webSocketControlMessage) {
 	}()
 }
 
+func (c *webSocketClient) handleClearGradeExitData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := ClearGradeExitData(control)
+		c.sendCommandAck("clearExitGrades", cTCPHCGradeInfo, destID, payloadBytes, result)
+	}()
+}
+
 func (c *webSocketClient) handleGradeInfoData(topic string, commandID int32, control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendGradeInfoData(topic, commandID, control)
+		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendSimpleFSMCommand(topic, commandID, control)
 		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
 	}()
 }
@@ -457,6 +477,46 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 	return 0, destID, len(payload)
 }
 
+func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	grade, ok := latestGradeInfo(destID)
+	if !ok {
+		setCTCPServerLastMessage("WebSocket clearExitGrades failed: no cached StGradeInfo, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	before := summarizeGradeExitMappings(grade)
+	clearGradeExitMappings(&grade)
+
+	payload, err := encodeGradeInfoPayload(grade)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket clearExitGrades failed: encode StGradeInfo: %v", err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCGradeInfo, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket clearExitGrades: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, activeExitsBefore=%s, activeExitsAfter=%s",
+		uint32(cTCPHCGradeInfo),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		before,
+		summarizeGradeExitMappings(grade),
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCGradeInfo, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket clearExitGrades failed: HC_CMD_GRADE_INFO result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	cacheLatestGradeInfo(destID, grade)
+	setCTCPServerLastMessage("WebSocket clearExitGrades success: HC_CMD_GRADE_INFO sent, dest=0x%04X", uint32(destID))
+	return 0, destID, len(payload)
+}
+
 func SendGradeInfoData(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
 	destID := normalizeDropDataDestID(control)
 	if control.Grade == nil {
@@ -500,6 +560,28 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	cacheLatestGradeInfo(destID, grade)
 	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X", topic, uint32(commandID), uint32(destID))
 	return 0, destID, len(payload)
+}
+
+func SendSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=0 bytes",
+		topic,
+		uint32(commandID),
+		uint32(destID),
+		targetIP,
+		targetPort,
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, commandID, nil)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket %s failed: cmd=0x%04X result=%d", topic, uint32(commandID), result)
+		return result, destID, 0
+	}
+
+	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X", topic, uint32(commandID), uint32(destID))
+	return 0, destID, 0
 }
 
 func cacheLatestGradeInfo(destID int32, grade StGradeInfo) {
@@ -626,6 +708,37 @@ func applyGradeExitBit(item *StGradeItemInfo, exitNo int, add bool) {
 	}
 	item.ExitLow = uint32(exit64)
 	item.ExitHigh = uint32(exit64 >> 32)
+}
+
+func clearGradeExitMappings(grade *StGradeInfo) {
+	if grade == nil {
+		return
+	}
+	sizeNum := 1
+	qualityNum := 1
+	if grade.NClassifyType > 0 && grade.NQualityGradeNum > 0 {
+		qualityNum = int(grade.NQualityGradeNum)
+	}
+	if grade.NSizeGradeNum > 0 {
+		sizeNum = int(grade.NSizeGradeNum)
+	}
+	if qualityNum > cTCPServerMaxQualityGradeNum {
+		qualityNum = cTCPServerMaxQualityGradeNum
+	}
+	if sizeNum > cTCPServerMaxSizeGradeNum {
+		sizeNum = cTCPServerMaxSizeGradeNum
+	}
+
+	for qualityIndex := 0; qualityIndex < qualityNum; qualityIndex++ {
+		for sizeIndex := 0; sizeIndex < sizeNum; sizeIndex++ {
+			gradeIndex := qualityIndex*cTCPServerMaxSizeGradeNum + sizeIndex
+			if gradeIndex < 0 || gradeIndex >= len(grade.Grades) {
+				continue
+			}
+			grade.Grades[gradeIndex].ExitLow = 0
+			grade.Grades[gradeIndex].ExitHigh = 0
+		}
+	}
 }
 
 func mergeGradeExitState(target *StGradeInfo, cached StGradeInfo) {
