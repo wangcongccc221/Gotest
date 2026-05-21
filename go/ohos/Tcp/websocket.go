@@ -57,11 +57,21 @@ type webSocketControlMessage struct {
 	DestID     int32                `json:"destId,omitempty"`
 	Grade      *StGradeInfo         `json:"grade,omitempty"`
 	GradeExits []webSocketGradeExit `json:"gradeExits,omitempty"`
+	Action     string               `json:"action,omitempty"`
+	ExitNo     int                  `json:"exitNo,omitempty"`
+	DropGrades []webSocketDropGrade `json:"grades,omitempty"`
 }
 
 type webSocketGradeExit struct {
 	Index int     `json:"index"`
 	Exit  float64 `json:"exit"`
+}
+
+type webSocketDropGrade struct {
+	Row   *int   `json:"row,omitempty"`
+	Col   *int   `json:"col,omitempty"`
+	Index *int   `json:"index,omitempty"`
+	Name  string `json:"name,omitempty"`
 }
 
 type webSocketHub struct {
@@ -398,7 +408,7 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 	}
 
 	destID := normalizeDropDataDestID(control)
-	if len(control.GradeExits) == 0 {
+	if len(control.DropGrades) == 0 && len(control.GradeExits) == 0 {
 		setCTCPServerLastMessage("WebSocket dropdata failed: empty gradeExits, dest=0x%04X", uint32(destID))
 		return -1, destID, 0
 	}
@@ -409,7 +419,12 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 		return -1, destID, 0
 	}
 
-	if err := applyGradeExitMapping(&grade, control.GradeExits); err != nil {
+	if len(control.DropGrades) > 0 {
+		if err := applyGradeDropAction(&grade, control.Action, control.ExitNo, control.DropGrades); err != nil {
+			setCTCPServerLastMessage("WebSocket dropdata failed: %v", err)
+			return -1, destID, 0
+		}
+	} else if err := applyGradeExitMapping(&grade, control.GradeExits); err != nil {
 		setCTCPServerLastMessage("WebSocket dropdata failed: %v", err)
 		return -1, destID, 0
 	}
@@ -450,6 +465,12 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	}
 
 	grade := *control.Grade
+	if commandID == cTCPHCGradeInfo {
+		if cached, ok := latestGradeInfo(destID); ok {
+			mergeGradeExitState(&grade, cached)
+		}
+	}
+
 	payload, err := encodeGradeInfoPayload(grade)
 	if err != nil {
 		setCTCPServerLastMessage("WebSocket %s failed: encode StGradeInfo: %v", topic, err)
@@ -537,6 +558,99 @@ func normalizeDropDataDestID(control webSocketControlMessage) int32 { //标准�
 	return cTCPDefaultFSMID
 }
 
+func applyGradeDropAction(grade *StGradeInfo, action string, exitNo int, grades []webSocketDropGrade) error {
+	add, err := normalizeDropAction(action)
+	if err != nil {
+		return err
+	}
+	if exitNo < 1 || exitNo > 64 {
+		return fmt.Errorf("exitNo out of range: %d", exitNo)
+	}
+	if len(grades) == 0 {
+		return errors.New("empty drop grades")
+	}
+
+	for _, item := range grades {
+		index, err := resolveDropGradeIndex(item)
+		if err != nil {
+			return err
+		}
+		applyGradeExitBit(&grade.Grades[index], exitNo, add)
+	}
+	if add {
+		enableGradeExit(grade, exitNo)
+	}
+	return nil
+}
+
+func normalizeDropAction(action string) (bool, error) {
+	switch strings.ToLower(strings.TrimSpace(action)) {
+	case "", "add", "append", "up":
+		return true, nil
+	case "remove", "delete", "del", "down":
+		return false, nil
+	default:
+		return false, fmt.Errorf("unknown drop action: %s", action)
+	}
+}
+
+func resolveDropGradeIndex(item webSocketDropGrade) (int, error) {
+	if item.Row != nil || item.Col != nil {
+		if item.Row == nil || item.Col == nil {
+			return 0, errors.New("grade row/col must be provided together")
+		}
+		if *item.Row < 0 || *item.Row >= cTCPServerMaxQualityGradeNum {
+			return 0, fmt.Errorf("grade row out of range: %d", *item.Row)
+		}
+		if *item.Col < 0 || *item.Col >= cTCPServerMaxSizeGradeNum {
+			return 0, fmt.Errorf("grade col out of range: %d", *item.Col)
+		}
+		return *item.Row*cTCPServerMaxSizeGradeNum + *item.Col, nil
+	}
+	if item.Index != nil {
+		if *item.Index < 0 || *item.Index >= cTCPServerMaxQualityGradeNum*cTCPServerMaxSizeGradeNum {
+			return 0, fmt.Errorf("grade index out of range: %d", *item.Index)
+		}
+		return *item.Index, nil
+	}
+	return 0, errors.New("grade row/col or index is required")
+}
+
+func applyGradeExitBit(item *StGradeItemInfo, exitNo int, add bool) {
+	mask := uint64(1) << uint(exitNo-1)
+	exit64 := uint64(item.ExitLow) | (uint64(item.ExitHigh) << 32)
+	if add {
+		exit64 |= mask
+	} else {
+		exit64 &^= mask
+	}
+	item.ExitLow = uint32(exit64)
+	item.ExitHigh = uint32(exit64 >> 32)
+}
+
+func mergeGradeExitState(target *StGradeInfo, cached StGradeInfo) {
+	for i := 0; i < len(target.Grades) && i < len(cached.Grades); i++ {
+		target.Grades[i].ExitLow |= cached.Grades[i].ExitLow
+		target.Grades[i].ExitHigh |= cached.Grades[i].ExitHigh
+	}
+	for i := 0; i < len(target.ExitEnabled) && i < len(cached.ExitEnabled); i++ {
+		target.ExitEnabled[i] = int32(uint32(target.ExitEnabled[i]) | uint32(cached.ExitEnabled[i]))
+	}
+}
+
+func enableGradeExit(grade *StGradeInfo, exitNo int) {
+	if exitNo < 1 || exitNo > 64 {
+		return
+	}
+	bucket := 0
+	shift := exitNo - 1
+	if shift >= 32 {
+		bucket = 1
+		shift -= 32
+	}
+	grade.ExitEnabled[bucket] = int32(uint32(grade.ExitEnabled[bucket]) | (uint32(1) << uint(shift)))
+}
+
 func applyGradeExitMapping(grade *StGradeInfo, exits []webSocketGradeExit) error {
 	for _, item := range exits {
 		if item.Index < 0 || item.Index >= len(grade.Grades) {
@@ -544,8 +658,10 @@ func applyGradeExitMapping(grade *StGradeInfo, exits []webSocketGradeExit) error
 		}
 
 		exitMask := uint64(item.Exit)
-		grade.Grades[item.Index].ExitLow = uint32(exitMask)
-		grade.Grades[item.Index].ExitHigh = uint32(exitMask >> 32)
+		current := grade.Grades[item.Index].Exit()
+		next := current | exitMask
+		grade.Grades[item.Index].ExitLow = uint32(next)
+		grade.Grades[item.Index].ExitHigh = uint32(next >> 32)
 	}
 	return nil
 }
