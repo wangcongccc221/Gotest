@@ -610,6 +610,17 @@ type StFruitGradeInfos struct {
 	FruitGradeInfos [12]StFruitGradeInfo
 }
 
+const (
+	MAX_EXIT_NUM    = 48
+	MAX_TEXT_LENGTH = 12
+)
+
+type StExitInfos struct {
+	ExitName        [MAX_EXIT_NUM * MAX_TEXT_LENGTH]uint8
+	ExitControlMode [MAX_EXIT_NUM]uint8
+	ExitBoxType     [MAX_EXIT_NUM]uint8
+}
+
 // 内部品质----------------------------------------------------------------------------------------------------
 
 // 语言包

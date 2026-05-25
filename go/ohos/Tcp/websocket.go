@@ -19,6 +19,7 @@ const (
 	webSocketTopicStGlobal   = "stglobal" // StGlobal 全量数据
 	webSocketTopicStatistics = "statistics"
 	webSocketTopicGrade      = "grade"
+	webSocketTopicExitInfos  = "exitInfos"
 
 	webSocketWriteWait           = 5 * time.Second  //写入等待
 	webSocketPongWait            = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
@@ -56,6 +57,7 @@ type webSocketControlMessage struct {
 	FSMID      int32                `json:"fsmId,omitempty"`
 	DestID     int32                `json:"destId,omitempty"`
 	Grade      *StGradeInfo         `json:"grade,omitempty"`
+	ExitInfos  *StExitInfos         `json:"exitInfos,omitempty"`
 	GradeExits []webSocketGradeExit `json:"gradeExits,omitempty"`
 	Action     string               `json:"action,omitempty"`
 	ExitNo     int                  `json:"exitNo,omitempty"`
@@ -72,6 +74,11 @@ type webSocketDropGrade struct {
 	Col   *int   `json:"col,omitempty"`
 	Index *int   `json:"index,omitempty"`
 	Name  string `json:"name,omitempty"`
+}
+
+type webSocketExitInfosData struct {
+	FSMID     int32       `json:"fsmId"`
+	ExitInfos StExitInfos `json:"exitInfos"`
 }
 
 type webSocketHub struct {
@@ -256,7 +263,7 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleRequestStGlobal()
 
 	case "close_client":
-		fmt.Println("123")
+		fmt.Println("123") //发送一个display_off 还有一个关闭啥来着 忘记了
 
 	case "dropdata":
 		c.handleDropData(control)
@@ -271,7 +278,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleGradeInfoData("saveLevelData", cTCPHCGradeInfo, control)
 	case "saveQualityData":
 		c.handleGradeInfoData("saveQualityData", cTCPHCColorGradeInfo, control)
-
+	case "saveExitInfos":
+		c.handleExitInfosLog(control)
 	}
 
 }
@@ -291,6 +299,7 @@ func parseWebSocketControlMessage(text string) (webSocketControlMessage, bool) {
 }
 
 func (c *webSocketClient) handleRequestStGlobal() {
+	c.sendLatestExitInfosData()
 	// 前端 WebSocket 连接成功后发 requestStGlobal，表示前端已经准备接收数据。
 	// 这里异步触发 CTCP 客户端发送 DISPLAY_ON，避免阻塞 WebSocket 的读循环。
 	go func() {
@@ -319,6 +328,57 @@ func (c *webSocketClient) handleGradeInfoData(topic string, commandID int32, con
 		result, destID, payloadBytes := SendGradeInfoData(topic, commandID, control)
 		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
 	}()
+}
+
+func (c *webSocketClient) handleExitInfosLog(control webSocketControlMessage) {
+	if control.ExitInfos == nil {
+		setCTCPServerLastMessage("WebSocket saveExitInfos failed: empty StExitInfos, fsmId=0x%04X", uint32(control.FSMID))
+		return
+	}
+
+	baseExitInfos := defaultStExitInfos()
+	if _, cachedExitInfos, ok := latestStExitInfosSnapshot(); ok {
+		baseExitInfos = cachedExitInfos
+	}
+	exitInfos := mergeStExitInfosBoxTypeUpdate(baseExitInfos, *control.ExitInfos)
+	setCTCPServerLastMessage(
+		"WebSocket saveExitInfos: fsmId=0x%04X, ExitBoxType=%v, ExitControlMode=%v",
+		uint32(control.FSMID),
+		exitInfos.ExitBoxType,
+		exitInfos.ExitControlMode,
+	)
+	if err := SaveStExitInfosToLocalConfig(control.FSMID, exitInfos); err != nil {
+		return
+	}
+	setLastStExitInfosSnapshot(control.FSMID, exitInfos)
+	LogStExitInfos(exitInfos)
+	publishExitInfosData(control.FSMID, exitInfos)
+}
+
+func (c *webSocketClient) sendLatestExitInfosData() {
+	fsmID, exitInfos, ok := latestStExitInfosSnapshot()
+	if !ok {
+		return
+	}
+	c.sendExitInfosData(fsmID, exitInfos)
+}
+
+func (c *webSocketClient) sendExitInfosData(fsmID int32, exitInfos StExitInfos) {
+	c.sendFrame(webSocketFrame{
+		Type:  webSocketTopicData,
+		Topic: webSocketTopicExitInfos,
+		Data:  rawJSONFromValue(webSocketExitInfosData{FSMID: fsmID, ExitInfos: exitInfos}),
+	})
+}
+
+func publishExitInfosData(fsmID int32, exitInfos StExitInfos) {
+	raw := rawJSONFromValue(webSocketExitInfosData{FSMID: fsmID, ExitInfos: exitInfos})
+	frame, err := newWebSocketDataFrame(webSocketTopicExitInfos, raw)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket publish exitInfos failed: %v", err)
+		return
+	}
+	defaultWebSocketHub.publish(webSocketTopicExitInfos, frame)
 }
 
 func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {
@@ -527,7 +587,9 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	grade := *control.Grade
 	if commandID == cTCPHCGradeInfo {
 		if cached, ok := latestGradeInfo(destID); ok {
-			mergeGradeExitState(&grade, cached)
+			if shouldPreserveCachedGradeExits(grade, cached) {
+				mergeGradeExitState(&grade, cached)
+			}
 		}
 	}
 
@@ -714,30 +776,9 @@ func clearGradeExitMappings(grade *StGradeInfo) {
 	if grade == nil {
 		return
 	}
-	sizeNum := 1
-	qualityNum := 1
-	if grade.NClassifyType > 0 && grade.NQualityGradeNum > 0 {
-		qualityNum = int(grade.NQualityGradeNum)
-	}
-	if grade.NSizeGradeNum > 0 {
-		sizeNum = int(grade.NSizeGradeNum)
-	}
-	if qualityNum > cTCPServerMaxQualityGradeNum {
-		qualityNum = cTCPServerMaxQualityGradeNum
-	}
-	if sizeNum > cTCPServerMaxSizeGradeNum {
-		sizeNum = cTCPServerMaxSizeGradeNum
-	}
-
-	for qualityIndex := 0; qualityIndex < qualityNum; qualityIndex++ {
-		for sizeIndex := 0; sizeIndex < sizeNum; sizeIndex++ {
-			gradeIndex := qualityIndex*cTCPServerMaxSizeGradeNum + sizeIndex
-			if gradeIndex < 0 || gradeIndex >= len(grade.Grades) {
-				continue
-			}
-			grade.Grades[gradeIndex].ExitLow = 0
-			grade.Grades[gradeIndex].ExitHigh = 0
-		}
+	for i := range grade.Grades {
+		grade.Grades[i].ExitLow = 0
+		grade.Grades[i].ExitHigh = 0
 	}
 }
 
@@ -749,6 +790,12 @@ func mergeGradeExitState(target *StGradeInfo, cached StGradeInfo) {
 	for i := 0; i < len(target.ExitEnabled) && i < len(cached.ExitEnabled); i++ {
 		target.ExitEnabled[i] = int32(uint32(target.ExitEnabled[i]) | uint32(cached.ExitEnabled[i]))
 	}
+}
+
+func shouldPreserveCachedGradeExits(target StGradeInfo, cached StGradeInfo) bool {
+	return target.NSizeGradeNum == cached.NSizeGradeNum &&
+		target.NQualityGradeNum == cached.NQualityGradeNum &&
+		target.NClassifyType == cached.NClassifyType
 }
 
 func enableGradeExit(grade *StGradeInfo, exitNo int) {

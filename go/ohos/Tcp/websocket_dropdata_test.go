@@ -70,7 +70,37 @@ func TestMergeGradeExitStatePreservesCachedAndIncomingExitBits(t *testing.T) {
 	}
 }
 
-func TestClearGradeExitMappingsClearsOnlyConfiguredSizeQualityMatrix(t *testing.T) {
+func TestShouldPreserveCachedGradeExitsRequiresSameGradeShape(t *testing.T) {
+	cached := StGradeInfo{
+		NClassifyType:    1,
+		NSizeGradeNum:    10,
+		NQualityGradeNum: 2,
+	}
+	incoming := cached
+
+	if !shouldPreserveCachedGradeExits(incoming, cached) {
+		t.Fatalf("same grade shape should preserve cached exit bits")
+	}
+
+	incoming.NSizeGradeNum = 2
+	if shouldPreserveCachedGradeExits(incoming, cached) {
+		t.Fatalf("changed size grade count should not preserve cached exit bits")
+	}
+
+	incoming = cached
+	incoming.NQualityGradeNum = 1
+	if shouldPreserveCachedGradeExits(incoming, cached) {
+		t.Fatalf("changed quality grade count should not preserve cached exit bits")
+	}
+
+	incoming = cached
+	incoming.NClassifyType = 0
+	if shouldPreserveCachedGradeExits(incoming, cached) {
+		t.Fatalf("changed classify type should not preserve cached exit bits")
+	}
+}
+
+func TestClearGradeExitMappingsClearsAllGradeExitValues(t *testing.T) {
 	var grade StGradeInfo
 	grade.NClassifyType = 1
 	grade.NQualityGradeNum = 2
@@ -94,8 +124,8 @@ func TestClearGradeExitMappingsClearsOnlyConfiguredSizeQualityMatrix(t *testing.
 	if grade.Grades[cTCPServerMaxSizeGradeNum+2].ExitLow != 0 || grade.Grades[cTCPServerMaxSizeGradeNum+2].ExitHigh != 0 {
 		t.Fatalf("quality1 size2 exit bits = low:%08x high:%08x, want zero", grade.Grades[cTCPServerMaxSizeGradeNum+2].ExitLow, grade.Grades[cTCPServerMaxSizeGradeNum+2].ExitHigh)
 	}
-	if grade.Grades[5].ExitLow != 0b100 {
-		t.Fatalf("inactive grade5 exit bits = low:%08x, want 00000004", grade.Grades[5].ExitLow)
+	if grade.Grades[5].ExitLow != 0 || grade.Grades[5].ExitHigh != 0 {
+		t.Fatalf("inactive grade5 exit bits = low:%08x high:%08x, want zero", grade.Grades[5].ExitLow, grade.Grades[5].ExitHigh)
 	}
 	if grade.ExitEnabled[0] != 0b011 || grade.ExitEnabled[1] != 0b001 {
 		t.Fatalf("ExitEnabled = [%08x,%08x], want unchanged [00000003,00000001]", uint32(grade.ExitEnabled[0]), uint32(grade.ExitEnabled[1]))
@@ -117,8 +147,8 @@ func TestClearGradeExitMappingsWithSizeOnlyClassifyIgnoresQualityRows(t *testing
 	if grade.Grades[0].ExitLow != 0 || grade.Grades[1].ExitLow != 0 {
 		t.Fatalf("size-only first row exit bits = [%08x,%08x], want zero", grade.Grades[0].ExitLow, grade.Grades[1].ExitLow)
 	}
-	if grade.Grades[cTCPServerMaxSizeGradeNum].ExitLow != 0b100 {
-		t.Fatalf("quality row was cleared for size-only mode: got %08x, want 00000004", grade.Grades[cTCPServerMaxSizeGradeNum].ExitLow)
+	if grade.Grades[cTCPServerMaxSizeGradeNum].ExitLow != 0 {
+		t.Fatalf("quality row exit bits = %08x, want zero", grade.Grades[cTCPServerMaxSizeGradeNum].ExitLow)
 	}
 }
 

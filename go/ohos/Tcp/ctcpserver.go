@@ -104,6 +104,9 @@ var (
 
 	cTCPPayloadMu    sync.Mutex
 	cTCPPayloadByCmd = make(map[string]cTCPStoredPayload)
+
+	cTCPStStatisticsLogMu   sync.Mutex
+	cTCPStStatisticsLogLast time.Time
 )
 
 func StartCTCPServer() int {
@@ -146,7 +149,9 @@ func StartCTCPServer() int {
 		goSz, cTCP48StGlobalExpectedSize)
 	appendCTCPLogChunks("CTCP startup StGlobalLayoutReport", StGlobalLayoutReport())
 	setCTCPServerLastMessage("CTCP startup: StGlobal 全量 JSON 在收到 FSM_CMD_CONFIG(0x1000) 后写入日志（HiLog 搜「CTCP StGlobal 全量」）。")
+	LoadStExitInfosFromLocalConfig()
 	StartStGradeInfoPeriodicLog()
+	StartStExitInfosPeriodicLog()
 	return cTCPServerStatPort
 }
 
@@ -213,6 +218,26 @@ func stStatisticsPreview(state StStatistics, payload []byte) string {
 	)
 }
 
+func logStStatisticsEvery5Seconds(remoteAddr string, head cTCPServerCommandHead, state StStatistics, payload []byte) {
+	cTCPStStatisticsLogMu.Lock()
+	now := time.Now()
+	if !cTCPStStatisticsLogLast.IsZero() && now.Sub(cTCPStStatisticsLogLast) < 5*time.Second {
+		cTCPStStatisticsLogMu.Unlock()
+		return
+	}
+	cTCPStStatisticsLogLast = now
+	cTCPStStatisticsLogMu.Unlock()
+
+	setCTCPServerLastMessage(
+		"CTCP StStatistics 5秒打印: remote=%s, src=0x%04X, dst=0x%04X, %s",
+		remoteAddr,
+		uint32(head.NSrcId),
+		uint32(head.NDstId),
+		stStatisticsPreview(state, payload),
+	)
+	appendCTCPLogChunks("CTCP StStatistics Go结构体 5秒打印", fmt.Sprintf("%+v", state))
+}
+
 func StopCTCPServer() int {
 	cTCPServerMu.Lock()
 	imageServer := cTCPServerImage
@@ -229,6 +254,7 @@ func StopCTCPServer() int {
 	}
 
 	StopStGradeInfoPeriodicLog()
+	StopStExitInfosPeriodicLog()
 	setCTCPServerLastMessage("CTCP servers stopped")
 	return 0
 }
@@ -502,8 +528,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 
 		// appendPayloadHexChunks("CTCP StStatistics 原始payload", payload)
-		// setCTCPServerLastMessage("CTCP StStatistics 解析预览: %s", stStatisticsPreview(state, payload))
-		// appendCTCPLogChunks("CTCP StStatistics Go结构体", fmt.Sprintf("%+v", state))
+		logStStatisticsEvery5Seconds(remoteAddr, head, state, payload)
 
 		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
 		if stateJSON != "" && jsonErr == nil {
