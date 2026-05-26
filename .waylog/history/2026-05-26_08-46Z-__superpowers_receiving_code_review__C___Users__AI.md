@@ -219,3 +219,847 @@ A plugin is a local bundle of skills, MCP servers, and apps. Below is the list o
 另一个 `e:\my_harmony` 里也有一套旧逻辑：它在 [UIDataSync.ets](</e:/my_harmony/entry/src/main/ets/protocol/UIDataSync.ets:242>) 直接用 `data.efficiency` 显示分选速度，而 `data.efficiency` 在 [GlobalDataInterface.ets](</e:/my_harmony/entry/src/main/ets/protocol/GlobalDataInterface.ets:3539>) 来自 `statistics.nIntervalSumperminute`。这套没有像 `e:\new\my_harmony` 那样单独走 `HomeStatsCalculator`。
 
 ---
+
+
+**User**
+
+给我详细的讲一讲这个48的分选速度吧 有些函数名我都没看懂
+
+---
+
+
+**OpenAI Codex**
+
+我再把 `homeform.cpp` 里这段所在函数和相关字段上下文补齐一下，这样讲的时候能把“谁调用谁、字段从哪来、界面显示到哪”串起来。
+
+---
+
+
+**OpenAI Codex**
+
+**一句话先讲透**
+
+48 里的“分选速度”不是 `homeform.cpp` 现场用时间差算出来的。它主要是读取下位机/统计结构上报的 `nIntervalSumperminute`，然后按“当前子系统”或“所有子系统合并”做一次有效平均，最后显示到首页的 `VelChangelabel` 上。
+
+核心代码在 [homeform.cpp](</e:/new/48/RSS/Forms/homeform.cpp:2082>) 的 `HomeForm::OnUpStatisticInfoEvent()` 里面，具体分选速度段在 [homeform.cpp](</e:/new/48/RSS/Forms/homeform.cpp:2381>)。
+
+**字段来源**
+
+先看结构体字段，在 [interface.h](</e:/new/48/RSS/Base/interface.h:9888>)：
+
+```cpp
+int nInterval;              // 与上次发送统计信息的间隔数
+int nIntervalSumperminute;  // 一分钟内光电开关的个数,计算分选速度
+ushort nPulseInterval;      // 2000以上时，分选速度为0；单位为ms
+```
+
+这里最关键的是：
+
+`nIntervalSumperminute`：分选速度，单位可以理解成“个/分钟”。  
+它的注释说的是“一分钟内光电开关的个数”，也就是说设备侧已经统计好了每分钟通过光电的数量。
+
+`nPulseInterval`：光电脉冲间隔，单位 ms。  
+这个不是首页的“分选速度”，而是下面代码里的“光电速度/间隔速度”。
+
+**首页分选速度逻辑**
+
+代码大概是这样：
+
+```cpp
+ulong lSum = 0;
+uint ValidSubsysNum = 0;
+ulong lVelChangelabelValue = 0;
+
+if (GlobalDataInterface::m_sGlobalAllMerge) {
+    for (int k = 0; k < GlobalDataInterface::globalOut_SysConfig[0].nSubsysNum; k++) {
+        if (GlobalDataInterface::globalIn_statistics[k].nIntervalSumperminute > 0) {
+            lSum += GlobalDataInterface::globalIn_statistics[k].nIntervalSumperminute;
+            ValidSubsysNum++;
+        }
+    }
+} else {
+    if (GlobalDataInterface::globalIn_statistics[GlobalDataInterface::CurrentSysIdx].nIntervalSumperminute > 0) {
+        lSum += GlobalDataInterface::globalIn_statistics[GlobalDataInterface::CurrentSysIdx].nIntervalSumperminute;
+        ValidSubsysNum++;
+    }
+}
+
+if (ValidSubsysNum != 0) {
+    lVelChangelabelValue = lSum / ValidSubsysNum;
+} else {
+    MainForm::m_mainForm->AutoResetCupState();
+}
+
+ui->VelChangelabel->setText(QString::number(lVelChangelabelValue));
+```
+
+这些名字可以这样理解：
+
+`GlobalDataInterface`：全局数据中心。这个项目里大量实时数据都挂在这里。
+
+`globalIn_statistics`：输入统计数据数组。每个子系统/FSM 一份统计信息。
+
+`globalIn_statistics[k]`：第 `k` 个子系统的统计数据。
+
+`nIntervalSumperminute`：第 `k` 个子系统当前上报的分选速度。
+
+`m_sGlobalAllMerge`：是否“全局合并显示”。  
+为真：把所有子系统都算进去。  
+为假：只看当前选中的子系统。
+
+`globalOut_SysConfig[0].nSubsysNum`：子系统数量。
+
+`CurrentSysIdx`：当前正在看的子系统索引。
+
+`lSum`：速度总和。
+
+`ValidSubsysNum`：有效子系统数量。注意只有 `nIntervalSumperminute > 0` 才算有效。
+
+`lVelChangelabelValue`：最终要显示的分选速度值。
+
+`VelChangelabel`：界面上的分选速度显示控件。
+
+所以最终公式是：
+
+```text
+分选速度 = 有效子系统的 nIntervalSumperminute 总和 / 有效子系统数量
+```
+
+如果只看当前子系统，那其实就是：
+
+```text
+分选速度 = 当前子系统的 nIntervalSumperminute
+```
+
+但是它仍然走了一遍 `sum / count`，所以看起来像平均逻辑。
+
+**为什么要判断大于 0**
+
+这段代码只统计：
+
+```cpp
+nIntervalSumperminute > 0
+```
+
+意思是：速度为 0 的子系统不参与平均。
+
+例子：
+
+```text
+子系统1速度 = 600
+子系统2速度 = 0
+子系统3速度 = 900
+```
+
+最终不是：
+
+```text
+(600 + 0 + 900) / 3 = 500
+```
+
+而是：
+
+```text
+(600 + 900) / 2 = 750
+```
+
+这个设计的含义是：没有速度的子系统被认为“无效/未运行”，不拉低平均值。
+
+如果所有子系统速度都是 0，那么：
+
+```cpp
+MainForm::m_mainForm->AutoResetCupState();
+```
+
+也就是自动重置杯状态，并且显示值保持默认的 `0`。
+
+**分选速度显示到哪里**
+
+最后这一句是真正写界面的地方：
+
+```cpp
+ui->VelChangelabel->setText(QString::number(lVelChangelabelValue));
+```
+
+也就是首页 UI 上的 `VelChangelabel`。
+
+如果其他地方要拿这个速度，不是重新算，而是读 label：
+
+- [homeform.cpp](</e:/new/48/RSS/Forms/homeform.cpp:280>)
+
+```cpp
+int HomeForm::GetSpeed()
+{
+    return ui->VelChangelabel->text().toInt();
+}
+```
+
+所以 `GetSpeed()` 这个名字不要理解成“计算速度”，它只是“从界面控件里取当前显示的速度”。
+
+**间隔速度不是同一个东西**
+
+紧接着下面还有一段：
+
+```cpp
+int IntervalSum = 0;
+uint IntervalValidSubsysNum = 0;
+int IntervalChangelabelValue = 0;
+```
+
+注释写的是：
+
+```cpp
+//光电速度
+```
+
+但界面上更像“间隔速度”。
+
+它用的不是 `nIntervalSumperminute`，而是：
+
+```cpp
+nInterval
+nPulseInterval
+```
+
+逻辑是：
+
+```text
+如果 nInterval > 0，就认为这个子系统有有效间隔；
+把 nPulseInterval 累加；
+最后求平均；
+显示到 IntervalChangelabel。
+```
+
+所以这两个值的区别是：
+
+```text
+分选速度：nIntervalSumperminute，单位 个/分钟
+间隔速度：nPulseInterval，单位 ms
+```
+
+**和运行记录的关系**
+
+后面这段逻辑也用了 `lVelChangelabelValue`：
+
+```cpp
+if (lVelChangelabelValue > 0)
+```
+
+它拿“分选速度是否大于 0”判断机器是否正在分选，用来写运行开始/停止时间。
+
+所以在 48 里，分选速度不只是显示值，它还被当成“当前是否在运行”的判断依据之一。
+
+**总结成流程**
+
+```text
+下位机/通讯层更新 globalIn_statistics[k].nIntervalSumperminute
+        ↓
+HomeForm::OnUpStatisticInfoEvent() 刷新首页统计
+        ↓
+判断是否全局合并 m_sGlobalAllMerge
+        ↓
+取当前子系统或所有子系统的 nIntervalSumperminute
+        ↓
+过滤掉 <= 0 的速度
+        ↓
+求有效平均值
+        ↓
+显示到 ui->VelChangelabel
+        ↓
+GetSpeed() / 云上传 / 运行记录等地方再读这个显示值
+```
+
+你可以把 `homeform.cpp` 里的分选速度理解成“显示层汇总逻辑”：真正的原始速度字段是 `nIntervalSumperminute`，首页只是选择子系统、过滤无效值、平均、显示。
+
+---
+
+
+**User**
+
+所有子系统？ 我现在不就是只有一个子系统吗？ 不应该按照多少个出口来计算的吗？
+
+---
+
+
+**OpenAI Codex**
+
+对，你这个判断是对的：**如果你现场/当前配置只有 1 个子系统，那这段“所有子系统平均”实际不会产生多系统平均效果，最后就是取这一个子系统的 `nIntervalSumperminute`。**
+
+这里的“所有子系统”不是“所有出口”。
+
+在代码里：
+
+```cpp
+for (int k = 0; k < GlobalDataInterface::globalOut_SysConfig[0].nSubsysNum; k++)
+```
+
+循环的是：
+
+```cpp
+nSubsysNum
+```
+
+也就是子系统数量/FSM 数量，不是出口数量。
+
+出口相关一般是这些字段：
+
+```cpp
+nExitCount[]
+nExitWeightCount[]
+```
+
+或者 UI 里的出口面板、出口列表。分选速度这段完全没有按出口循环。
+
+**为什么不是按出口算？**
+
+因为 `nIntervalSumperminute` 的含义是：
+
+```cpp
+一分钟内光电开关的个数，计算分选速度
+```
+
+它是设备统计上报的“这一套子系统的通过量/分钟”。也就是说，它在进入 `homeform.cpp` 之前，已经是一个速度结果了。
+
+首页代码只是：
+
+```text
+取子系统速度 → 过滤 0 → 平均 → 显示
+```
+
+它不是：
+
+```text
+每个出口数量 → 累加 → 自己计算速度
+```
+
+**如果你只有一个子系统**
+
+假设：
+
+```cpp
+nSubsysNum = 1
+globalIn_statistics[0].nIntervalSumperminute = 720
+```
+
+那无论 `m_sGlobalAllMerge` 是 true 还是 false，结果基本都是：
+
+```text
+lSum = 720
+ValidSubsysNum = 1
+lVelChangelabelValue = 720 / 1 = 720
+```
+
+所以首页分选速度就是 `720 个/分钟`。
+
+**什么时候“所有子系统”才有意义？**
+
+比如一台机器有多个 FSM/多套分选线，每个子系统各自上报速度：
+
+```text
+子系统1：600 个/分钟
+子系统2：800 个/分钟
+```
+
+当前代码算的是平均：
+
+```text
+(600 + 800) / 2 = 700 个/分钟
+```
+
+注意，它不是总速度 `1400 个/分钟`。这一点很关键。
+
+**你说的“按多少个出口来计算”更像另一种业务口径**
+
+如果要按出口算，通常会用：
+
+```cpp
+nExitCount[i]
+```
+
+然后在固定时间窗口内做差：
+
+```text
+分选速度 = 本次出口总数 - 上次出口总数 / 时间差
+```
+
+或者：
+
+```text
+分选速度 = 所有出口单位时间新增个数总和
+```
+
+但 48 当前首页这段不是这么做的。当前 48 的口径是相信下位机给的 `nIntervalSumperminute`，出口数量只用于出口统计、等级统计，不参与首页这个 `VelChangelabel` 的速度计算。
+
+所以结论是：
+
+```text
+当前代码：按子系统速度算。
+不是按出口数量算。
+如果只有一个子系统，那就是直接显示这个子系统上报的 nIntervalSumperminute。
+```
+
+如果你现在现场确实只有一个子系统，那鸿蒙端也应该照这个口径：直接取当前/唯一子系统的 `nIntervalSumperminute` 显示，不需要按出口数再算一遍。
+
+---
+
+
+**User**
+
+我在后端先打印一下这个nSubsysNum 和nIntervalSumperminute：分选速度，单位可以理解成“个/分钟”。
+它的注释说的是“一分钟内光电开关的个数”，也就是说设备侧已经统计好了每分钟通过光电的数量。
+
+nPulseInterval：光电脉冲间隔，单位 ms。
+这个不是首页的“分选速度”，而是下面代码里的“光电速度/间隔速度”。
+这三个 我对比一下 不就行了吗？
+
+---
+
+
+**OpenAI Codex**
+
+对，就这么比是最直接的。
+
+你先在后端/48 侧打印这三个值：
+
+```cpp
+GlobalDataInterface::globalOut_SysConfig[0].nSubsysNum
+GlobalDataInterface::globalIn_statistics[k].nIntervalSumperminute
+GlobalDataInterface::globalIn_statistics[k].nPulseInterval
+```
+
+如果只有一个子系统，重点看 `k = 0` 就够了。
+
+建议顺手把 `nInterval` 也一起打出来，因为 48 里间隔速度不是单看 `nPulseInterval`，它有这个判断：
+
+```cpp
+if (GlobalDataInterface::globalIn_statistics[k].nInterval > 0)
+{
+    IntervalSum += GlobalDataInterface::globalIn_statistics[k].nPulseInterval;
+}
+```
+
+所以推荐打印四个：
+
+```cpp
+qDebug() << "nSubsysNum =" << GlobalDataInterface::globalOut_SysConfig[0].nSubsysNum;
+
+for (int k = 0; k < GlobalDataInterface::globalOut_SysConfig[0].nSubsysNum; k++)
+{
+    qDebug() << "subsys =" << k
+             << "nIntervalSumperminute =" << GlobalDataInterface::globalIn_statistics[k].nIntervalSumperminute
+             << "nInterval =" << GlobalDataInterface::globalIn_statistics[k].nInterval
+             << "nPulseInterval =" << GlobalDataInterface::globalIn_statistics[k].nPulseInterval;
+}
+```
+
+你要验证的结论就是：
+
+```text
+首页分选速度 VelChangelabel
+≈ nIntervalSumperminute
+```
+
+在单子系统情况下应该基本一致。
+
+如果你发现：
+
+```text
+nSubsysNum = 1
+nIntervalSumperminute = 700
+首页显示分选速度 = 700
+```
+
+那就说明 48 的显示逻辑就是直接吃设备侧上报速度。
+
+如果鸿蒙显示不一致，就去查鸿蒙有没有又做了一次平均、求和、按出口重算，或者读错成了 `nPulseInterval`。
+
+---
+
+
+**User**
+
+你帮我打印一下  go后端 自己去看一下go的代码 每5s打印一次
+
+---
+
+
+**OpenAI Codex**
+
+我会先看 Go 后端现在在哪里接收/保存统计结构，再把 5 秒节流打印加到数据更新路径上，避免刷屏。不会编译。
+
+---
+
+
+**OpenAI Codex**
+
+Go 后端已经有一个 `StStatistics` 的 5 秒节流打印钩子，我现在看它打印了哪些字段；如果缺 `nSubsysNum` 或字段不直观，我就在这个现有钩子上补齐。
+
+---
+
+
+**OpenAI Codex**
+
+我会复用现成的 `logStStatisticsEvery5Seconds`，补三件事：收到配置包时缓存 `NSubsysNum`，统计包 5 秒日志里打印它，再把 `NPulseInterval` 加进同一条日志。
+
+---
+
+
+**OpenAI Codex**
+
+已加到 Go 后端现有的 5 秒统计日志里了，没编译。
+
+改的是 [ctcpserver.go](</e:/goTest/go/ohos/Tcp/ctcpserver.go:107>)：
+
+- 收到 `cmdFSMConfig / 0x1000` 配置包时，缓存 `stg.Sys.NSubsysNum`
+- 收到 `cmdFSMStatistics / 0x1001` 统计包时，原来就有 `logStStatisticsEvery5Seconds(...)`
+- 我把这条 5 秒日志补成会打印：
+  - `nSubsysNum`
+  - `nIntervalSumperminute`
+  - `nPulseInterval`
+  - 原来已有的 `nInterval`
+  - `nSubsysId`
+
+现在日志格式里能看到类似：
+
+```text
+CTCP StStatistics 5秒打印:
+nSubsysNum=1,
+nSubsysId=1,
+nInterval=...,
+nIntervalSumperminute=...,
+nPulseInterval=...
+```
+
+注意一点：`nSubsysNum` 来自配置包 `StGlobal.Sys.NSubsysNum`，如果统计包先到、配置包还没到，它会先打印 `0`；等收到配置包后就会变成真实值。
+
+---
+
+
+**User**
+
+"ForceChannel": 10
+                                                                                               }
+05-26 17:19:59.282   13620-13620   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     09:19:59.236 CTCP StStatistics 5秒打印: remote=192.168.0.16:62517, src=0x0100, dst=0x1000, payload=7152 bytes, sizeof(StStatistics)=7152 bytes, nSubsysNum=1, nSubsysId=1, nChannelTotalCount=202800, nChannelWeightCount=91243170, nTotalCupNum=476688, nInterval=84, nIntervalSumperminute=716, nPulseInterval=84, nNetState=255, nWeightSetting=63, gradeCount[0:8]=[0 0 177588 0 25212 0 0 0], weightGradeCount[0:8]=[0 0 79909500 0 11333670 0 0 0], exitCount[0:12]=[0 0 0 0 0 0 0 0 0 95658 100434 0], exitWeightCount[0:12]=[0 0 0 0 0 0 0 0 0 43040652 45188418 0], exitBoxNum[0:12]=[0 0 0 0 0 0 0 0 0 95361 100113 0]
+05-26 17:19:59.282   13620-13620   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     09:19:59.237 CTCP StStatistics Go结构体 5秒打印 part 1/1 chars [0:2769)
+                                                                                               {NGradeCount:[0 0 177588 0 25212 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] NWeightGradeCount:[0 0 79909500 0 11333670 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] NExitCount:[0 0 0 0 0 0 0 0 0 95658 100434 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] NExitWeightCount:[0 0 0 0 0 0 0 0 0 43040652 45188418 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] NChannelTotalCount:202800 NChannelWeightCount:91243170 NSubsysId:1 NBoxGradeCount:[0 0 159 0 45 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] NBoxGradeWeight:[0 0 500316 0 250130 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0] NTotalCupNum:476688 NInterval:84 NIntervalSumperminute:716 NCupState:0 NPulseInterval:84 NUnpushFruitCount:0 NNetState:255 NWeightSetting:63 NSCMState:1 NIQSNetState:255 NLockState:0 ExitBoxNum:[0 0 0 0 0 0 0 0 0 95361 100113 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0]}
+
+---
+
+
+**OpenAI Codex**
+
+这条日志已经把结论打出来了：
+
+```text
+nSubsysNum=1
+nSubsysId=1
+nIntervalSumperminute=716
+nPulseInterval=84
+nInterval=84
+```
+
+所以现在这台设备/当前配置确实是 **1 个子系统**。48 端 `homeform.cpp` 那个“所有子系统平均”的逻辑，在你这里等价于：
+
+```text
+分选速度 = globalIn_statistics[0].nIntervalSumperminute
+分选速度 = 716 个/分钟
+```
+
+也就是说，48 首页的 `VelChangelabel` 理论上应该显示 **716** 左右。
+
+这里还有一个很关键的验证点：
+
+```text
+nPulseInterval = 84 ms
+60000 / 84 ≈ 714.28 个/分钟
+```
+
+这和：
+
+```text
+nIntervalSumperminute = 716
+```
+
+非常接近。
+
+这说明 `nIntervalSumperminute` 基本就是设备侧根据光电脉冲间隔/单位时间计数算出来的“每分钟通过数量”。所以我们之前判断没问题：**这个字段就是分选速度，鸿蒙首页应该优先直接显示它。**
+
+出口这边：
+
+```text
+exitCount[0:12]=[0 0 0 0 0 0 0 0 0 95658 100434 0]
+```
+
+这说明现在主要有两个出口在累计出果，索引大概是 9、10。但这些是累计数量，不是速度。要按出口算速度，就必须拿两次日志之间的差值再除以时间，例如：
+
+```text
+速度 = 本次所有出口累计数 - 上次所有出口累计数
+     / 两次采样间隔秒数
+     * 60
+```
+
+48 目前不是这么算的。48 直接吃：
+
+```text
+nIntervalSumperminute = 716
+```
+
+所以你现在对比方向应该是：
+
+```text
+Go 后端日志 nIntervalSumperminute = 716
+鸿蒙 UI 分选速度应该显示 716 件/分钟
+```
+
+如果鸿蒙显示不是 716，而是按出口累计数、实时产量、效率字段、或者 `nPulseInterval` 显示，那就是鸿蒙显示链路读错字段或又加工了一遍。
+
+---
+
+
+**User**
+
+j没问题啊 但是主管说 有问题 我也不知道是哪里的问题  然后找一下我的鸿蒙代码 给我看一下
+
+---
+
+
+**OpenAI Codex**
+
+我去看 `e:\new\my_harmony` 这一份鸿蒙代码，重点追 `nIntervalSumperminute -> UIDataSync -> SORT_SPEED -> SortingInfoCard` 这条链路，看看有没有哪里会被平均、覆盖或读成别的字段。
+
+---
+
+
+**OpenAI Codex**
+
+目前这份鸿蒙首页逻辑看起来和 48 单子系统口径是一致的：`SORT_SPEED` 来自 `HomeStatsCalculator.averageSortSpeed()`，它读的就是 `stats.nIntervalSumperminute`。我继续看数据进入 `statisticsBySubsys` 的地方，确认有没有子系统 id、字段映射或覆盖问题。
+
+---
+
+
+**OpenAI Codex**
+
+我看了你这份 `e:\new\my_harmony`，首页“分选速度”这条链路本身看起来没问题，和 48 单子系统口径是对得上的。
+
+**首页分选速度链路**
+
+数据从 Go 后端 JSON 进来后，先在这里映射：
+
+[StStatisticsJsonMapper.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/StStatisticsJsonMapper.ets:31>)
+
+```ts
+target.nInterval = toInt(normalized.nInterval, 0)
+target.nIntervalSumperminute = toInt(normalized.nIntervalSumperminute, 0)
+target.nPulseInterval = clampInt(normalized.nPulseInterval, 0, 65535)
+```
+
+然后首页同步在这里算指标：
+
+[UIDataSync.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/UIDataSync.ets:221>)
+
+```ts
+const runtimeSnapshot = this.dataInterface.getRuntimeDataInterfaceSnapshot(targetSubsysId)
+const input = new HomeStatsCalculatorInput(
+  targetSubsysId,
+  this.dataInterface.getAllSubsystemStatistics(),
+  data,
+  runtimeSnapshot
+)
+const metrics = this.homeStatsCalculator.calculate(input)
+```
+
+真正算分选速度的是这里：
+
+[HomeStatsCalculator.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/HomeStatsCalculator.ets:195>)
+
+```ts
+private averageSortSpeed(statsList: StStatistics[]): number {
+  let sum = 0
+  let validCount = 0
+  statsList.forEach((stats: StStatistics): void => {
+    const speed = this.normalizeNumber(stats.nIntervalSumperminute)
+    if (speed > 0) {
+      sum += speed
+      validCount++
+    }
+  })
+  return validCount > 0 ? Math.floor(sum / validCount) : 0
+}
+```
+
+这和 48 的逻辑一致：只统计 `nIntervalSumperminute > 0` 的子系统，然后求平均。你现在日志里：
+
+```text
+nSubsysNum=1
+nIntervalSumperminute=716
+```
+
+所以鸿蒙首页应该得到：
+
+```text
+716 件/分钟
+```
+
+最后写入 UI：
+
+[UIDataSync.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/UIDataSync.ets:242>)
+
+```ts
+this.setStorageIfChanged(keys.SORT_SPEED, `${metrics.sortSpeedPerMinute.toFixed(0)} 件/分钟`)
+```
+
+页面显示：
+
+[SortingInfoCard.ets](</e:/new/my_harmony/entry/src/main/ets/pages/home/SortingInfoCard.ets:9>)
+
+```ts
+@StorageLink('SORT_SPEED') sortSpeed: string = '0 件/分钟'
+```
+
+[SortingInfoCard.ets](</e:/new/my_harmony/entry/src/main/ets/pages/home/SortingInfoCard.ets:115>)
+
+```ts
+this.buildInfoItem(t('分选速度'), () => this.sortSpeed, 11.11)
+```
+
+**我看到的可疑点**
+
+不是首页“分选速度”本身，而是代码里有个命名混乱点：`efficiency` 有些地方实际存的是“速度”。
+
+比如这里：
+
+[GlobalDataInterface.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/GlobalDataInterface.ets:2253>)
+
+```ts
+this.globalData.efficiency = this.resolveServiceSpeedPerMinute(mergedSnapshot)
+```
+
+这里的 `efficiency` 实际是 `nIntervalSumperminute` 推出来的速度，单位是个/分。
+
+还有这里：
+
+[GlobalDataInterface.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/GlobalDataInterface.ets:3597>)
+
+```ts
+data.efficiency = Number(statistics.nIntervalSumperminute ?? 0)
+```
+
+也就是说 `GlobalRealtimeData.efficiency` 这个字段名叫“效率”，但内容其实是“分选速度”。
+
+然后实时面板这里显示成：
+
+[RealtimeDataPanel.ets](</e:/new/my_harmony/entry/src/main/ets/components/realtime/RealtimeDataPanel.ets:198>)
+
+```ts
+this.buildStatCard(
+  '效率',
+  this.realtimeData.efficiency.toFixed(1),
+  '个/分',
+  '#9C27B0',
+  '⚡'
+)
+```
+
+这个地方 UI 文案叫“效率”，单位却是“个/分”。这很可能就是主管觉得“不对”的地方：它不是百分比效率，而是分选速度，只是变量和标题叫了效率。
+
+**结论**
+
+首页卡片里的：
+
+```text
+分选速度 = nIntervalSumperminute
+```
+
+这条是对的。
+
+真正容易被挑出来的问题是：
+
+```text
+GlobalRealtimeData.efficiency 实际保存分选速度
+RealtimeDataPanel 却显示标题“效率”
+```
+
+如果主管说的是“分选速度不对”，你可以先对比首页 `SORT_SPEED` 是否显示 716。  
+如果主管说的是“效率不对”，那就八成是这个命名/展示口径混了：有的地方“效率”是 `%`，有的地方“效率”其实是 `个/分`。
+
+---
+
+
+**User**
+
+你帮我找一下 鸿蒙里面的分选速度 是不是有一个100件/分钟的硬编码
+
+---
+
+
+**OpenAI Codex**
+
+我直接在鸿蒙工程里搜 `100 件/分钟`、`100件/分钟`、`sortSpeed`、`SORT_SPEED` 和速度相关字段，确认有没有硬编码默认值或模拟数据。
+
+---
+
+
+**OpenAI Codex**
+
+我搜了两份可能的鸿蒙工程：
+
+- `e:\new\my_harmony`
+- `e:\my_harmony`
+
+没有找到 **`100 件/分钟` / `100件/分钟` / `100 个/分钟`** 这种分选速度硬编码。
+
+我找到的分选速度相关默认值只有这些：
+
+- [UIDataSync.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/UIDataSync.ets:178>)  
+  初始化默认值：
+
+```ts
+AppStorage.setOrCreate(keys.SORT_SPEED, '0 件/分钟')
+```
+
+- [SortingInfoCard.ets](</e:/new/my_harmony/entry/src/main/ets/pages/home/SortingInfoCard.ets:9>)  
+  UI 默认值：
+
+```ts
+@StorageLink('SORT_SPEED') sortSpeed: string = '0 件/分钟'
+```
+
+- [HomeConstants.ets](</e:/new/my_harmony/entry/src/main/ets/pages/home/HomeConstants.ets:134>)  
+  默认状态：
+
+```ts
+sortSpeed: '0 件/分钟'
+```
+
+真正运行时写入的是这里：
+
+- [UIDataSync.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/UIDataSync.ets:243>)
+
+```ts
+this.setStorageIfChanged(keys.SORT_SPEED, `${metrics.sortSpeedPerMinute.toFixed(0)} 件/分钟`)
+```
+
+而 `metrics.sortSpeedPerMinute` 来自：
+
+- [HomeStatsCalculator.ets](</e:/new/my_harmony/entry/src/main/ets/protocol/HomeStatsCalculator.ets:195>)
+
+```ts
+const speed = this.normalizeNumber(stats.nIntervalSumperminute)
+```
+
+也就是读后端来的 `nIntervalSumperminute`，不是写死 100。
+
+唯一接近“硬编码示例”的是这个注释：
+
+- [HomeEventHandler.ets](</e:/new/my_harmony/entry/src/main/ets/pages/home/core/HomeEventHandler.ets:259>)
+
+```ts
+sortSpeed: '120 件/分钟',
+```
+
+但这是注释里的示例，不参与运行。
+
+所以结论：**鸿蒙首页分选速度没有 100 件/分钟硬编码。**  
+如果界面上出现 100，更可能来自后端数据、模拟数据、缓存的 AppStorage 值，或者别的页面组件显示的“效率/速度”字段，不是 `SORT_SPEED` 这条首页链路写死的。
+
+---

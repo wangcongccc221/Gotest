@@ -105,8 +105,13 @@ var (
 	cTCPPayloadMu    sync.Mutex
 	cTCPPayloadByCmd = make(map[string]cTCPStoredPayload)
 
-	cTCPStStatisticsLogMu   sync.Mutex
-	cTCPStStatisticsLogLast time.Time
+	cTCPStStatisticsLogMu           sync.Mutex
+	cTCPStStatisticsLogLastBySubsys = make(map[int32]time.Time)
+	cTCPStStatisticsLogPrevBySubsys = make(map[int32]StStatistics)
+
+	cTCPStGlobalConfigMu sync.Mutex
+	cTCPLastNSubsysNum   uint8
+	cTCPLastNChannelInfo [4]uint8
 )
 
 func StartCTCPServer() int {
@@ -197,22 +202,99 @@ func appendPayloadHexChunks(tag string, payload []byte) {
 	appendCTCPLogChunks(tag+" 原始字节HEX", b.String())
 }
 
+func setLastSysConfigSummary(nSubsysNum uint8, nChannelInfo [4]uint8) {
+	cTCPStGlobalConfigMu.Lock()
+	cTCPLastNSubsysNum = nSubsysNum
+	cTCPLastNChannelInfo = nChannelInfo
+	cTCPStGlobalConfigMu.Unlock()
+}
+
+func lastSysConfigSummary() (uint8, [4]uint8) {
+	cTCPStGlobalConfigMu.Lock()
+	defer cTCPStGlobalConfigMu.Unlock()
+	return cTCPLastNSubsysNum, cTCPLastNChannelInfo
+}
+
+func stStatisticsSubsysIndex(subsysID int32) int {
+	if subsysID >= 1 && subsysID <= cTCPServerMaxSubsysNum {
+		return int(subsysID - 1)
+	}
+	index := int(((subsysID >> 8) & 0x0F) - 1)
+	if index >= 0 && index < cTCPServerMaxSubsysNum {
+		return index
+	}
+	return -1
+}
+
+func sumUint64Array48(values [48]uint64) uint64 {
+	var sum uint64
+	for _, value := range values {
+		sum += value
+	}
+	return sum
+}
+
+func sumUint64Array256(values [256]uint64) uint64 {
+	var sum uint64
+	for _, value := range values {
+		sum += value
+	}
+	return sum
+}
+
+func sumInt32Array(values [256]int32) int64 {
+	var sum int64
+	for _, value := range values {
+		sum += int64(value)
+	}
+	return sum
+}
+
+func sumUint32Array(values [48]uint32) uint64 {
+	var sum uint64
+	for _, value := range values {
+		sum += uint64(value)
+	}
+	return sum
+}
+
 func stStatisticsPreview(state StStatistics, payload []byte) string {
+	nSubsysNum, nChannelInfo := lastSysConfigSummary()
+	subsysIndex := stStatisticsSubsysIndex(state.NSubsysId)
+	channelNum := uint8(0)
+	if subsysIndex >= 0 && subsysIndex < len(nChannelInfo) {
+		channelNum = nChannelInfo[subsysIndex]
+	}
+	effectiveCupNum := int64(state.NTotalCupNum) * int64(channelNum)
 	return fmt.Sprintf(
-		"payload=%d bytes, sizeof(StStatistics)=%d bytes, nSubsysId=%d, "+
+		"payload=%d bytes, sizeof(StStatistics)=%d bytes, nSubsysNum=%d, nChannelInfo=%v, nSubsysId=%d, channelNum=%d, "+
 			"nChannelTotalCount=%d, nChannelWeightCount=%d, nTotalCupNum=%d, "+
-			"nInterval=%d, nIntervalSumperminute=%d, nNetState=%d, nWeightSetting=%d, "+
+			"effectiveCupNum=nTotalCupNum*channelNum=%d, "+
+			"nInterval=%d, nIntervalSumperminute=%d, nPulseInterval=%d, nNetState=%d, nWeightSetting=%d, "+
+			"sumGradeCount=%d, sumWeightGradeCount=%d, sumExitCount=%d, sumExitWeightCount=%d, sumBoxGradeCount=%d, sumBoxGradeWeight=%d, sumExitBoxNum=%d, "+
 			"gradeCount[0:8]=%v, weightGradeCount[0:8]=%v, exitCount[0:12]=%v, exitWeightCount[0:12]=%v, exitBoxNum[0:12]=%v",
 		len(payload),
 		int(unsafe.Sizeof(StStatistics{})),
+		nSubsysNum,
+		nChannelInfo,
 		state.NSubsysId,
+		channelNum,
 		state.NChannelTotalCount,
 		state.NChannelWeightCount,
 		state.NTotalCupNum,
+		effectiveCupNum,
 		state.NInterval,
 		state.NIntervalSumperminute,
+		state.NPulseInterval,
 		state.NNetState,
 		state.NWeightSetting,
+		sumUint64Array256(state.NGradeCount),
+		sumUint64Array256(state.NWeightGradeCount),
+		sumUint64Array48(state.NExitCount),
+		sumUint64Array48(state.NExitWeightCount),
+		sumInt32Array(state.NBoxGradeCount),
+		sumInt32Array(state.NBoxGradeWeight),
+		sumUint32Array(state.ExitBoxNum),
 		state.NGradeCount[:8],
 		state.NWeightGradeCount[:8],
 		state.NExitCount[:12],
@@ -221,24 +303,57 @@ func stStatisticsPreview(state StStatistics, payload []byte) string {
 	)
 }
 
-func logStStatisticsEvery5Seconds(remoteAddr string, head cTCPServerCommandHead, state StStatistics, payload []byte) {
+func stStatisticsManualDeltaSummary(prev StStatistics, current StStatistics) string {
+	_, nChannelInfo := lastSysConfigSummary()
+	subsysIndex := stStatisticsSubsysIndex(current.NSubsysId)
+	channelNum := uint8(0)
+	if subsysIndex >= 0 && subsysIndex < len(nChannelInfo) {
+		channelNum = nChannelInfo[subsysIndex]
+	}
+
+	deltaCount := int64(current.NChannelTotalCount) - int64(prev.NChannelTotalCount)
+	deltaWeight := int64(current.NChannelWeightCount) - int64(prev.NChannelWeightCount)
+	deltaCup := int64(current.NTotalCupNum-prev.NTotalCupNum) * int64(channelNum)
+	efficiency := 0.0
+	if deltaCup > 0 {
+		efficiency = float64(deltaCount) * 100.0 / float64(deltaCup)
+	}
+	return fmt.Sprintf(
+		"deltaSinceLastPrint: deltaCount=%d, deltaWeight=%d, deltaCup=nTotalCupNumDelta*channelNum=%d, manualEfficiency=deltaCount*100/deltaCup=%.1f%%",
+		deltaCount,
+		deltaWeight,
+		deltaCup,
+		efficiency,
+	)
+}
+
+func logStStatisticsEvery3Seconds(remoteAddr string, head cTCPServerCommandHead, state StStatistics, payload []byte) {
 	cTCPStStatisticsLogMu.Lock()
 	now := time.Now()
-	if !cTCPStStatisticsLogLast.IsZero() && now.Sub(cTCPStStatisticsLogLast) < 5*time.Second {
+	last := cTCPStStatisticsLogLastBySubsys[state.NSubsysId]
+	if !last.IsZero() && now.Sub(last) < 3*time.Second {
 		cTCPStStatisticsLogMu.Unlock()
 		return
 	}
-	cTCPStStatisticsLogLast = now
+	prev, hasPrev := cTCPStStatisticsLogPrevBySubsys[state.NSubsysId]
+	cTCPStStatisticsLogLastBySubsys[state.NSubsysId] = now
+	cTCPStStatisticsLogPrevBySubsys[state.NSubsysId] = state
 	cTCPStStatisticsLogMu.Unlock()
 
+	deltaSummary := "deltaSinceLastPrint: first sample for this subsys"
+	if hasPrev {
+		deltaSummary = stStatisticsManualDeltaSummary(prev, state)
+	}
 	setCTCPServerLastMessage(
-		"CTCP StStatistics 5秒打印: remote=%s, src=0x%04X, dst=0x%04X, %s",
+		"CTCP StStatistics 3秒打印: remote=%s, src=0x%04X, dst=0x%04X, %s, %s",
 		remoteAddr,
 		uint32(head.NSrcId),
 		uint32(head.NDstId),
 		stStatisticsPreview(state, payload),
+		deltaSummary,
 	)
-	appendCTCPLogChunks("CTCP StStatistics Go结构体 5秒打印", fmt.Sprintf("%+v", state))
+	appendCTCPLogChunks("CTCP StStatistics 手算字段 3秒打印", stStatisticsPreview(state, payload)+"\n"+deltaSummary)
+	appendCTCPLogChunks("CTCP StStatistics Go结构体全字段 3秒打印", fmt.Sprintf("%+v", state))
 }
 
 func normalizeStStatisticsSubsysID(srcID int32, payloadSubsysID int32) int32 {
@@ -515,14 +630,16 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		if err != nil {
 			return
 		}
+		setLastSysConfigSummary(stg.Sys.NSubsysNum, stg.Sys.NChannelInfo)
 		cacheLatestGradeInfo(head.NSrcId, stg.Grade)
 		stgJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
 		setCTCPServerLastMessage(
-			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysId=%d, nVersion=%d",
+			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysNum=%d, nSubsysId=%d, nVersion=%d",
 			cTCPCommandName(head.NCmdId),
 			goSz,
 			len(payload),
+			stg.Sys.NSubsysNum,
 			stg.NSubsysId,
 			stg.NVersion,
 		)
@@ -545,7 +662,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		state.NSubsysId = normalizeStStatisticsSubsysID(head.NSrcId, state.NSubsysId)
 
 		// appendPayloadHexChunks("CTCP StStatistics 原始payload", payload)
-		logStStatisticsEvery5Seconds(remoteAddr, head, state, payload)
+		logStStatisticsEvery3Seconds(remoteAddr, head, state, payload)
 
 		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
 		if stateJSON != "" && jsonErr == nil {
