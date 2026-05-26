@@ -18,24 +18,34 @@ type stExitInfos48ConfigValue struct {
 }
 
 func LoadStExitInfosFromLocalConfig() {
-	text, err := database.GetConfigValue(cTCPExitInfosConfigName)
+	exitInfos, ok, err := ReadStExitInfosFromLocalConfig()
 	if err != nil {
 		setCTCPServerLastMessage("StExitInfos 本地配置读取失败: %v", err)
 		return
 	}
-	if strings.TrimSpace(text) == "" {
+	if !ok {
 		setCTCPServerLastMessage("StExitInfos 本地配置为空: key=%s", cTCPExitInfosConfigName)
-		return
-	}
-
-	exitInfos, err := parseStExitInfosConfigValue(text)
-	if err != nil {
-		setCTCPServerLastMessage("StExitInfos 本地配置解析失败: %v", err)
 		return
 	}
 
 	setLastStExitInfosSnapshot(0, exitInfos)
 	setCTCPServerLastMessage("StExitInfos 本地配置已加载: key=%s", cTCPExitInfosConfigName)
+}
+
+func ReadStExitInfosFromLocalConfig() (StExitInfos, bool, error) {
+	text, err := database.GetConfigValue(cTCPExitInfosConfigName)
+	if err != nil {
+		return StExitInfos{}, false, err
+	}
+	if strings.TrimSpace(text) == "" {
+		return defaultStExitInfos(), false, nil
+	}
+
+	exitInfos, err := parseStExitInfosConfigValue(text)
+	if err != nil {
+		return StExitInfos{}, false, err
+	}
+	return exitInfos, true, nil
 }
 
 func SaveStExitInfosToLocalConfig(fsmID int32, exitInfos StExitInfos) error {
@@ -147,10 +157,4 @@ func defaultStExitInfos() StExitInfos {
 		exitInfos.ExitControlMode[i] = 2
 	}
 	return exitInfos
-}
-
-func mergeStExitInfosBoxTypeUpdate(base StExitInfos, incoming StExitInfos) StExitInfos {
-	next := base
-	copy(next.ExitBoxType[:], incoming.ExitBoxType[:])
-	return next
 }

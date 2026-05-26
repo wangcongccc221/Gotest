@@ -77,15 +77,19 @@ func TestFormatStExitInfosConfigValueWrites48Format(t *testing.T) {
 	}
 }
 
-func TestMergeStExitInfosBoxTypeUpdatePreservesExistingFields(t *testing.T) {
+func TestApplyStExitInfosUpdatePreservesOmittedFields(t *testing.T) {
 	base := defaultStExitInfos()
 	base.ExitName[0] = 'C'
 	base.ExitControlMode[5] = 1
-	incoming := StExitInfos{}
-	incoming.ExitControlMode[5] = 0
-	incoming.ExitBoxType[5] = 1
+	update := webSocketExitInfosControl{
+		ExitBoxType: make([]uint8, MAX_EXIT_NUM),
+	}
+	update.ExitBoxType[5] = 1
 
-	merged := mergeStExitInfosBoxTypeUpdate(base, incoming)
+	merged, err := applyStExitInfosUpdate(base, update)
+	if err != nil {
+		t.Fatalf("applyStExitInfosUpdate() error = %v", err)
+	}
 	if merged.ExitName[0] != 'C' {
 		t.Fatalf("ExitName[0] = %q, want preserved C", merged.ExitName[0])
 	}
@@ -94,5 +98,27 @@ func TestMergeStExitInfosBoxTypeUpdatePreservesExistingFields(t *testing.T) {
 	}
 	if merged.ExitBoxType[5] != 1 {
 		t.Fatalf("ExitBoxType[5] = %d, want updated 1", merged.ExitBoxType[5])
+	}
+}
+
+func TestApplyStExitInfosUpdateWritesAndClearsExitNameWhenFieldPresent(t *testing.T) {
+	base := defaultStExitInfos()
+	nameBytes := make([]uint8, MAX_EXIT_NUM*MAX_TEXT_LENGTH)
+	nameBytes[0] = 'N'
+
+	merged, err := applyStExitInfosUpdate(base, webSocketExitInfosControl{ExitName: nameBytes})
+	if err != nil {
+		t.Fatalf("applyStExitInfosUpdate() write error = %v", err)
+	}
+	if merged.ExitName[0] != 'N' {
+		t.Fatalf("ExitName[0] = %q, want N", merged.ExitName[0])
+	}
+
+	cleared, err := applyStExitInfosUpdate(merged, webSocketExitInfosControl{ExitName: make([]uint8, MAX_EXIT_NUM*MAX_TEXT_LENGTH)})
+	if err != nil {
+		t.Fatalf("applyStExitInfosUpdate() clear error = %v", err)
+	}
+	if cleared.ExitName[0] != 0 {
+		t.Fatalf("ExitName[0] = %q, want cleared zero", cleared.ExitName[0])
 	}
 }
