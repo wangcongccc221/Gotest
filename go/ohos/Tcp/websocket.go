@@ -15,12 +15,13 @@ import (
 )
 
 const (
-	webSocketTopicData        = "data"     //
-	webSocketTopicStGlobal    = "stglobal" // StGlobal 全量数据
-	webSocketTopicStatistics  = "statistics"
-	webSocketTopicGrade       = "grade"
-	webSocketTopicExitInfos   = "exitInfos"
-	webSocketTopicExitDisplay = "exitDisplay"
+	webSocketTopicData               = "data"     //
+	webSocketTopicStGlobal           = "stglobal" // StGlobal 全量数据
+	webSocketTopicStatistics         = "statistics"
+	webSocketTopicGrade              = "grade"
+	webSocketTopicExitInfos          = "exitInfos"
+	webSocketTopicExitDisplay        = "exitDisplay"
+	webSocketTopicExitAdditionalText = "exitAdditionalText"
 
 	webSocketWriteWait           = 5 * time.Second  //写入等待
 	webSocketPongWait            = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
@@ -54,17 +55,18 @@ type webSocketFrame struct { //数据帧
 }
 
 type webSocketControlMessage struct {
-	Type        string                       `json:"type"`
-	FSMID       int32                        `json:"fsmId,omitempty"`
-	DestID      int32                        `json:"destId,omitempty"`
-	Grade       *StGradeInfo                 `json:"grade,omitempty"`
-	ExitInfos   *webSocketExitInfosControl   `json:"exitInfos,omitempty"`
-	ExitDisplay *webSocketExitDisplayControl `json:"exitDisplay,omitempty"`
-	Motor       *StMotorInfo                 `json:"motor,omitempty"`
-	GradeExits  []webSocketGradeExit         `json:"gradeExits,omitempty"`
-	Action      string                       `json:"action,omitempty"`
-	ExitNo      int                          `json:"exitNo,omitempty"`
-	DropGrades  []webSocketDropGrade         `json:"grades,omitempty"`
+	Type               string                              `json:"type"`
+	FSMID              int32                               `json:"fsmId,omitempty"`
+	DestID             int32                               `json:"destId,omitempty"`
+	Grade              *StGradeInfo                        `json:"grade,omitempty"`
+	ExitInfos          *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
+	ExitDisplay        *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
+	ExitAdditionalText *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
+	Motor              *StMotorInfo                        `json:"motor,omitempty"`
+	GradeExits         []webSocketGradeExit                `json:"gradeExits,omitempty"`
+	Action             string                              `json:"action,omitempty"`
+	ExitNo             int                                 `json:"exitNo,omitempty"`
+	DropGrades         []webSocketDropGrade                `json:"grades,omitempty"`
 }
 
 type webSocketGradeExit struct {
@@ -98,6 +100,15 @@ type webSocketExitDisplayControl struct {
 type webSocketExitDisplayData struct {
 	FSMID       int32           `json:"fsmId"`
 	ExitDisplay ExitDisplayInfo `json:"exitDisplay"`
+}
+
+type webSocketExitAdditionalTextControl struct {
+	AdditionalTexts []string `json:"additionalTexts,omitempty"`
+}
+
+type webSocketExitAdditionalTextData struct {
+	FSMID              int32                  `json:"fsmId"`
+	ExitAdditionalText ExitAdditionalTextInfo `json:"exitAdditionalText"`
 }
 
 type webSocketHub struct {
@@ -301,6 +312,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleExitInfosLog(control)
 	case "saveExitDisplay":
 		c.handleExitDisplayInfo(control)
+	case "saveExitAdditionalText":
+		c.handleExitAdditionalTextInfo(control)
 	case "saveMotorInfo":
 		c.handleMotorInfoData(control)
 	}
@@ -324,6 +337,7 @@ func parseWebSocketControlMessage(text string) (webSocketControlMessage, bool) {
 func (c *webSocketClient) handleRequestStGlobal() {
 	c.sendLatestExitInfosData()
 	c.sendLatestExitDisplayData()
+	c.sendLatestExitAdditionalTextData()
 	// 前端 WebSocket 连接成功后发 requestStGlobal，表示前端已经准备接收数据。
 	// 这里异步触发 CTCP 客户端发送 DISPLAY_ON，避免阻塞 WebSocket 的读循环。
 	go func() {
@@ -453,6 +467,35 @@ func applyExitDisplayUpdate(base ExitDisplayInfo, update webSocketExitDisplayCon
 	return next
 }
 
+func (c *webSocketClient) handleExitAdditionalTextInfo(control webSocketControlMessage) {
+	if control.ExitAdditionalText == nil {
+		setCTCPServerLastMessage("WebSocket saveExitAdditionalText failed: empty ExitAdditionalTextInfo, fsmId=0x%04X", uint32(control.FSMID))
+		return
+	}
+
+	baseInfo := defaultExitAdditionalTextInfo()
+	if _, cachedInfo, ok := latestExitAdditionalTextInfoSnapshot(); ok {
+		baseInfo = cachedInfo
+	}
+	info := applyExitAdditionalTextUpdate(baseInfo, *control.ExitAdditionalText)
+	if err := SaveExitAdditionalTextInfoToLocalConfig(control.FSMID, info); err != nil {
+		return
+	}
+	setLastExitAdditionalTextInfoSnapshot(control.FSMID, info)
+	publishExitAdditionalTextData(control.FSMID, info)
+}
+
+func applyExitAdditionalTextUpdate(base ExitAdditionalTextInfo, update webSocketExitAdditionalTextControl) ExitAdditionalTextInfo {
+	next := base
+	for i, text := range update.AdditionalTexts {
+		if i >= len(next.AdditionalTexts) {
+			break
+		}
+		next.AdditionalTexts[i] = text
+	}
+	return next
+}
+
 func (c *webSocketClient) sendLatestExitInfosData() {
 	fsmID, exitInfos, ok := latestStExitInfosSnapshot()
 	if !ok {
@@ -479,6 +522,14 @@ func (c *webSocketClient) sendLatestExitDisplayData() {
 	c.sendExitDisplayData(fsmID, info)
 }
 
+func (c *webSocketClient) sendLatestExitAdditionalTextData() {
+	fsmID, info, ok := latestExitAdditionalTextInfoSnapshot()
+	if !ok {
+		return
+	}
+	c.sendExitAdditionalTextData(fsmID, info)
+}
+
 func (c *webSocketClient) sendExitInfosData(fsmID int32, exitInfos StExitInfos) {
 	c.sendFrame(webSocketFrame{
 		Type:  webSocketTopicData,
@@ -492,6 +543,14 @@ func (c *webSocketClient) sendExitDisplayData(fsmID int32, info ExitDisplayInfo)
 		Type:  webSocketTopicData,
 		Topic: webSocketTopicExitDisplay,
 		Data:  rawJSONFromValue(webSocketExitDisplayData{FSMID: fsmID, ExitDisplay: info}),
+	})
+}
+
+func (c *webSocketClient) sendExitAdditionalTextData(fsmID int32, info ExitAdditionalTextInfo) {
+	c.sendFrame(webSocketFrame{
+		Type:  webSocketTopicData,
+		Topic: webSocketTopicExitAdditionalText,
+		Data:  rawJSONFromValue(webSocketExitAdditionalTextData{FSMID: fsmID, ExitAdditionalText: info}),
 	})
 }
 
@@ -513,6 +572,16 @@ func publishExitDisplayData(fsmID int32, info ExitDisplayInfo) {
 		return
 	}
 	defaultWebSocketHub.publish(webSocketTopicExitDisplay, frame)
+}
+
+func publishExitAdditionalTextData(fsmID int32, info ExitAdditionalTextInfo) {
+	raw := rawJSONFromValue(webSocketExitAdditionalTextData{FSMID: fsmID, ExitAdditionalText: info})
+	frame, err := newWebSocketDataFrame(webSocketTopicExitAdditionalText, raw)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket publish exitAdditionalText failed: %v", err)
+		return
+	}
+	defaultWebSocketHub.publish(webSocketTopicExitAdditionalText, frame)
 }
 
 func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {

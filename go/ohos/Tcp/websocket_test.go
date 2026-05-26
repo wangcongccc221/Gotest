@@ -186,6 +186,34 @@ func TestParseWebSocketControlMessageReadsExitDisplayData(t *testing.T) {
 	}
 }
 
+func TestParseWebSocketControlMessageReadsExitAdditionalTextData(t *testing.T) {
+	message, ok := parseWebSocketControlMessage(`{
+		"type": "saveExitAdditionalText",
+		"fsmId": 256,
+		"exitAdditionalText": {
+			"additionalTexts": ["一号备注", "二号备注"]
+		}
+	}`)
+	if !ok {
+		t.Fatal("parseWebSocketControlMessage() rejected saveExitAdditionalText")
+	}
+	if message.ExitAdditionalText == nil {
+		t.Fatal("ExitAdditionalText is nil")
+	}
+	if message.FSMID != 256 {
+		t.Fatalf("FSMID = %d, want 256", message.FSMID)
+	}
+	if len(message.ExitAdditionalText.AdditionalTexts) != 2 {
+		t.Fatalf("AdditionalTexts length = %d, want 2", len(message.ExitAdditionalText.AdditionalTexts))
+	}
+	if message.ExitAdditionalText.AdditionalTexts[0] != "一号备注" ||
+		message.ExitAdditionalText.AdditionalTexts[1] != "二号备注" {
+		t.Fatalf("AdditionalTexts[0,1] = %q, %q",
+			message.ExitAdditionalText.AdditionalTexts[0],
+			message.ExitAdditionalText.AdditionalTexts[1])
+	}
+}
+
 func TestApplyExitDisplayUpdatePreservesOmittedFieldsAndAllowsZeroDisplayType(t *testing.T) {
 	base := defaultExitDisplayInfo()
 	base.DisplayType = 7
@@ -216,5 +244,22 @@ func TestApplyExitDisplayUpdateOnlyReplacesProvidedDisplayNames(t *testing.T) {
 	}
 	if next.DisplayNames[1] != "旧二号" {
 		t.Fatalf("DisplayNames[1] = %q, want preserved", next.DisplayNames[1])
+	}
+}
+
+func TestApplyExitAdditionalTextUpdateOnlyReplacesProvidedTexts(t *testing.T) {
+	base := defaultExitAdditionalTextInfo()
+	base.AdditionalTexts[0] = "旧一号"
+	base.AdditionalTexts[1] = "旧二号"
+
+	next := applyExitAdditionalTextUpdate(base, webSocketExitAdditionalTextControl{
+		AdditionalTexts: []string{"新一号"},
+	})
+
+	if next.AdditionalTexts[0] != "新一号" {
+		t.Fatalf("AdditionalTexts[0] = %q, want 新一号", next.AdditionalTexts[0])
+	}
+	if next.AdditionalTexts[1] != "旧二号" {
+		t.Fatalf("AdditionalTexts[1] = %q, want preserved", next.AdditionalTexts[1])
 	}
 }
