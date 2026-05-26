@@ -240,6 +240,19 @@ func logStStatisticsEvery5Seconds(remoteAddr string, head cTCPServerCommandHead,
 	appendCTCPLogChunks("CTCP StStatistics Go结构体 5秒打印", fmt.Sprintf("%+v", state))
 }
 
+func normalizeStStatisticsSubsysID(srcID int32, payloadSubsysID int32) int32 {
+	if idx := getSubsysIndex(srcID); idx >= 0 && idx < cTCPServerMaxSubsysNum {
+		return int32(idx + 1)
+	}
+	if payloadSubsysID >= 1 && payloadSubsysID <= cTCPServerMaxSubsysNum {
+		return payloadSubsysID
+	}
+	if idx := getSubsysIndex(payloadSubsysID); idx >= 0 && idx < cTCPServerMaxSubsysNum {
+		return int32(idx + 1)
+	}
+	return 1
+}
+
 func StopCTCPServer() int {
 	cTCPServerMu.Lock()
 	imageServer := cTCPServerImage
@@ -528,6 +541,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			setCTCPServerLastMessage("CTCP StStatistics 解析失败: %v", err)
 			return
 		}
+		state.NSubsysId = normalizeStStatisticsSubsysID(head.NSrcId, state.NSubsysId)
 
 		// appendPayloadHexChunks("CTCP StStatistics 原始payload", payload)
 		logStStatisticsEvery5Seconds(remoteAddr, head, state, payload)
