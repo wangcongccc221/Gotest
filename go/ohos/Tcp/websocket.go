@@ -22,6 +22,7 @@ const (
 	webSocketTopicExitInfos          = "exitInfos"
 	webSocketTopicExitDisplay        = "exitDisplay"
 	webSocketTopicExitAdditionalText = "exitAdditionalText"
+	webSocketTopicLevelAuxConfig     = "levelAuxConfig"
 
 	webSocketWriteWait           = 5 * time.Second  //写入等待
 	webSocketPongWait            = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
@@ -62,6 +63,7 @@ type webSocketControlMessage struct {
 	ExitInfos          *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
 	ExitDisplay        *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
 	ExitAdditionalText *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
+	LevelAuxConfig     *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
 	Motor              *StMotorInfo                        `json:"motor,omitempty"`
 	GradeExits         []webSocketGradeExit                `json:"gradeExits,omitempty"`
 	Action             string                              `json:"action,omitempty"`
@@ -109,6 +111,17 @@ type webSocketExitAdditionalTextControl struct {
 type webSocketExitAdditionalTextData struct {
 	FSMID              int32                  `json:"fsmId"`
 	ExitAdditionalText ExitAdditionalTextInfo `json:"exitAdditionalText"`
+}
+
+type webSocketLevelAuxConfigControl struct {
+	SelectedFruitTypes *string `json:"selectedFruitTypes,omitempty"`
+	GradeAccuracy      *int    `json:"gradeAccuracy,omitempty"`
+	ExitAlarmThreshold *int    `json:"exitAlarmThreshold,omitempty"`
+}
+
+type webSocketLevelAuxConfigData struct {
+	FSMID          int32              `json:"fsmId"`
+	LevelAuxConfig LevelAuxConfigInfo `json:"levelAuxConfig"`
 }
 
 type webSocketHub struct {
@@ -314,6 +327,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleExitDisplayInfo(control)
 	case "saveExitAdditionalText":
 		c.handleExitAdditionalTextInfo(control)
+	case "saveLevelAuxConfig":
+		c.handleLevelAuxConfigInfo(control)
 	case "saveMotorInfo":
 		c.handleMotorInfoData(control)
 	}
@@ -338,6 +353,7 @@ func (c *webSocketClient) handleRequestStGlobal() {
 	c.sendLatestExitInfosData()
 	c.sendLatestExitDisplayData()
 	c.sendLatestExitAdditionalTextData()
+	c.sendLatestLevelAuxConfigData()
 	// 前端 WebSocket 连接成功后发 requestStGlobal，表示前端已经准备接收数据。
 	// 这里异步触发 CTCP 客户端发送 DISPLAY_ON，避免阻塞 WebSocket 的读循环。
 	go func() {
@@ -496,6 +512,50 @@ func applyExitAdditionalTextUpdate(base ExitAdditionalTextInfo, update webSocket
 	return next
 }
 
+func (c *webSocketClient) handleLevelAuxConfigInfo(control webSocketControlMessage) {
+	if control.LevelAuxConfig == nil {
+		setCTCPServerLastMessage("WebSocket saveLevelAuxConfig failed: empty levelAuxConfig, fsmId=0x%04X", uint32(control.FSMID))
+		return
+	}
+	if err := saveLevelAuxConfigFromControl(control.FSMID, *control.LevelAuxConfig); err != nil {
+		return
+	}
+}
+
+func saveLevelAuxConfigFromControl(fsmID int32, update webSocketLevelAuxConfigControl) error {
+	baseInfo := defaultLevelAuxConfigInfo()
+	if _, cachedInfo, ok := latestLevelAuxConfigInfoSnapshot(); ok {
+		baseInfo = cachedInfo
+	} else if storedInfo, err := ReadLevelAuxConfigInfoFromLocalConfig(); err != nil {
+		setCTCPServerLastMessage("WebSocket saveLevelAuxConfig failed: read local config: %v", err)
+		return err
+	} else {
+		baseInfo = storedInfo
+	}
+
+	info := applyLevelAuxConfigUpdate(baseInfo, update)
+	if err := SaveLevelAuxConfigInfoToLocalConfig(fsmID, info); err != nil {
+		return err
+	}
+	setLastLevelAuxConfigInfoSnapshot(fsmID, info)
+	publishLevelAuxConfigData(fsmID, info)
+	return nil
+}
+
+func applyLevelAuxConfigUpdate(base LevelAuxConfigInfo, update webSocketLevelAuxConfigControl) LevelAuxConfigInfo {
+	next := base
+	if update.SelectedFruitTypes != nil {
+		next.SelectedFruitTypes = *update.SelectedFruitTypes
+	}
+	if update.GradeAccuracy != nil {
+		next.GradeAccuracy = *update.GradeAccuracy
+	}
+	if update.ExitAlarmThreshold != nil {
+		next.ExitAlarmThreshold = *update.ExitAlarmThreshold
+	}
+	return normalizeLevelAuxConfigInfo(next)
+}
+
 func (c *webSocketClient) sendLatestExitInfosData() {
 	fsmID, exitInfos, ok := latestStExitInfosSnapshot()
 	if !ok {
@@ -530,6 +590,21 @@ func (c *webSocketClient) sendLatestExitAdditionalTextData() {
 	c.sendExitAdditionalTextData(fsmID, info)
 }
 
+func (c *webSocketClient) sendLatestLevelAuxConfigData() {
+	fsmID, info, ok := latestLevelAuxConfigInfoSnapshot()
+	if !ok {
+		storedInfo, err := ReadLevelAuxConfigInfoFromLocalConfig()
+		if err != nil {
+			setCTCPServerLastMessage("WebSocket send levelAuxConfig failed: read local config: %v", err)
+			return
+		}
+		fsmID = 0
+		info = storedInfo
+		setLastLevelAuxConfigInfoSnapshot(fsmID, info)
+	}
+	c.sendLevelAuxConfigData(fsmID, info)
+}
+
 func (c *webSocketClient) sendExitInfosData(fsmID int32, exitInfos StExitInfos) {
 	c.sendFrame(webSocketFrame{
 		Type:  webSocketTopicData,
@@ -551,6 +626,14 @@ func (c *webSocketClient) sendExitAdditionalTextData(fsmID int32, info ExitAddit
 		Type:  webSocketTopicData,
 		Topic: webSocketTopicExitAdditionalText,
 		Data:  rawJSONFromValue(webSocketExitAdditionalTextData{FSMID: fsmID, ExitAdditionalText: info}),
+	})
+}
+
+func (c *webSocketClient) sendLevelAuxConfigData(fsmID int32, info LevelAuxConfigInfo) {
+	c.sendFrame(webSocketFrame{
+		Type:  webSocketTopicData,
+		Topic: webSocketTopicLevelAuxConfig,
+		Data:  rawJSONFromValue(webSocketLevelAuxConfigData{FSMID: fsmID, LevelAuxConfig: normalizeLevelAuxConfigInfo(info)}),
 	})
 }
 
@@ -582,6 +665,16 @@ func publishExitAdditionalTextData(fsmID int32, info ExitAdditionalTextInfo) {
 		return
 	}
 	defaultWebSocketHub.publish(webSocketTopicExitAdditionalText, frame)
+}
+
+func publishLevelAuxConfigData(fsmID int32, info LevelAuxConfigInfo) {
+	raw := rawJSONFromValue(webSocketLevelAuxConfigData{FSMID: fsmID, LevelAuxConfig: normalizeLevelAuxConfigInfo(info)})
+	frame, err := newWebSocketDataFrame(webSocketTopicLevelAuxConfig, raw)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket publish levelAuxConfig failed: %v", err)
+		return
+	}
+	defaultWebSocketHub.publish(webSocketTopicLevelAuxConfig, frame)
 }
 
 func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {
@@ -782,6 +875,12 @@ func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) {
 
 func SendGradeInfoData(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
 	destID := normalizeDropDataDestID(control)
+	if commandID == cTCPHCGradeInfo && control.LevelAuxConfig != nil {
+		if err := saveLevelAuxConfigFromControl(control.FSMID, *control.LevelAuxConfig); err != nil {
+			setCTCPServerLastMessage("WebSocket %s failed: save levelAuxConfig: %v", topic, err)
+			return -1, destID, 0
+		}
+	}
 	if control.Grade == nil {
 		setCTCPServerLastMessage("WebSocket %s failed: empty StGradeInfo, dest=0x%04X", topic, uint32(destID))
 		return -1, destID, 0

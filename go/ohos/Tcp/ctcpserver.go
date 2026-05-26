@@ -152,6 +152,7 @@ func StartCTCPServer() int {
 	LoadStExitInfosFromLocalConfig()
 	LoadExitDisplayInfoFromLocalConfig()
 	LoadExitAdditionalTextInfoFromLocalConfig()
+	LoadLevelAuxConfigInfoFromLocalConfig()
 	StartStGradeInfoPeriodicLog()
 	StartStMotorInfoPeriodicLog()
 	return cTCPServerStatPort
