@@ -11,6 +11,7 @@ import (
 
 const (
 	cTCP48StGradeInfoWireSize  = 11600
+	cTCP48StMotorInfoWireSize  = 20
 	cTCP48StGlobalExpectedSize = 28712
 	cTCP48MaxChannelNum        = 12
 	cTCP48MaxIPMNum            = 12

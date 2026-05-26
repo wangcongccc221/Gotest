@@ -58,6 +58,7 @@ type webSocketControlMessage struct {
 	DestID     int32                `json:"destId,omitempty"`
 	Grade      *StGradeInfo         `json:"grade,omitempty"`
 	ExitInfos  *StExitInfos         `json:"exitInfos,omitempty"`
+	Motor      *StMotorInfo         `json:"motor,omitempty"`
 	GradeExits []webSocketGradeExit `json:"gradeExits,omitempty"`
 	Action     string               `json:"action,omitempty"`
 	ExitNo     int                  `json:"exitNo,omitempty"`
@@ -280,6 +281,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleGradeInfoData("saveQualityData", cTCPHCColorGradeInfo, control)
 	case "saveExitInfos":
 		c.handleExitInfosLog(control)
+	case "saveMotorInfo":
+		c.handleMotorInfoData(control)
 	}
 
 }
@@ -330,6 +333,13 @@ func (c *webSocketClient) handleGradeInfoData(topic string, commandID int32, con
 	}()
 }
 
+func (c *webSocketClient) handleMotorInfoData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendMotorInfoData(control)
+		c.sendCommandAck("saveMotorInfo", cTCPHCMotorInfo, destID, payloadBytes, result)
+	}()
+}
+
 func (c *webSocketClient) handleExitInfosLog(control webSocketControlMessage) {
 	if control.ExitInfos == nil {
 		setCTCPServerLastMessage("WebSocket saveExitInfos failed: empty StExitInfos, fsmId=0x%04X", uint32(control.FSMID))
@@ -341,17 +351,10 @@ func (c *webSocketClient) handleExitInfosLog(control webSocketControlMessage) {
 		baseExitInfos = cachedExitInfos
 	}
 	exitInfos := mergeStExitInfosBoxTypeUpdate(baseExitInfos, *control.ExitInfos)
-	setCTCPServerLastMessage(
-		"WebSocket saveExitInfos: fsmId=0x%04X, ExitBoxType=%v, ExitControlMode=%v",
-		uint32(control.FSMID),
-		exitInfos.ExitBoxType,
-		exitInfos.ExitControlMode,
-	)
 	if err := SaveStExitInfosToLocalConfig(control.FSMID, exitInfos); err != nil {
 		return
 	}
 	setLastStExitInfosSnapshot(control.FSMID, exitInfos)
-	LogStExitInfos(exitInfos)
 	publishExitInfosData(control.FSMID, exitInfos)
 }
 
@@ -624,6 +627,51 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	return 0, destID, len(payload)
 }
 
+func SendMotorInfoData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	if control.Motor == nil {
+		setCTCPServerLastMessage("WebSocket saveMotorInfo failed: empty StMotorInfo, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	motor := *control.Motor
+	if int(motor.BExitId) >= cTCP48MaxExitNum {
+		setCTCPServerLastMessage("WebSocket saveMotorInfo failed: exit=%d out of range, dest=0x%04X", motor.BExitId, uint32(destID))
+		return -1, destID, 0
+	}
+	payload, err := encodeMotorInfoPayload(motor)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveMotorInfo failed: encode StMotorInfo: %v", err)
+		return -1, destID, 0
+	}
+	setLastStMotorInfoSnapshot(destID, motor)
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCMotorInfo, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket saveMotorInfo: sending HC_CMD_MOTOR_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, exit=%d, mode=%d, num=%d, weight=%d, delay=%.1f, hold=%.1f",
+		uint32(cTCPHCMotorInfo),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		motor.BExitId,
+		motor.BMotorSwitch,
+		motor.NMotorEnableSwitchNum,
+		motor.NMotorEnableSwitchWeight,
+		motor.FDelayTime,
+		motor.FHoldTime,
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCMotorInfo, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket saveMotorInfo failed: HC_CMD_MOTOR_INFO result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	setCTCPServerLastMessage("WebSocket saveMotorInfo success: HC_CMD_MOTOR_INFO sent, dest=0x%04X, exit=%d", uint32(destID), motor.BExitId)
+	return 0, destID, len(payload)
+}
+
 func SendSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
 	destID := normalizeDropDataDestID(control)
 	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
@@ -834,6 +882,18 @@ func encodeGradeInfoPayload(grade StGradeInfo) ([]byte, error) {
 
 	payload := make([]byte, size)
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&grade)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeMotorInfoPayload(motor StMotorInfo) ([]byte, error) {
+	size := int(unsafe.Sizeof(motor))
+	if size != cTCP48StMotorInfoWireSize {
+		return nil, fmt.Errorf("sizeof(StMotorInfo)=%d, expected=%d", size, cTCP48StMotorInfoWireSize)
+	}
+
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&motor)), size)
 	copy(payload, src)
 	return payload, nil
 }

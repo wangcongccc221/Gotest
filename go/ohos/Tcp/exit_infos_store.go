@@ -36,7 +36,6 @@ func LoadStExitInfosFromLocalConfig() {
 
 	setLastStExitInfosSnapshot(0, exitInfos)
 	setCTCPServerLastMessage("StExitInfos 本地配置已加载: key=%s", cTCPExitInfosConfigName)
-	LogStExitInfos(exitInfos)
 }
 
 func SaveStExitInfosToLocalConfig(fsmID int32, exitInfos StExitInfos) error {

@@ -125,7 +125,7 @@ func initORMWithPath(dbPath string) error {
 		ormInitErr = err
 		return err
 	}
-	if err := db.AutoMigrate(&DeviceRecord{}); err != nil {
+	if err := migrateORMTables(db); err != nil {
 		ormInitErr = err
 		return err
 	}

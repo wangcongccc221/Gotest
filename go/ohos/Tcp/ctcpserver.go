@@ -151,7 +151,7 @@ func StartCTCPServer() int {
 	setCTCPServerLastMessage("CTCP startup: StGlobal 全量 JSON 在收到 FSM_CMD_CONFIG(0x1000) 后写入日志（HiLog 搜「CTCP StGlobal 全量」）。")
 	LoadStExitInfosFromLocalConfig()
 	StartStGradeInfoPeriodicLog()
-	StartStExitInfosPeriodicLog()
+	StartStMotorInfoPeriodicLog()
 	return cTCPServerStatPort
 }
 
@@ -254,7 +254,7 @@ func StopCTCPServer() int {
 	}
 
 	StopStGradeInfoPeriodicLog()
-	StopStExitInfosPeriodicLog()
+	StopStMotorInfoPeriodicLog()
 	setCTCPServerLastMessage("CTCP servers stopped")
 	return 0
 }

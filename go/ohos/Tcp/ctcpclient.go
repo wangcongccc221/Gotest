@@ -41,6 +41,7 @@ const (
 	cTCPHCDisplayOn      = int32(0x0019) // 打开显示
 	cTCPHCSysConfig      = int32(0x0050) // 系统配置
 	cTCPHCGradeInfo      = int32(0x0051) // 等级设置 StGradeInfo
+	cTCPHCMotorInfo      = int32(0x005C) // 电机使能参数 StMotorInfo
 	cTCPHCColorGradeInfo = int32(0x005D) // 品质等级设置 StGradeInfo
 )
 

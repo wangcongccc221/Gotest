@@ -9,7 +9,7 @@ import (
 
 const (
 	stGradeInfoPeriodicLogInterval = 10 * time.Second
-	stExitInfosPeriodicLogInterval = 15 * time.Second
+	stMotorInfoPeriodicLogInterval = 20 * time.Second
 )
 
 var (
@@ -22,11 +22,16 @@ var (
 	lastStExitInfosSnapshotOK bool
 	lastStExitInfosSnapshotMu sync.RWMutex
 
+	lastStMotorInfoSnapshot   StMotorInfo
+	lastStMotorInfoFSMID      int32
+	lastStMotorInfoSnapshotOK bool
+	lastStMotorInfoSnapshotMu sync.RWMutex
+
 	stGradeInfoPeriodicLogMu  sync.Mutex
 	stGradeInfoPeriodicCancel context.CancelFunc
 
-	stExitInfosPeriodicLogMu  sync.Mutex
-	stExitInfosPeriodicCancel context.CancelFunc
+	stMotorInfoPeriodicLogMu  sync.Mutex
+	stMotorInfoPeriodicCancel context.CancelFunc
 )
 
 // setLastStGradeInfoSnapshot 在收到/发送等级数据时更新，供周期日志读取。
@@ -58,6 +63,21 @@ func latestStExitInfosSnapshot() (int32, StExitInfos, bool) {
 	return lastStExitInfosFSMID, lastStExitInfosSnapshot, lastStExitInfosSnapshotOK
 }
 
+// setLastStMotorInfoSnapshot 在收到有效电机下发数据时更新，供周期日志读取。
+func setLastStMotorInfoSnapshot(fsmID int32, motor StMotorInfo) {
+	lastStMotorInfoSnapshotMu.Lock()
+	lastStMotorInfoSnapshot = motor
+	lastStMotorInfoFSMID = fsmID
+	lastStMotorInfoSnapshotOK = true
+	lastStMotorInfoSnapshotMu.Unlock()
+}
+
+func latestStMotorInfoSnapshot() (int32, StMotorInfo, bool) {
+	lastStMotorInfoSnapshotMu.RLock()
+	defer lastStMotorInfoSnapshotMu.RUnlock()
+	return lastStMotorInfoFSMID, lastStMotorInfoSnapshot, lastStMotorInfoSnapshotOK
+}
+
 // DumpStGradeInfo 格式化 StGradeInfo 全部字段。
 // 后续若要改输出格式（只打部分字段、uint8 转字符串等），改这个函数即可。
 func DumpStGradeInfo(grade StGradeInfo) string {
@@ -73,29 +93,29 @@ func LogStGradeInfo(grade StGradeInfo) {
 	appendCTCPLogChunks("StGradeInfo 全量", DumpStGradeInfo(grade))
 }
 
-// DumpStExitInfos 格式化 StExitInfos 全部字段。
-func DumpStExitInfos(exitInfos StExitInfos) string {
-	text, err := FormatDataFullJSON(exitInfos)
+// DumpStMotorInfo 格式化 StMotorInfo 全部字段。
+func DumpStMotorInfo(motor StMotorInfo) string {
+	text, err := FormatDataFullJSON(motor)
 	if err != nil {
-		return fmt.Sprintf("StExitInfos JSON 序列化失败: %v", err)
+		return fmt.Sprintf("StMotorInfo JSON 序列化失败: %v", err)
 	}
 	return text
 }
 
-// LogStExitInfos 输出一次 StExitInfos 全量字段到 CTCP 日志（HiLog 搜「StExitInfos Go结构体」）。
-func LogStExitInfos(exitInfos StExitInfos) {
-	appendCTCPLogChunks("StExitInfos Go结构体", fmt.Sprintf("%+v", exitInfos))
-	appendCTCPLogChunks("StExitInfos 全量JSON", DumpStExitInfos(exitInfos))
+// LogStMotorInfo 输出一次 StMotorInfo 全量字段到 CTCP 日志（HiLog 搜「StMotorInfo Go结构体」）。
+func LogStMotorInfo(motor StMotorInfo) {
+	appendCTCPLogChunks("StMotorInfo Go结构体", fmt.Sprintf("%+v", motor))
+	appendCTCPLogChunks("StMotorInfo 全量JSON", DumpStMotorInfo(motor))
 }
 
-// LogLatestStExitInfos 输出最近一次缓存的 StExitInfos；尚无数据时只打提示。
-func LogLatestStExitInfos() {
-	_, exitInfos, ok := latestStExitInfosSnapshot()
+// LogLatestStMotorInfo 输出最近一次缓存的 StMotorInfo；尚无数据时只打提示。
+func LogLatestStMotorInfo() {
+	_, motor, ok := latestStMotorInfoSnapshot()
 	if !ok {
-		setCTCPServerLastMessage("StExitInfos 输出: 尚无缓存数据（等待 WebSocket saveExitInfos）")
+		setCTCPServerLastMessage("StMotorInfo 周期输出: 尚无缓存数据（等待 WebSocket saveMotorInfo）")
 		return
 	}
-	LogStExitInfos(exitInfos)
+	LogStMotorInfo(motor)
 }
 
 // LogLatestStGradeInfo 输出最近一次缓存的 StGradeInfo；尚无数据时只打提示。
@@ -144,37 +164,37 @@ func StartStGradeInfoPeriodicLogWithInterval(interval time.Duration) {
 	}()
 }
 
-// StartStExitInfosPeriodicLog 每 15 秒输出一次最近一次 StExitInfos 全量字段。
-func StartStExitInfosPeriodicLog() {
-	StartStExitInfosPeriodicLogWithInterval(stExitInfosPeriodicLogInterval)
+// StartStMotorInfoPeriodicLog 每 20 秒输出一次最近一次 StMotorInfo 全量字段。
+func StartStMotorInfoPeriodicLog() {
+	StartStMotorInfoPeriodicLogWithInterval(stMotorInfoPeriodicLogInterval)
 }
 
-// StartStExitInfosPeriodicLogWithInterval 按指定间隔周期输出 StExitInfos。
-func StartStExitInfosPeriodicLogWithInterval(interval time.Duration) {
+// StartStMotorInfoPeriodicLogWithInterval 按指定间隔周期输出 StMotorInfo。
+func StartStMotorInfoPeriodicLogWithInterval(interval time.Duration) {
 	if interval <= 0 {
-		interval = stExitInfosPeriodicLogInterval
+		interval = stMotorInfoPeriodicLogInterval
 	}
 
-	stExitInfosPeriodicLogMu.Lock()
-	defer stExitInfosPeriodicLogMu.Unlock()
-	if stExitInfosPeriodicCancel != nil {
+	stMotorInfoPeriodicLogMu.Lock()
+	defer stMotorInfoPeriodicLogMu.Unlock()
+	if stMotorInfoPeriodicCancel != nil {
 		return
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
-	stExitInfosPeriodicCancel = cancel
+	stMotorInfoPeriodicCancel = cancel
 
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-		setCTCPServerLastMessage("StExitInfos 周期输出已启动: 每 %s 打印一次全量字段", interval)
+		setCTCPServerLastMessage("StMotorInfo 周期输出已启动: 每 %s 打印一次全量字段", interval)
 		for {
 			select {
 			case <-ctx.Done():
-				setCTCPServerLastMessage("StExitInfos 周期输出已停止")
+				setCTCPServerLastMessage("StMotorInfo 周期输出已停止")
 				return
 			case <-ticker.C:
-				LogLatestStExitInfos()
+				LogLatestStMotorInfo()
 			}
 		}
 	}()
@@ -191,12 +211,12 @@ func StopStGradeInfoPeriodicLog() {
 	}
 }
 
-// StopStExitInfosPeriodicLog 停止周期输出。
-func StopStExitInfosPeriodicLog() {
-	stExitInfosPeriodicLogMu.Lock()
-	cancel := stExitInfosPeriodicCancel
-	stExitInfosPeriodicCancel = nil
-	stExitInfosPeriodicLogMu.Unlock()
+// StopStMotorInfoPeriodicLog 停止周期输出。
+func StopStMotorInfoPeriodicLog() {
+	stMotorInfoPeriodicLogMu.Lock()
+	cancel := stMotorInfoPeriodicCancel
+	stMotorInfoPeriodicCancel = nil
+	stMotorInfoPeriodicLogMu.Unlock()
 	if cancel != nil {
 		cancel()
 	}
