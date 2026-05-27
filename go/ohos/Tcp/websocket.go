@@ -114,9 +114,13 @@ type webSocketExitAdditionalTextData struct {
 }
 
 type webSocketLevelAuxConfigControl struct {
-	SelectedFruitTypes *string `json:"selectedFruitTypes,omitempty"`
-	GradeAccuracy      *int    `json:"gradeAccuracy,omitempty"`
-	ExitAlarmThreshold *int    `json:"exitAlarmThreshold,omitempty"`
+	SelectedFruitTypes *string   `json:"selectedFruitTypes,omitempty"`
+	GradeAccuracy      *int      `json:"gradeAccuracy,omitempty"`
+	ExitAlarmThreshold *int      `json:"exitAlarmThreshold,omitempty"`
+	PackingWeight1     *float64  `json:"packingWeight1,omitempty"`
+	PackingWeight2     *float64  `json:"packingWeight2,omitempty"`
+	WeightStandards    *[]int    `json:"weightStandards,omitempty"`
+	LabelerNames       *[]string `json:"labelerNames,omitempty"`
 }
 
 type webSocketLevelAuxConfigData struct {
@@ -524,13 +528,14 @@ func (c *webSocketClient) handleLevelAuxConfigInfo(control webSocketControlMessa
 
 func saveLevelAuxConfigFromControl(fsmID int32, update webSocketLevelAuxConfigControl) error {
 	baseInfo := defaultLevelAuxConfigInfo()
-	if _, cachedInfo, ok := latestLevelAuxConfigInfoSnapshot(); ok {
-		baseInfo = cachedInfo
-	} else if storedInfo, err := ReadLevelAuxConfigInfoFromLocalConfig(); err != nil {
+	if storedInfo, err := ReadLevelAuxConfigInfoFromLocalConfig(); err != nil {
 		setCTCPServerLastMessage("WebSocket saveLevelAuxConfig failed: read local config: %v", err)
 		return err
 	} else {
 		baseInfo = storedInfo
+	}
+	if _, cachedInfo, ok := latestLevelAuxConfigInfoSnapshot(); ok && !hasNonEmptyString(baseInfo.LabelerNames) {
+		baseInfo.LabelerNames = cachedInfo.LabelerNames
 	}
 
 	info := applyLevelAuxConfigUpdate(baseInfo, update)
@@ -553,7 +558,31 @@ func applyLevelAuxConfigUpdate(base LevelAuxConfigInfo, update webSocketLevelAux
 	if update.ExitAlarmThreshold != nil {
 		next.ExitAlarmThreshold = *update.ExitAlarmThreshold
 	}
+	if update.PackingWeight1 != nil {
+		next.PackingWeight1 = *update.PackingWeight1
+	}
+	if update.PackingWeight2 != nil {
+		next.PackingWeight2 = *update.PackingWeight2
+	}
+	if update.WeightStandards != nil {
+		next.WeightStandards = append([]int(nil), (*update.WeightStandards)...)
+	}
+	if update.LabelerNames != nil {
+		names := normalizeLabelerNames(*update.LabelerNames)
+		if hasNonEmptyString(names) {
+			next.LabelerNames = names
+		}
+	}
 	return normalizeLevelAuxConfigInfo(next)
+}
+
+func hasNonEmptyString(values []string) bool {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *webSocketClient) sendLatestExitInfosData() {
@@ -591,17 +620,27 @@ func (c *webSocketClient) sendLatestExitAdditionalTextData() {
 }
 
 func (c *webSocketClient) sendLatestLevelAuxConfigData() {
-	fsmID, info, ok := latestLevelAuxConfigInfoSnapshot()
-	if !ok {
-		storedInfo, err := ReadLevelAuxConfigInfoFromLocalConfig()
-		if err != nil {
-			setCTCPServerLastMessage("WebSocket send levelAuxConfig failed: read local config: %v", err)
+	fsmID := int32(0)
+	if cachedFSMID, _, ok := latestLevelAuxConfigInfoSnapshot(); ok {
+		fsmID = cachedFSMID
+	}
+	info, err := ReadLevelAuxConfigInfoFromLocalConfig()
+	if err != nil {
+		if _, cachedInfo, ok := latestLevelAuxConfigInfoSnapshot(); ok {
+			setCTCPServerLastMessage("WebSocket send levelAuxConfig read local config failed, fallback cache: %v", err)
+			c.sendLevelAuxConfigData(fsmID, cachedInfo)
 			return
 		}
-		fsmID = 0
-		info = storedInfo
-		setLastLevelAuxConfigInfoSnapshot(fsmID, info)
+		setCTCPServerLastMessage("WebSocket send levelAuxConfig failed: read local config: %v", err)
+		return
 	}
+	setLastLevelAuxConfigInfoSnapshot(fsmID, info)
+	setCTCPServerLastMessage(
+		"WebSocket send levelAuxConfig: fsmId=0x%04X, selectedFruitTypesLen=%d, labelerNames=%s",
+		uint32(fsmID),
+		len(info.SelectedFruitTypes),
+		formatStringListForLog(info.LabelerNames),
+	)
 	c.sendLevelAuxConfigData(fsmID, info)
 }
 
