@@ -121,7 +121,7 @@ func ReadLevelAuxConfigInfoFromLocalConfig() (LevelAuxConfigInfo, error) {
 
 	for i := 0; i < 4; i++ {
 		key := fmt.Sprintf("贴标机%d", i+1)
-		labelerName, err := database.GetConfigValue(key)
+		labelerName, err := database.GetConfigValuePreferNonEmpty(key)
 		if err != nil {
 			return LevelAuxConfigInfo{}, fmt.Errorf("read %s: %w", key, err)
 		}
@@ -161,7 +161,17 @@ func SaveLevelAuxConfigInfoToLocalConfig(fsmID int32, info LevelAuxConfigInfo) e
 	}
 	for i := 0; i < 4; i++ {
 		key := fmt.Sprintf("贴标机%d", i+1)
-		if err := database.SaveConfigValue(key, info.LabelerNames[i]); err != nil {
+		labelerName := strings.TrimSpace(info.LabelerNames[i])
+		if labelerName == "" {
+			storedLabelerName, err := database.GetConfigValuePreferNonEmpty(key)
+			if err != nil {
+				setCTCPServerLastMessage("%s读取已有值失败: %v", key, err)
+				return err
+			}
+			labelerName = strings.TrimSpace(storedLabelerName)
+			info.LabelerNames[i] = labelerName
+		}
+		if err := database.SaveConfigValue(key, labelerName); err != nil {
 			setCTCPServerLastMessage("%s保存失败: %v", key, err)
 			return err
 		}

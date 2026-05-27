@@ -41,6 +41,23 @@ func GetConfigValue(configType string) (string, error) {
 	return item.FValue, nil
 }
 
+func GetConfigValuePreferNonEmpty(configType string) (string, error) {
+	db, err := getORMDB()
+	if err != nil {
+		return "", err
+	}
+
+	var item TbSysConfigs
+	err = db.Where("FModuleName = ? AND FType = ? AND TRIM(COALESCE(FValue, '')) <> ?", "RSS", configType, "").Order("FID desc").First(&item).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return GetConfigValue(configType)
+	}
+	if err != nil {
+		return "", err
+	}
+	return item.FValue, nil
+}
+
 func SaveConfigValue(configType string, value string) error {
 	db, err := getORMDB()
 	if err != nil {
