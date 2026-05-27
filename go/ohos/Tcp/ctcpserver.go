@@ -105,9 +105,10 @@ var (
 	cTCPPayloadMu    sync.Mutex
 	cTCPPayloadByCmd = make(map[string]cTCPStoredPayload)
 
-	cTCPStStatisticsLogMu           sync.Mutex
-	cTCPStStatisticsLogLastBySubsys = make(map[int32]time.Time)
-	cTCPStStatisticsLogPrevBySubsys = make(map[int32]StStatistics)
+	cTCPStStatisticsLogMu                 sync.Mutex
+	cTCPStStatisticsLogLastBySubsys       = make(map[int32]time.Time)
+	cTCPStStatisticsLogPrevBySubsys       = make(map[int32]StStatistics)
+	cTCPStStatisticsWeightLogLastBySubsys = make(map[int32]time.Time)
 
 	cTCPStGlobalConfigMu sync.Mutex
 	cTCPLastNSubsysNum   uint8
@@ -324,6 +325,55 @@ func stStatisticsManualDeltaSummary(prev StStatistics, current StStatistics) str
 		deltaWeight,
 		deltaCup,
 		efficiency,
+	)
+}
+
+func stStatisticsExitWeightRatioSummary(state StStatistics) string {
+	totalExitWeight := sumUint64Array48(state.NExitWeightCount)
+	nonZeroItems := make([]string, 0, cTCP48MaxExitNum)
+	for i, weight := range state.NExitWeightCount {
+		if weight == 0 {
+			continue
+		}
+		percent := 0.0
+		if totalExitWeight > 0 {
+			percent = float64(weight) * 100.0 / float64(totalExitWeight)
+		}
+		nonZeroItems = append(nonZeroItems, fmt.Sprintf("出口%d=%d/%d=%.2f%%", i+1, weight, totalExitWeight, percent))
+	}
+	nonZeroText := "[]"
+	if len(nonZeroItems) > 0 {
+		nonZeroText = strings.Join(nonZeroItems, ", ")
+	}
+	return fmt.Sprintf(
+		"nSubsysId=%d, totalExitWeight=sum(NExitWeightCount)=%d, exitWeightCount[1:12]=%v, nonZeroRatios=%s",
+		state.NSubsysId,
+		totalExitWeight,
+		state.NExitWeightCount[:12],
+		nonZeroText,
+	)
+}
+
+func logStStatisticsExitWeightEverySecond(remoteAddr string, head cTCPServerCommandHead, state StStatistics) {
+	cTCPStStatisticsLogMu.Lock()
+	now := time.Now()
+	last := cTCPStStatisticsWeightLogLastBySubsys[state.NSubsysId]
+	if !last.IsZero() && now.Sub(last) < time.Second {
+		cTCPStStatisticsLogMu.Unlock()
+		return
+	}
+	cTCPStStatisticsWeightLogLastBySubsys[state.NSubsysId] = now
+	cTCPStStatisticsLogMu.Unlock()
+
+	appendCTCPLogChunks(
+		"CTCP StStatistics 出口重量占比 1秒打印",
+		fmt.Sprintf(
+			"remote=%s, src=0x%04X, dst=0x%04X, %s",
+			remoteAddr,
+			uint32(head.NSrcId),
+			uint32(head.NDstId),
+			stStatisticsExitWeightRatioSummary(state),
+		),
 	)
 }
 
@@ -663,6 +713,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 
 		// appendPayloadHexChunks("CTCP StStatistics 原始payload", payload)
 		logStStatisticsEvery3Seconds(remoteAddr, head, state, payload)
+		logStStatisticsExitWeightEverySecond(remoteAddr, head, state)
 
 		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
 		if stateJSON != "" && jsonErr == nil {
