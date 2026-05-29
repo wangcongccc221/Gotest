@@ -367,7 +367,14 @@ func StartCTCPClient(remoteIP string, remotePort int, destID int32, cmd int32, d
 
 func RequestStGlobalFromDefaultFSM() int {
 	// 前端 WebSocket 已连接后调用这个入口。发送SYNC
-	return StartCTCPClient("", 0, cTCPDefaultFSMID, cTCPHCDisplayOn, nil)
+	return RequestStGlobalFromFSM(cTCPDefaultFSMID)
+}
+
+func RequestStGlobalFromFSM(destID int32) int {
+	if destID == 0 {
+		destID = cTCPDefaultFSMID
+	}
+	return StartCTCPClient("", 0, destID, cTCPHCDisplayOn, nil)
 }
 
 func writeAll(conn net.Conn, data []byte) error {

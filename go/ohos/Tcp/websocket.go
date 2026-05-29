@@ -24,12 +24,13 @@ const (
 	webSocketTopicExitAdditionalText = "exitAdditionalText"
 	webSocketTopicLevelAuxConfig     = "levelAuxConfig"
 
-	webSocketWriteWait           = 5 * time.Second  //写入等待
-	webSocketPongWait            = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
-	webSocketPingPeriod          = 30 * time.Second
-	webSocketMaxMessageSize      = 2056 * 2056 // 4MB 放数据用的
-	webSocketSendBufferSize      = 32          //最多发送32条消息
-	webSocketBroadcastBufferSize = 64          // 广播最多64条消息
+	webSocketWriteWait             = 5 * time.Second  //写入等待
+	webSocketPongWait              = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
+	webSocketPingPeriod            = 30 * time.Second
+	webSocketMaxMessageSize        = 2056 * 2056 // 4MB 放数据用的
+	webSocketSendBufferSize        = 32          //最多发送32条消息
+	webSocketBroadcastBufferSize   = 64          // 广播最多64条消息
+	webSocketSysConfigRefreshDelay = 300 * time.Millisecond
 )
 
 var (
@@ -59,6 +60,7 @@ type webSocketControlMessage struct {
 	Type               string                              `json:"type"`
 	FSMID              int32                               `json:"fsmId,omitempty"`
 	DestID             int32                               `json:"destId,omitempty"`
+	SysConfig          *StSysConfig                        `json:"sysConfig,omitempty"`
 	Grade              *StGradeInfo                        `json:"grade,omitempty"`
 	ExitInfos          *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
 	ExitDisplay        *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
@@ -325,6 +327,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleGradeInfoData("saveLevelData", cTCPHCGradeInfo, control)
 	case "saveQualityData":
 		c.handleGradeInfoData("saveQualityData", cTCPHCColorGradeInfo, control)
+	case "saveSysConfig":
+		c.handleSysConfigData(control)
 	case "saveExitInfos":
 		c.handleExitInfosLog(control)
 	case "saveExitDisplay":
@@ -392,6 +396,13 @@ func (c *webSocketClient) handleMotorInfoData(control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendMotorInfoData(control)
 		c.sendCommandAck("saveMotorInfo", cTCPHCMotorInfo, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleSysConfigData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendSysConfigData(control)
+		c.sendCommandAck("saveSysConfig", cTCPHCSysConfig, destID, payloadBytes, result)
 	}()
 }
 
@@ -872,7 +883,7 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 	return 0, destID, len(payload)
 }
 
-func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) {
+func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) { //清空数据
 	destID := normalizeDropDataDestID(control)
 	grade, ok := latestGradeInfo(destID)
 	if !ok {
@@ -912,7 +923,7 @@ func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) {
 	return 0, destID, len(payload)
 }
 
-func SendGradeInfoData(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+func SendGradeInfoData(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) { //发送等级信息数据
 	destID := normalizeDropDataDestID(control)
 	if commandID == cTCPHCGradeInfo && control.LevelAuxConfig != nil {
 		if err := saveLevelAuxConfigFromControl(control.FSMID, *control.LevelAuxConfig); err != nil {
@@ -1008,6 +1019,60 @@ func SendMotorInfoData(control webSocketControlMessage) (int, int32, int) {
 
 	setCTCPServerLastMessage("WebSocket saveMotorInfo success: HC_CMD_MOTOR_INFO sent, dest=0x%04X, exit=%d", uint32(destID), motor.BExitId)
 	return 0, destID, len(payload)
+}
+
+func SendSysConfigData(control webSocketControlMessage) (int, int32, int) { // 发送系统数据
+	destID := normalizeDropDataDestID(control)
+	if control.SysConfig == nil {
+		setCTCPServerLastMessage("WebSocket saveSysConfig failed: empty StSysConfig, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	sysConfig := *control.SysConfig
+	payload, err := encodeSysConfigPayload(sysConfig)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveSysConfig failed: encode StSysConfig: %v", err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCSysConfig, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket saveSysConfig: sending HC_CMD_SYS_CONFIG(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, subsys=%d, exits=%d, classify=0x%02X, cir=0x%02X, uv=0x%02X, weight=0x%02X, internal=0x%02X, ultrasonic=0x%02X",
+		uint32(cTCPHCSysConfig),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		sysConfig.NSubsysNum,
+		sysConfig.NExitNum,
+		sysConfig.NClassificationInfo,
+		sysConfig.CIRClassifyType,
+		sysConfig.UVClassifyType,
+		sysConfig.WeightClassifyTpye,
+		sysConfig.InternalClassifyType,
+		sysConfig.UltrasonicClassifyType,
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCSysConfig, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket saveSysConfig failed: HC_CMD_SYS_CONFIG result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	requestStGlobalAfterSysConfig(destID)
+	setCTCPServerLastMessage("WebSocket saveSysConfig success: HC_CMD_SYS_CONFIG sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
+	return 0, destID, len(payload)
+}
+
+func requestStGlobalAfterSysConfig(destID int32) {
+	go func() {
+		time.Sleep(webSocketSysConfigRefreshDelay)
+		if result := RequestStGlobalFromFSM(destID); result != 0 {
+			setCTCPServerLastMessage("WebSocket saveSysConfig refresh StGlobal failed: dest=0x%04X, result=%d", uint32(destID), result)
+			return
+		}
+		setCTCPServerLastMessage("WebSocket saveSysConfig refresh StGlobal requested: dest=0x%04X", uint32(destID))
+	}()
 }
 
 func SendSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
@@ -1232,6 +1297,18 @@ func encodeMotorInfoPayload(motor StMotorInfo) ([]byte, error) {
 
 	payload := make([]byte, size)
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&motor)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeSysConfigPayload(sysConfig StSysConfig) ([]byte, error) {
+	size := int(unsafe.Sizeof(sysConfig))
+	if size != cTCP48StSysConfigWireSize {
+		return nil, fmt.Errorf("sizeof(StSysConfig)=%d, expected=%d", size, cTCP48StSysConfigWireSize)
+	}
+
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&sysConfig)), size)
 	copy(payload, src)
 	return payload, nil
 }

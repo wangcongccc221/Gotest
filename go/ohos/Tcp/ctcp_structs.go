@@ -10,6 +10,7 @@ import (
 // RawSize/Offset fields are local parser metadata, not part of the wire data.
 
 const (
+	cTCP48StSysConfigWireSize  = 504
 	cTCP48StGradeInfoWireSize  = 11600
 	cTCP48StMotorInfoWireSize  = 20
 	cTCP48StGlobalExpectedSize = 28712
