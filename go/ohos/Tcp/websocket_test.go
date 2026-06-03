@@ -214,6 +214,59 @@ func TestParseWebSocketControlMessageReadsExitAdditionalTextData(t *testing.T) {
 	}
 }
 
+func TestParseWebSocketControlMessageReadsFruitTypeConfig(t *testing.T) {
+	message, ok := parseWebSocketControlMessage(`{
+		"type": "saveFruitTypeConfig",
+		"fsmId": 256,
+		"fruitTypeConfig": {
+			"majorTypes": "1.脐橙(1-8);",
+			"selectedFruitTypes": "1.1-新鲜脐橙;",
+			"subTypeConfigs": {
+				"1.脐橙(1-8)": "1.1-新鲜脐橙;"
+			}
+		}
+	}`)
+	if !ok {
+		t.Fatal("parseWebSocketControlMessage() rejected saveFruitTypeConfig")
+	}
+	if message.FruitTypeConfig == nil {
+		t.Fatal("FruitTypeConfig is nil")
+	}
+	if message.FruitTypeConfig.MajorTypes == nil || *message.FruitTypeConfig.MajorTypes != "1.脐橙(1-8);" {
+		t.Fatalf("MajorTypes = %v, want 1.脐橙(1-8);", message.FruitTypeConfig.MajorTypes)
+	}
+	if message.FruitTypeConfig.SelectedFruitTypes == nil || *message.FruitTypeConfig.SelectedFruitTypes != "1.1-新鲜脐橙;" {
+		t.Fatalf("SelectedFruitTypes = %v, want 1.1-新鲜脐橙;", message.FruitTypeConfig.SelectedFruitTypes)
+	}
+	if message.FruitTypeConfig.SubTypeConfigs == nil || (*message.FruitTypeConfig.SubTypeConfigs)["1.脐橙(1-8)"] != "1.1-新鲜脐橙;" {
+		t.Fatalf("SubTypeConfigs = %#v, want configured major", message.FruitTypeConfig.SubTypeConfigs)
+	}
+}
+
+func TestParseWebSocketControlMessageReadsDensityInfo(t *testing.T) {
+	message, ok := parseWebSocketControlMessage(`{
+		"type": "saveDensityInfo",
+		"fsmId": 256,
+		"densityInfo": {
+			"UAnalogDensity": [1.25, 2.5, 3.75]
+		}
+	}`)
+	if !ok {
+		t.Fatal("parseWebSocketControlMessage() rejected saveDensityInfo")
+	}
+	if message.DensityInfo == nil {
+		t.Fatal("DensityInfo is nil")
+	}
+	if message.DensityInfo.UAnalogDensity[0] != 1.25 ||
+		message.DensityInfo.UAnalogDensity[1] != 2.5 ||
+		message.DensityInfo.UAnalogDensity[2] != 3.75 {
+		t.Fatalf("UAnalogDensity[0:3] = %.2f %.2f %.2f, want 1.25 2.50 3.75",
+			message.DensityInfo.UAnalogDensity[0],
+			message.DensityInfo.UAnalogDensity[1],
+			message.DensityInfo.UAnalogDensity[2])
+	}
+}
+
 func TestApplyExitDisplayUpdatePreservesOmittedFieldsAndAllowsZeroDisplayType(t *testing.T) {
 	base := defaultExitDisplayInfo()
 	base.DisplayType = 7

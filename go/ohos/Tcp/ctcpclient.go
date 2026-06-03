@@ -48,6 +48,7 @@ const (
 	cTCPHCGlobalExitInfo = int32(0x0058) // 全局出口信息 StGlobalExitInfo
 	cTCPHCMotorInfo      = int32(0x005C) // 电机使能参数 StMotorInfo
 	cTCPHCColorGradeInfo = int32(0x005D) // 品质等级设置 StGradeInfo
+	cTCPHCDensityInfo    = int32(0x005E) // 水果密度信息 StAnalogDensity
 
 	cTCPHCSingleSample        = int32(0x2000) // 单张图像采集，无 payload
 	cTCPHCContinuousSampleOn  = int32(0x2001) // 连续采集开，payload: StContinousCapture

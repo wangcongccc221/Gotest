@@ -24,6 +24,7 @@ const (
 	webSocketTopicExitDisplay        = "exitDisplay"
 	webSocketTopicExitAdditionalText = "exitAdditionalText"
 	webSocketTopicLevelAuxConfig     = "levelAuxConfig"
+	webSocketTopicFruitTypeConfig    = "fruitTypeConfig"
 	webSocketTopicWeightGlobal       = "weightGlobal"
 	webSocketTopicWeightInfo         = "weightInfo"
 
@@ -72,6 +73,8 @@ type webSocketControlMessage struct {
 	ExitDisplay         *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
 	ExitAdditionalText  *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
 	LevelAuxConfig      *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
+	FruitTypeConfig     *webSocketFruitTypeConfigControl    `json:"fruitTypeConfig,omitempty"`
+	DensityInfo         *StAnalogDensity                    `json:"densityInfo,omitempty"`
 	Motor               *StMotorInfo                        `json:"motor,omitempty"`
 	GradeExits          []webSocketGradeExit                `json:"gradeExits,omitempty"`
 	Action              string                              `json:"action,omitempty"`
@@ -141,6 +144,18 @@ type webSocketLevelAuxConfigControl struct {
 type webSocketLevelAuxConfigData struct {
 	FSMID          int32              `json:"fsmId"`
 	LevelAuxConfig LevelAuxConfigInfo `json:"levelAuxConfig"`
+}
+
+type webSocketFruitTypeConfigControl struct {
+	MajorTypes         *string            `json:"majorTypes,omitempty"`
+	MajorTypesEn       *string            `json:"majorTypesEn,omitempty"`
+	SelectedFruitTypes *string            `json:"selectedFruitTypes,omitempty"`
+	SubTypeConfigs     *map[string]string `json:"subTypeConfigs,omitempty"`
+}
+
+type webSocketFruitTypeConfigData struct {
+	FSMID           int32               `json:"fsmId"`
+	FruitTypeConfig FruitTypeConfigInfo `json:"fruitTypeConfig"`
 }
 
 type webSocketHub struct {
@@ -371,6 +386,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleGradeInfoData("saveLevelData", cTCPHCGradeInfo, control)
 	case "saveQualityData":
 		c.handleGradeInfoData("saveQualityData", cTCPHCColorGradeInfo, control)
+	case "saveDensityInfo":
+		c.handleDensityInfoData(control)
 	case "saveSysConfig":
 		c.handleSysConfigData(control)
 	case "saveParasInfo":
@@ -405,6 +422,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleExitAdditionalTextInfo(control)
 	case "saveLevelAuxConfig":
 		c.handleLevelAuxConfigInfo(control)
+	case "saveFruitTypeConfig":
+		c.handleFruitTypeConfigInfo(control)
 	case "saveMotorInfo":
 		c.handleMotorInfoData(control)
 	}
@@ -430,6 +449,7 @@ func (c *webSocketClient) handleRequestStGlobal() {
 	c.sendLatestExitDisplayData()
 	c.sendLatestExitAdditionalTextData()
 	c.sendLatestLevelAuxConfigData()
+	c.sendLatestFruitTypeConfigData()
 	// 前端 WebSocket 连接成功后发 requestStGlobal，表示前端已经准备接收数据。
 	// 这里异步触发 CTCP 客户端发送 DISPLAY_ON，避免阻塞 WebSocket 的读循环。
 	go func() {
@@ -457,6 +477,13 @@ func (c *webSocketClient) handleGradeInfoData(topic string, commandID int32, con
 	go func() {
 		result, destID, payloadBytes := SendGradeInfoData(topic, commandID, control)
 		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleDensityInfoData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendDensityInfoData(control)
+		c.sendCommandAck("saveDensityInfo", cTCPHCDensityInfo, destID, payloadBytes, result)
 	}()
 }
 
@@ -626,6 +653,76 @@ func (c *webSocketClient) handleLevelAuxConfigInfo(control webSocketControlMessa
 	}
 }
 
+func (c *webSocketClient) handleFruitTypeConfigInfo(control webSocketControlMessage) {
+	if control.FruitTypeConfig == nil {
+		setCTCPServerLastMessage("WebSocket saveFruitTypeConfig failed: empty fruitTypeConfig, fsmId=0x%04X", uint32(control.FSMID))
+		return
+	}
+	if err := saveFruitTypeConfigFromControl(control.FSMID, *control.FruitTypeConfig); err != nil {
+		return
+	}
+}
+
+func saveFruitTypeConfigFromControl(fsmID int32, update webSocketFruitTypeConfigControl) error {
+	baseInfo := defaultFruitTypeConfigInfo()
+	if storedInfo, err := ReadFruitTypeConfigInfoFromLocalConfig(); err != nil {
+		setCTCPServerLastMessage("WebSocket saveFruitTypeConfig failed: read local config: %v", err)
+		return err
+	} else {
+		baseInfo = storedInfo
+	}
+
+	info := applyFruitTypeConfigUpdate(baseInfo, update)
+	if err := SaveFruitTypeConfigInfoToLocalConfig(fsmID, info); err != nil {
+		return err
+	}
+	setLastFruitTypeConfigInfoSnapshot(fsmID, info)
+	publishFruitTypeConfigData(fsmID, info)
+	syncLevelAuxSelectedFruitTypesFromFruitConfig(fsmID, info.SelectedFruitTypes)
+	return nil
+}
+
+func applyFruitTypeConfigUpdate(base FruitTypeConfigInfo, update webSocketFruitTypeConfigControl) FruitTypeConfigInfo {
+	next := base
+	if update.MajorTypes != nil {
+		next.MajorTypes = *update.MajorTypes
+	}
+	if update.MajorTypesEn != nil {
+		next.MajorTypesEn = *update.MajorTypesEn
+	}
+	if update.SelectedFruitTypes != nil {
+		next.SelectedFruitTypes = *update.SelectedFruitTypes
+	}
+	if update.SubTypeConfigs != nil {
+		next.SubTypeConfigs = make(map[string]string, len(*update.SubTypeConfigs))
+		for key, value := range *update.SubTypeConfigs {
+			next.SubTypeConfigs[key] = value
+		}
+	}
+	return normalizeFruitTypeConfigInfo(next)
+}
+
+func syncLevelAuxSelectedFruitTypesFromFruitConfig(fsmID int32, selectedFruitTypes string) {
+	selectedFruitTypes = strings.TrimSpace(selectedFruitTypes)
+	if selectedFruitTypes == "" {
+		return
+	}
+	baseInfo := defaultLevelAuxConfigInfo()
+	if storedInfo, err := ReadLevelAuxConfigInfoFromLocalConfig(); err != nil {
+		setCTCPServerLastMessage("WebSocket saveFruitTypeConfig: levelAux read failed, skip selected fruit push: %v", err)
+		return
+	} else {
+		baseInfo = storedInfo
+	}
+	update := webSocketLevelAuxConfigControl{SelectedFruitTypes: &selectedFruitTypes}
+	info := applyLevelAuxConfigUpdate(baseInfo, update)
+	if err := SaveLevelAuxConfigInfoToLocalConfig(fsmID, info); err != nil {
+		return
+	}
+	setLastLevelAuxConfigInfoSnapshot(fsmID, info)
+	publishLevelAuxConfigData(fsmID, info)
+}
+
 func saveLevelAuxConfigFromControl(fsmID int32, update webSocketLevelAuxConfigControl) error {
 	baseInfo := defaultLevelAuxConfigInfo()
 	if storedInfo, err := ReadLevelAuxConfigInfoFromLocalConfig(); err != nil {
@@ -744,6 +841,32 @@ func (c *webSocketClient) sendLatestLevelAuxConfigData() {
 	c.sendLevelAuxConfigData(fsmID, info)
 }
 
+func (c *webSocketClient) sendLatestFruitTypeConfigData() {
+	fsmID := int32(0)
+	if cachedFSMID, _, ok := latestFruitTypeConfigInfoSnapshot(); ok {
+		fsmID = cachedFSMID
+	}
+	info, err := ReadFruitTypeConfigInfoFromLocalConfig()
+	if err != nil {
+		if _, cachedInfo, ok := latestFruitTypeConfigInfoSnapshot(); ok {
+			setCTCPServerLastMessage("WebSocket send fruitTypeConfig read local config failed, fallback cache: %v", err)
+			c.sendFruitTypeConfigData(fsmID, cachedInfo)
+			return
+		}
+		setCTCPServerLastMessage("WebSocket send fruitTypeConfig failed: read local config: %v", err)
+		return
+	}
+	setLastFruitTypeConfigInfoSnapshot(fsmID, info)
+	setCTCPServerLastMessage(
+		"WebSocket send fruitTypeConfig: fsmId=0x%04X, majorTypes=%d, selectedFruitTypesLen=%d, subTypeKeys=%d",
+		uint32(fsmID),
+		len(splitSemicolonConfig(info.MajorTypes)),
+		len(info.SelectedFruitTypes),
+		len(info.SubTypeConfigs),
+	)
+	c.sendFruitTypeConfigData(fsmID, info)
+}
+
 func (c *webSocketClient) sendExitInfosData(fsmID int32, exitInfos StExitInfos) {
 	c.sendFrame(webSocketFrame{
 		Type:  webSocketTopicData,
@@ -773,6 +896,14 @@ func (c *webSocketClient) sendLevelAuxConfigData(fsmID int32, info LevelAuxConfi
 		Type:  webSocketTopicData,
 		Topic: webSocketTopicLevelAuxConfig,
 		Data:  rawJSONFromValue(webSocketLevelAuxConfigData{FSMID: fsmID, LevelAuxConfig: normalizeLevelAuxConfigInfo(info)}),
+	})
+}
+
+func (c *webSocketClient) sendFruitTypeConfigData(fsmID int32, info FruitTypeConfigInfo) {
+	c.sendFrame(webSocketFrame{
+		Type:  webSocketTopicData,
+		Topic: webSocketTopicFruitTypeConfig,
+		Data:  rawJSONFromValue(webSocketFruitTypeConfigData{FSMID: fsmID, FruitTypeConfig: normalizeFruitTypeConfigInfo(info)}),
 	})
 }
 
@@ -814,6 +945,16 @@ func publishLevelAuxConfigData(fsmID int32, info LevelAuxConfigInfo) {
 		return
 	}
 	defaultWebSocketHub.publish(webSocketTopicLevelAuxConfig, frame)
+}
+
+func publishFruitTypeConfigData(fsmID int32, info FruitTypeConfigInfo) {
+	raw := rawJSONFromValue(webSocketFruitTypeConfigData{FSMID: fsmID, FruitTypeConfig: normalizeFruitTypeConfigInfo(info)})
+	frame, err := newWebSocketDataFrame(webSocketTopicFruitTypeConfig, raw)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket publish fruitTypeConfig failed: %v", err)
+		return
+	}
+	defaultWebSocketHub.publish(webSocketTopicFruitTypeConfig, frame)
 }
 
 func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {
@@ -1394,6 +1535,44 @@ func encodeIpmWhiteBalancePayload(values []int) ([]byte, error) {
 	return payload, nil
 }
 
+func SendDensityInfoData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	if control.DensityInfo == nil {
+		setCTCPServerLastMessage("WebSocket saveDensityInfo failed: empty StAnalogDensity, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	densityInfo := *control.DensityInfo
+	payload, err := encodeAnalogDensityPayload(densityInfo)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveDensityInfo failed: encode StAnalogDensity: %v", err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCDensityInfo, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket saveDensityInfo: sending HC_CMD_DENSITY_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, density0=%.3f, density1=%.3f, density2=%.3f",
+		uint32(cTCPHCDensityInfo),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		densityInfo.UAnalogDensity[0],
+		densityInfo.UAnalogDensity[1],
+		densityInfo.UAnalogDensity[2],
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCDensityInfo, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket saveDensityInfo failed: HC_CMD_DENSITY_INFO result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	requestStGlobalAfterConfigCommand("saveDensityInfo", destID)
+	setCTCPServerLastMessage("WebSocket saveDensityInfo success: HC_CMD_DENSITY_INFO sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
+	return 0, destID, len(payload)
+}
+
 func SendSysConfigData(control webSocketControlMessage) (int, int32, int) { // 发送系统数据
 	destID := normalizeDropDataDestID(control)
 	if control.SysConfig == nil {
@@ -1842,6 +2021,19 @@ func encodeGlobalExitInfoPayload(globalExitInfo StGlobalExitInfo) ([]byte, error
 
 	payload := make([]byte, size)
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&globalExitInfo)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeAnalogDensityPayload(densityInfo StAnalogDensity) ([]byte, error) {
+	size := int(unsafe.Sizeof(densityInfo))
+	expected := cTCP48AnalogDensitySlots * 4
+	if size != expected {
+		return nil, fmt.Errorf("sizeof(StAnalogDensity)=%d, expected=%d", size, expected)
+	}
+
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&densityInfo)), size)
 	copy(payload, src)
 	return payload, nil
 }
