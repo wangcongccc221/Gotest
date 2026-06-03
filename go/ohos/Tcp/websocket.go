@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"encoding/binary"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -23,6 +24,8 @@ const (
 	webSocketTopicExitDisplay        = "exitDisplay"
 	webSocketTopicExitAdditionalText = "exitAdditionalText"
 	webSocketTopicLevelAuxConfig     = "levelAuxConfig"
+	webSocketTopicWeightGlobal       = "weightGlobal"
+	webSocketTopicWeightInfo         = "weightInfo"
 
 	webSocketWriteWait             = 5 * time.Second  //写入等待
 	webSocketPongWait              = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
@@ -57,20 +60,30 @@ type webSocketFrame struct { //数据帧
 }
 
 type webSocketControlMessage struct {
-	Type               string                              `json:"type"`
-	FSMID              int32                               `json:"fsmId,omitempty"`
-	DestID             int32                               `json:"destId,omitempty"`
-	SysConfig          *StSysConfig                        `json:"sysConfig,omitempty"`
-	Grade              *StGradeInfo                        `json:"grade,omitempty"`
-	ExitInfos          *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
-	ExitDisplay        *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
-	ExitAdditionalText *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
-	LevelAuxConfig     *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
-	Motor              *StMotorInfo                        `json:"motor,omitempty"`
-	GradeExits         []webSocketGradeExit                `json:"gradeExits,omitempty"`
-	Action             string                              `json:"action,omitempty"`
-	ExitNo             int                                 `json:"exitNo,omitempty"`
-	DropGrades         []webSocketDropGrade                `json:"grades,omitempty"`
+	Type                string                              `json:"type"`
+	FSMID               int32                               `json:"fsmId,omitempty"`
+	DestID              int32                               `json:"destId,omitempty"`
+	SysConfig           *StSysConfig                        `json:"sysConfig,omitempty"`
+	Grade               *StGradeInfo                        `json:"grade,omitempty"`
+	Paras               *StParas                            `json:"paras,omitempty"`
+	GlobalExitInfo      *StGlobalExitInfo                   `json:"globalExitInfo,omitempty"`
+	ExitInfo            *StExitInfo                         `json:"exitInfo,omitempty"`
+	ExitInfos           *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
+	ExitDisplay         *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
+	ExitAdditionalText  *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
+	LevelAuxConfig      *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
+	Motor               *StMotorInfo                        `json:"motor,omitempty"`
+	GradeExits          []webSocketGradeExit                `json:"gradeExits,omitempty"`
+	Action              string                              `json:"action,omitempty"`
+	ExitNo              int                                 `json:"exitNo,omitempty"`
+	DropGrades          []webSocketDropGrade                `json:"grades,omitempty"`
+	CameraNum           *int                                `json:"cameraNum,omitempty"`
+	EvenShow            *bool                               `json:"evenShow,omitempty"`
+	WhiteBalancePayload []int                               `json:"whiteBalancePayload,omitempty"`
+	ChannelIndex        *int                                `json:"channelIndex,omitempty"`
+	ResetADValue        *int                                `json:"resetADValue,omitempty"`
+	WeightInfo          *StWeightBaseInfo                   `json:"weightInfo,omitempty"`
+	GlobalWeightInfo    *StGlobalWeightBaseInfo             `json:"globalWeightInfo,omitempty"`
 }
 
 type webSocketGradeExit struct {
@@ -322,6 +335,37 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 
 	case "clearData": //数据清零
 		c.handleSimpleFSMCommand("clearData", cTCPHCClearData, control)
+	case "fsmTestCupOn":
+		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
+	case "fsmTestCupOff":
+		c.handleSimpleFSMCommand("fsmTestCupOff", cTCPHCTestCupOff, control)
+
+	case "wamGetInfo":
+		c.handleSimpleWAMCommand("wamGetInfo", cTCPHCWAMWeightOn, control)
+	case "wamWeightReset":
+		c.handleSimpleWAMCommand("wamWeightReset", cTCPHCWAMWeightReset, control)
+	case "wamSimulatedPulseOn":
+		c.handleSimpleWAMCommand("wamSimulatedPulseOn", cTCPHCWAMSimulatedPulseOn, control)
+	case "wamSimulatedPulseOff":
+		c.handleSimpleWAMCommand("wamSimulatedPulseOff", cTCPHCWAMSimulatedPulseOff, control)
+	case "wamTestCupOn":
+		c.handleSimpleWAMCommand("wamTestCupOn", cTCPHCWAMTestCupOn, control)
+	case "wamTestCupOff":
+		c.handleSimpleWAMCommand("wamTestCupOff", cTCPHCWAMTestCupOff, control)
+	case "wamWaveFormOn":
+		c.handleSimpleWAMChannelCommand("wamWaveFormOn", cTCPHCWAMWaveFormOn, control)
+	case "wamWaveFormOff":
+		c.handleSimpleWAMChannelCommand("wamWaveFormOff", cTCPHCWAMWaveFormOff, control)
+	case "wamDataTrackingOn":
+		c.handleSimpleWAMChannelCommand("wamDataTrackingOn", cTCPHCWAMDataTrackingOn, control)
+	case "wamDataTrackingOff":
+		c.handleSimpleWAMChannelCommand("wamDataTrackingOff", cTCPHCWAMDataTrackingOff, control)
+	case "wamResetAd":
+		c.handleWAMResetAD(control)
+	case "saveWamWeightInfo":
+		c.handleWAMWeightInfoData(control)
+	case "saveWamGlobalWeightInfo":
+		c.handleWAMGlobalWeightInfoData(control)
 
 	case "saveLevelData":
 		c.handleGradeInfoData("saveLevelData", cTCPHCGradeInfo, control)
@@ -329,6 +373,30 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleGradeInfoData("saveQualityData", cTCPHCColorGradeInfo, control)
 	case "saveSysConfig":
 		c.handleSysConfigData(control)
+	case "saveParasInfo":
+		c.handleParasInfoData(control)
+	case "saveGlobalExitInfo":
+		c.handleGlobalExitInfoData(control)
+	case "saveExitInfo":
+		c.handleExitInfoData(control)
+	case "ipmSingleSample":
+		c.handleIpmCameraCommand("ipmSingleSample", cTCPHCSingleSample, control)
+	case "ipmContinuousSampleOn":
+		c.handleIpmCameraCommand("ipmContinuousSampleOn", cTCPHCContinuousSampleOn, control)
+	case "ipmContinuousSampleOff":
+		c.handleIpmCameraCommand("ipmContinuousSampleOff", cTCPHCContinuousSampleOff, control)
+	case "ipmShowBlobOn":
+		c.handleIpmCameraCommand("ipmShowBlobOn", cTCPHCShowBlobOn, control)
+	case "ipmAutoBalanceOnCamera":
+		c.handleIpmCameraCommand("ipmAutoBalanceOnCamera", cTCPHCAutoBalanceOnCamera, control)
+	case "ipmAutoBalanceOn":
+		c.handleIpmCameraCommand("ipmAutoBalanceOn", cTCPHCAutoBalanceOn, control)
+	case "ipmSingleSampleSpot":
+		c.handleIpmCameraCommand("ipmSingleSampleSpot", cTCPHCSingleSampleSpot, control)
+	case "ipmShutterAdjustOn":
+		c.handleIpmCameraCommand("ipmShutterAdjustOn", cTCPHCShutterAdjustOn, control)
+	case "ipmShutterAdjustOff":
+		c.handleIpmCameraCommand("ipmShutterAdjustOff", cTCPHCShutterAdjustOff, control)
 	case "saveExitInfos":
 		c.handleExitInfosLog(control)
 	case "saveExitDisplay":
@@ -403,6 +471,27 @@ func (c *webSocketClient) handleSysConfigData(control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendSysConfigData(control)
 		c.sendCommandAck("saveSysConfig", cTCPHCSysConfig, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleParasInfoData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendParasInfoData(control)
+		c.sendCommandAck("saveParasInfo", cTCPHCParasInfo, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleGlobalExitInfoData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendGlobalExitInfoData(control)
+		c.sendCommandAck("saveGlobalExitInfo", cTCPHCGlobalExitInfo, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleExitInfoData(control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendExitInfoData(control)
+		c.sendCommandAck("saveExitInfo", cTCPHCExitInfo, destID, payloadBytes, result)
 	}()
 }
 
@@ -734,6 +823,80 @@ func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, 
 	}()
 }
 
+func (c *webSocketClient) handleIpmCameraCommand(topic string, commandID int32, control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendIpmCameraCommand(topic, commandID, control)
+		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleSimpleWAMCommand(topic string, commandID int32, control webSocketControlMessage) {
+	result, destID, payloadBytes := SendSimpleWAMCommand(topic, commandID, control)
+	c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+}
+
+func (c *webSocketClient) handleSimpleWAMChannelCommand(topic string, commandID int32, control webSocketControlMessage) {
+	result, destID, payloadBytes := SendSimpleWAMChannelCommand(topic, commandID, control)
+	c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+}
+
+func (c *webSocketClient) handleWAMResetAD(control webSocketControlMessage) {
+	result, destID, payloadBytes := SendWAMResetAD(control)
+	c.sendCommandAck("wamResetAd", cTCPHCWAMResetAD, destID, payloadBytes, result)
+}
+
+func (c *webSocketClient) handleWAMWeightInfoData(control webSocketControlMessage) {
+	destID := normalizeWAMChannelDestID(control)
+	channelIndexText := "<nil>"
+	if control.ChannelIndex != nil {
+		channelIndexText = fmt.Sprintf("%d", *control.ChannelIndex)
+	}
+	if control.WeightInfo == nil {
+		setCTCPServerLastMessage("WebSocket 收到 saveWamWeightInfo: dest=0x%04X, channelIndex=%s, payload=<empty>", uint32(destID), channelIndexText)
+	} else {
+		weightInfo := *control.WeightInfo
+		setCTCPServerLastMessage(
+			"WebSocket 收到 saveWamWeightInfo: dest=0x%04X, channelIndex=%s, StWeightBaseInfo{FGADParam=[%.6f %.6f], FTemperatureParams=%.6f, WaveInterval=[%d %d]}",
+			uint32(destID),
+			channelIndexText,
+			weightInfo.FGADParam[0],
+			weightInfo.FGADParam[1],
+			weightInfo.FTemperatureParams,
+			weightInfo.WaveInterval[0],
+			weightInfo.WaveInterval[1],
+		)
+	}
+	result, destID, payloadBytes := SendWAMWeightInfoData(control)
+	c.sendCommandAck("saveWamWeightInfo", cTCPHCWAMWeightInfo, destID, payloadBytes, result)
+}
+
+func (c *webSocketClient) handleWAMGlobalWeightInfoData(control webSocketControlMessage) {
+	destID := normalizeWAMDestID(control)
+	if control.GlobalWeightInfo == nil {
+		setCTCPServerLastMessage("WebSocket 收到 saveWamGlobalWeightInfo: dest=0x%04X, payload=<empty>", uint32(destID))
+	} else {
+		globalWeightInfo := *control.GlobalWeightInfo
+		setCTCPServerLastMessage(
+			"WebSocket 收到 saveWamGlobalWeightInfo: dest=0x%04X, StGlobalWeightBaseInfo{FFilterParam=%.6f, AD_Filter_ALG=%d, NEffectCupThreshold=%d, NMinGradeThreshold=%d, NCupDeviationThreshold=%d, NCupBreakageThreshold=%d, NBaseCupNum=%d, NTotalCupNums=%v, RefWeight=%d, WeightTh=%d}",
+			uint32(destID),
+			globalWeightInfo.FFilterParam,
+			globalWeightInfo.AD_Filter_ALG,
+			globalWeightInfo.NEffectCupThreshold,
+			globalWeightInfo.NMinGradeThreshold,
+			globalWeightInfo.NCupDeviationThreshold,
+			globalWeightInfo.NCupBreakageThreshold,
+			globalWeightInfo.NBaseCupNum,
+			globalWeightInfo.NTotalCupNums,
+			globalWeightInfo.RefWeight,
+			globalWeightInfo.WeightTh,
+		)
+	}
+	setCTCPServerLastMessage("WebSocket saveWamGlobalWeightInfo: wait 1000ms before WAM global write")
+	time.Sleep(1000 * time.Millisecond)
+	result, destID, payloadBytes := SendWAMGlobalWeightInfoData(control)
+	c.sendCommandAck("saveWamGlobalWeightInfo", cTCPHCWAMGlobalWeightInfo, destID, payloadBytes, result)
+}
+
 func (c *webSocketClient) sendCommandAck(topic string, commandID int32, destID int32, payloadBytes int, result int) {
 	c.sendFrame(webSocketFrame{
 		Type:  "commandAck",
@@ -976,6 +1139,121 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	return 0, destID, len(payload)
 }
 
+func SendParasInfoData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	if control.Paras == nil {
+		setCTCPServerLastMessage("WebSocket saveParasInfo failed: empty StParas, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	paras := *control.Paras
+	payload, err := encodeParasInfoPayload(paras)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveParasInfo failed: encode StParas: %v", err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCParasInfo, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket saveParasInfo: sending HC_CMD_PARAS_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, cupNum=%d, colorCameras=%d, nirCameras=%d",
+		uint32(cTCPHCParasInfo),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		paras.NCupNum,
+		len(paras.CameraParas),
+		len(paras.IRCameraParas),
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCParasInfo, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket saveParasInfo failed: HC_CMD_PARAS_INFO result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	requestStGlobalAfterParasInfo(destID)
+	setCTCPServerLastMessage("WebSocket saveParasInfo success: HC_CMD_PARAS_INFO sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
+	return 0, destID, len(payload)
+}
+
+func SendGlobalExitInfoData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	if control.GlobalExitInfo == nil {
+		setCTCPServerLastMessage("WebSocket saveGlobalExitInfo failed: empty StGlobalExitInfo, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	globalExitInfo := *control.GlobalExitInfo
+	payload, err := encodeGlobalExitInfoPayload(globalExitInfo)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveGlobalExitInfo failed: encode StGlobalExitInfo: %v", err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCGlobalExitInfo, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket saveGlobalExitInfo: sending HC_CMD_GLOBAL_EXIT_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, pulse=%d, labelPulse=%d, driver0=%d",
+		uint32(cTCPHCGlobalExitInfo),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		globalExitInfo.NPulse,
+		globalExitInfo.NLabelPulse,
+		globalExitInfo.NDriverPin[0],
+	)
+	setCTCPServerLastMessage("WebSocket saveGlobalExitInfo payload全字段: %s", formatStGlobalExitInfoFields(globalExitInfo))
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCGlobalExitInfo, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket saveGlobalExitInfo failed: HC_CMD_GLOBAL_EXIT_INFO result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	requestStGlobalAfterConfigCommand("saveGlobalExitInfo", destID)
+	setCTCPServerLastMessage("WebSocket saveGlobalExitInfo success: HC_CMD_GLOBAL_EXIT_INFO sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
+	return 0, destID, len(payload)
+}
+
+func SendExitInfoData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	if control.ExitInfo == nil {
+		setCTCPServerLastMessage("WebSocket saveExitInfo failed: empty StExitInfo, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+
+	exitInfo := *control.ExitInfo
+	payload, err := encodeExitInfoPayload(exitInfo)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveExitInfo failed: encode StExitInfo: %v", err)
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCExitInfo, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket saveExitInfo: sending HC_CMD_EXIT_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, label0Dis=%d, exit0Dis=%d, exit0Offset=%d",
+		uint32(cTCPHCExitInfo),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		exitInfo.LabelExit[0].NDis,
+		exitInfo.Exits[0].NDis,
+		exitInfo.Exits[0].NOffset,
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCExitInfo, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket saveExitInfo failed: HC_CMD_EXIT_INFO result=%d", result)
+		return result, destID, len(payload)
+	}
+
+	requestStGlobalAfterConfigCommand("saveExitInfo", destID)
+	setCTCPServerLastMessage("WebSocket saveExitInfo success: HC_CMD_EXIT_INFO sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
+	return 0, destID, len(payload)
+}
+
 func SendMotorInfoData(control webSocketControlMessage) (int, int32, int) {
 	destID := normalizeDropDataDestID(control)
 	if control.Motor == nil {
@@ -1021,6 +1299,101 @@ func SendMotorInfoData(control webSocketControlMessage) (int, int32, int) {
 	return 0, destID, len(payload)
 }
 
+func SendIpmCameraCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeDropDataDestID(control)
+	payload, cameraNum, err := encodeIpmCameraCommandPayload(commandID, control)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket %s failed: %v, dest=0x%04X", topic, err, uint32(destID))
+		return -1, destID, 0
+	}
+
+	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes, camera=%d",
+		topic,
+		uint32(commandID),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		cameraNum,
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, commandID, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket %s failed: cmd=0x%04X result=%d", topic, uint32(commandID), result)
+		return result, destID, len(payload)
+	}
+
+	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X, camera=%d", topic, uint32(commandID), uint32(destID), cameraNum)
+	return 0, destID, len(payload)
+}
+
+func encodeIpmCameraCommandPayload(commandID int32, control webSocketControlMessage) ([]byte, int, error) {
+	switch commandID {
+	case cTCPHCSingleSample, cTCPHCSingleSampleSpot, cTCPHCShutterAdjustOn, cTCPHCShutterAdjustOff:
+		return nil, -1, nil
+	case cTCPHCAutoBalanceOnCamera, cTCPHCAutoBalanceOn:
+		payload, err := encodeIpmWhiteBalancePayload(control.WhiteBalancePayload)
+		if err != nil {
+			return nil, -1, err
+		}
+		return payload, int(payload[20]), nil
+	case cTCPHCContinuousSampleOn:
+		cameraNum, err := requireIpmCameraNum(control)
+		if err != nil {
+			return nil, cameraNum, err
+		}
+		payload := []byte{byte(cameraNum), 0}
+		if control.EvenShow != nil && *control.EvenShow {
+			payload[1] = 1
+		}
+		return payload, cameraNum, nil
+	case cTCPHCContinuousSampleOff:
+		cameraNum, err := requireIpmCameraNum(control)
+		if err != nil {
+			return nil, cameraNum, err
+		}
+		return []byte{byte(cameraNum)}, cameraNum, nil
+	case cTCPHCShowBlobOn:
+		cameraNum, err := requireIpmCameraNum(control)
+		if err != nil {
+			return nil, cameraNum, err
+		}
+		payload := make([]byte, 4)
+		binary.LittleEndian.PutUint32(payload, uint32(cameraNum))
+		return payload, cameraNum, nil
+	default:
+		return nil, -1, fmt.Errorf("unsupported IPM camera command: 0x%04X", uint32(commandID))
+	}
+}
+
+func requireIpmCameraNum(control webSocketControlMessage) (int, error) {
+	if control.CameraNum == nil {
+		return 0, errors.New("empty cameraNum")
+	}
+	cameraNum := *control.CameraNum
+	if cameraNum < 0 || cameraNum >= cTCPServerMaxCameraNum {
+		return cameraNum, fmt.Errorf("cameraNum out of range: %d", cameraNum)
+	}
+	return cameraNum, nil
+}
+
+func encodeIpmWhiteBalancePayload(values []int) ([]byte, error) {
+	const whiteBalancePayloadBytes = 24
+	if len(values) != whiteBalancePayloadBytes {
+		return nil, fmt.Errorf("whiteBalancePayload length=%d, want %d", len(values), whiteBalancePayloadBytes)
+	}
+	payload := make([]byte, whiteBalancePayloadBytes)
+	for i, value := range values {
+		if value < 0 || value > 255 {
+			return nil, fmt.Errorf("whiteBalancePayload[%d] out of byte range: %d", i, value)
+		}
+		payload[i] = byte(value)
+	}
+	return payload, nil
+}
+
 func SendSysConfigData(control webSocketControlMessage) (int, int32, int) { // 发送系统数据
 	destID := normalizeDropDataDestID(control)
 	if control.SysConfig == nil {
@@ -1037,7 +1410,7 @@ func SendSysConfigData(control webSocketControlMessage) (int, int32, int) { // �
 
 	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCSysConfig, "", 0)
 	setCTCPServerLastMessage(
-		"WebSocket saveSysConfig: sending HC_CMD_SYS_CONFIG(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, subsys=%d, exits=%d, classify=0x%02X, cir=0x%02X, uv=0x%02X, weight=0x%02X, internal=0x%02X, ultrasonic=0x%02X",
+		"WebSocket saveSysConfig: sending HC_CMD_SYS_CONFIG(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, subsys=%d, exits=%d, systemInfo=0x%04X low9=%09b, classify=0x%02X, cir=0x%02X, uv=0x%02X, weight=0x%02X, internal=0x%02X, ultrasonic=0x%02X",
 		uint32(cTCPHCSysConfig),
 		uint32(destID),
 		targetIP,
@@ -1045,6 +1418,8 @@ func SendSysConfigData(control webSocketControlMessage) (int, int32, int) { // �
 		len(payload),
 		sysConfig.NSubsysNum,
 		sysConfig.NExitNum,
+		uint16(sysConfig.NSystemInfo),
+		uint16(sysConfig.NSystemInfo&0x01FF),
 		sysConfig.NClassificationInfo,
 		sysConfig.CIRClassifyType,
 		sysConfig.UVClassifyType,
@@ -1075,14 +1450,54 @@ func requestStGlobalAfterSysConfig(destID int32) {
 	}()
 }
 
+func requestStGlobalAfterParasInfo(destID int32) {
+	go func() {
+		time.Sleep(webSocketSysConfigRefreshDelay)
+		fsmID := encodeSubsys(getSubsysIndex(destID))
+		if result := RequestStGlobalFromFSM(fsmID); result != 0 {
+			setCTCPServerLastMessage("WebSocket saveParasInfo refresh StGlobal failed: fsm=0x%04X, dest=0x%04X, result=%d", uint32(fsmID), uint32(destID), result)
+			return
+		}
+		setCTCPServerLastMessage("WebSocket saveParasInfo refresh StGlobal requested: fsm=0x%04X, dest=0x%04X", uint32(fsmID), uint32(destID))
+	}()
+}
+
+func requestStGlobalAfterConfigCommand(topic string, destID int32) {
+	go func() {
+		fsmID := encodeSubsys(getSubsysIndex(destID))
+		delays := []time.Duration{
+			webSocketSysConfigRefreshDelay,
+			1500 * time.Millisecond,
+			3 * time.Second,
+		}
+		for index, delay := range delays {
+			time.Sleep(delay)
+			if result := RequestStGlobalFromFSM(fsmID); result != 0 {
+				setCTCPServerLastMessage("WebSocket %s refresh StGlobal failed: attempt=%d, fsm=0x%04X, dest=0x%04X, result=%d", topic, index+1, uint32(fsmID), uint32(destID), result)
+				return
+			}
+			setCTCPServerLastMessage("WebSocket %s refresh StGlobal requested: attempt=%d, fsm=0x%04X, dest=0x%04X", topic, index+1, uint32(fsmID), uint32(destID))
+		}
+	}()
+}
+
 func SendSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
 	destID := normalizeDropDataDestID(control)
-	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
+	targetDestID := destID
+	if destID < 0 {
+		if control.FSMID != 0 {
+			targetDestID = control.FSMID
+		} else {
+			targetDestID = cTCPDefaultFSMID
+		}
+	}
+	targetIP, targetPort := resolveCTCPTarget(targetDestID, commandID, "", 0)
 	setCTCPServerLastMessage(
-		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=0 bytes",
+		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, targetDest=0x%04X, target=%s:%d, payload=0 bytes",
 		topic,
 		uint32(commandID),
 		uint32(destID),
+		uint32(targetDestID),
 		targetIP,
 		targetPort,
 	)
@@ -1095,6 +1510,80 @@ func SendSimpleFSMCommand(topic string, commandID int32, control webSocketContro
 
 	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X", topic, uint32(commandID), uint32(destID))
 	return 0, destID, 0
+}
+
+func SendSimpleWAMCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeWAMDestID(control)
+	return sendWAMCommand(topic, commandID, destID, nil)
+}
+
+func SendSimpleWAMChannelCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeWAMChannelDestID(control)
+	return sendWAMCommand(topic, commandID, destID, nil)
+}
+
+func SendWAMResetAD(control webSocketControlMessage) (int, int32, int) {
+	resetAD := StResetAD{}
+	if control.ResetADValue != nil && *control.ResetADValue != 0 {
+		resetAD.Value = 1
+	}
+	payload, err := encodeResetADPayload(resetAD)
+	destID := normalizeWAMChannelDestID(control)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket wamResetAd failed: encode StResetAD: %v", err)
+		return -1, destID, 0
+	}
+	return sendWAMCommand("wamResetAd", cTCPHCWAMResetAD, destID, payload)
+}
+
+func SendWAMWeightInfoData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeWAMChannelDestID(control)
+	if control.WeightInfo == nil {
+		setCTCPServerLastMessage("WebSocket saveWamWeightInfo failed: empty StWeightBaseInfo, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+	payload, err := encodeWeightBaseInfoPayload(*control.WeightInfo)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveWamWeightInfo failed: encode StWeightBaseInfo: %v", err)
+		return -1, destID, 0
+	}
+	return sendWAMCommand("saveWamWeightInfo", cTCPHCWAMWeightInfo, destID, payload)
+}
+
+func SendWAMGlobalWeightInfoData(control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeWAMDestID(control)
+	if control.GlobalWeightInfo == nil {
+		setCTCPServerLastMessage("WebSocket saveWamGlobalWeightInfo failed: empty StGlobalWeightBaseInfo, dest=0x%04X", uint32(destID))
+		return -1, destID, 0
+	}
+	payload, err := encodeGlobalWeightBaseInfoPayload(*control.GlobalWeightInfo)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveWamGlobalWeightInfo failed: encode StGlobalWeightBaseInfo: %v", err)
+		return -1, destID, 0
+	}
+	return sendWAMCommand("saveWamGlobalWeightInfo", cTCPHCWAMGlobalWeightInfo, destID, payload)
+}
+
+func sendWAMCommand(topic string, commandID int32, destID int32, payload []byte) (int, int32, int) {
+	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
+	setCTCPServerLastMessage(
+		"WebSocket %s: sending WAM cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes",
+		topic,
+		uint32(commandID),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, commandID, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket %s failed: WAM cmd=0x%04X result=%d", topic, uint32(commandID), result)
+		return result, destID, len(payload)
+	}
+
+	setCTCPServerLastMessage("WebSocket %s success: WAM cmd=0x%04X sent, dest=0x%04X", topic, uint32(commandID), uint32(destID))
+	return 0, destID, len(payload)
 }
 
 func cacheLatestGradeInfo(destID int32, grade StGradeInfo) {
@@ -1151,6 +1640,38 @@ func normalizeDropDataDestID(control webSocketControlMessage) int32 { //标准�
 		return control.FSMID
 	}
 	return cTCPDefaultFSMID
+}
+
+func normalizeWAMDestID(control webSocketControlMessage) int32 {
+	destID := control.DestID
+	if destID == 0 {
+		destID = control.FSMID
+	}
+	if destID == 0 {
+		destID = cTCPDefaultFSMID
+	}
+	subsysBits := destID & 0x0F00
+	if subsysBits == 0 {
+		subsysBits = cTCPDefaultFSMID & 0x0F00
+	}
+	return subsysBits | 0x00D0
+}
+
+func normalizeWAMChannelDestID(control webSocketControlMessage) int32 {
+	if control.DestID != 0 && (control.DestID&0x000F) != 0 {
+		return control.DestID
+	}
+	channelIndex := 0
+	if control.ChannelIndex != nil {
+		channelIndex = *control.ChannelIndex
+	}
+	if channelIndex < 0 {
+		channelIndex = 0
+	}
+	if channelIndex >= cTCPMaxChannelNum {
+		channelIndex = cTCPMaxChannelNum - 1
+	}
+	return normalizeWAMDestID(control) | int32(channelIndex+1)
 }
 
 func applyGradeDropAction(grade *StGradeInfo, action string, exitNo int, grades []webSocketDropGrade) error {
@@ -1289,6 +1810,18 @@ func encodeGradeInfoPayload(grade StGradeInfo) ([]byte, error) {
 	return payload, nil
 }
 
+func encodeParasInfoPayload(paras StParas) ([]byte, error) {
+	size := int(unsafe.Sizeof(paras))
+	if size != cTCP48StParasWireSize {
+		return nil, fmt.Errorf("sizeof(StParas)=%d, expected=%d", size, cTCP48StParasWireSize)
+	}
+
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&paras)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
 func encodeMotorInfoPayload(motor StMotorInfo) ([]byte, error) {
 	size := int(unsafe.Sizeof(motor))
 	if size != cTCP48StMotorInfoWireSize {
@@ -1297,6 +1830,54 @@ func encodeMotorInfoPayload(motor StMotorInfo) ([]byte, error) {
 
 	payload := make([]byte, size)
 	src := unsafe.Slice((*byte)(unsafe.Pointer(&motor)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeGlobalExitInfoPayload(globalExitInfo StGlobalExitInfo) ([]byte, error) {
+	size := int(unsafe.Sizeof(globalExitInfo))
+	if size != cTCP48StGlobalExitInfoSize {
+		return nil, fmt.Errorf("sizeof(StGlobalExitInfo)=%d, expected=%d", size, cTCP48StGlobalExitInfoSize)
+	}
+
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&globalExitInfo)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeWeightBaseInfoPayload(weightInfo StWeightBaseInfo) ([]byte, error) {
+	size := int(unsafe.Sizeof(weightInfo))
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&weightInfo)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeGlobalWeightBaseInfoPayload(globalWeightInfo StGlobalWeightBaseInfo) ([]byte, error) {
+	size := int(unsafe.Sizeof(globalWeightInfo))
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&globalWeightInfo)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeResetADPayload(resetAD StResetAD) ([]byte, error) {
+	size := int(unsafe.Sizeof(resetAD))
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&resetAD)), size)
+	copy(payload, src)
+	return payload, nil
+}
+
+func encodeExitInfoPayload(exitInfo StExitInfo) ([]byte, error) {
+	size := int(unsafe.Sizeof(exitInfo))
+	if size != cTCP48StExitInfoWireSize {
+		return nil, fmt.Errorf("sizeof(StExitInfo)=%d, expected=%d", size, cTCP48StExitInfoWireSize)
+	}
+
+	payload := make([]byte, size)
+	src := unsafe.Slice((*byte)(unsafe.Pointer(&exitInfo)), size)
 	copy(payload, src)
 	return payload, nil
 }

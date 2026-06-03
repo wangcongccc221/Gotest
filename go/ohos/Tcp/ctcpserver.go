@@ -86,13 +86,22 @@ type cTCPStoredPayload struct {
 	ReceivedAt time.Time
 }
 
-type cTCPStGlobalClassifyFieldsSnapshot struct {
+type cTCPStParasImageFieldsSnapshot struct {
 	RemoteAddr string
 	SrcID      int32
 	DstID      int32
 	SubsysID   int32
-	Summary    string
 	ReceivedAt time.Time
+	Paras      [12]StParas
+}
+
+type cTCPStGlobalExitInfoSnapshot struct {
+	RemoteAddr string
+	SrcID      int32
+	DstID      int32
+	SubsysID   int32
+	ReceivedAt time.Time
+	GExit      StGlobalExitInfo
 }
 
 type cTCPServer struct {
@@ -114,18 +123,15 @@ var (
 	cTCPPayloadMu    sync.Mutex
 	cTCPPayloadByCmd = make(map[string]cTCPStoredPayload)
 
-	cTCPStStatisticsLogMu           sync.Mutex
-	cTCPStStatisticsLogLastBySubsys = make(map[int32]time.Time)
-	cTCPStStatisticsLogPrevBySubsys = make(map[int32]StStatistics)
+	cTCPStParasImageFieldsMu        sync.Mutex
+	cTCPStParasImageFieldsLatest    cTCPStParasImageFieldsSnapshot
+	cTCPStParasImageFieldsHasLatest bool
+	cTCPStParasImageFieldsStop      chan struct{}
 
-	cTCPStGlobalConfigMu sync.Mutex
-	cTCPLastNSubsysNum   uint8
-	cTCPLastNChannelInfo [4]uint8
-
-	cTCPStGlobalClassifyFieldsMu        sync.Mutex
-	cTCPStGlobalClassifyFieldsLatest    cTCPStGlobalClassifyFieldsSnapshot
-	cTCPStGlobalClassifyFieldsHasLatest bool
-	cTCPStGlobalClassifyFieldsStop      chan struct{}
+	cTCPStGlobalExitInfoMu        sync.Mutex
+	cTCPStGlobalExitInfoLatest    cTCPStGlobalExitInfoSnapshot
+	cTCPStGlobalExitInfoHasLatest bool
+	cTCPStGlobalExitInfoStop      chan struct{}
 )
 
 func StartCTCPServer() int {
@@ -166,15 +172,12 @@ func StartCTCPServer() int {
 	goSz := int(unsafe.Sizeof(StGlobal{}))
 	setCTCPServerLastMessage("CTCP startup: sizeof(StGlobal)=%d 字节, 线宽常量 cTCP48StGlobalExpectedSize=%d",
 		goSz, cTCP48StGlobalExpectedSize)
-	appendCTCPLogChunks("CTCP startup StGlobalLayoutReport", StGlobalLayoutReport())
-	setCTCPServerLastMessage("CTCP startup: StGlobal 全量 JSON 在收到 FSM_CMD_CONFIG(0x1000) 后写入日志（HiLog 搜「CTCP StGlobal 全量」）。")
 	LoadStExitInfosFromLocalConfig()
 	LoadExitDisplayInfoFromLocalConfig()
 	LoadExitAdditionalTextInfoFromLocalConfig()
 	LoadLevelAuxConfigInfoFromLocalConfig()
-	StartStGradeInfoPeriodicLog()
-	StartStMotorInfoPeriodicLog()
-	StartStGlobalClassifyFieldsPeriodicLog()
+	StartStParasImageFieldsPeriodicLog()
+	StartStGlobalExitInfoPeriodicLog()
 	return cTCPServerStatPort
 }
 
@@ -217,262 +220,254 @@ func appendPayloadHexChunks(tag string, payload []byte) {
 	appendCTCPLogChunks(tag+" 原始字节HEX", b.String())
 }
 
-func setLastSysConfigSummary(nSubsysNum uint8, nChannelInfo [4]uint8) {
-	cTCPStGlobalConfigMu.Lock()
-	cTCPLastNSubsysNum = nSubsysNum
-	cTCPLastNChannelInfo = nChannelInfo
-	cTCPStGlobalConfigMu.Unlock()
-}
-
-func lastSysConfigSummary() (uint8, [4]uint8) {
-	cTCPStGlobalConfigMu.Lock()
-	defer cTCPStGlobalConfigMu.Unlock()
-	return cTCPLastNSubsysNum, cTCPLastNChannelInfo
-}
-
-func stGlobalClassifyFieldsSummary(stg StGlobal) string {
-	sys := stg.Sys
-	return fmt.Sprintf(
-		"nClassificationInfo=%d(0x%02X), CIRClassifyType=%d(0x%02X), UVClassifyType=%d(0x%02X), WeightClassifyTpye=%d(0x%02X), InternalClassifyType=%d(0x%02X), UltrasonicClassifyType=%d(0x%02X)",
-		sys.NClassificationInfo,
-		sys.NClassificationInfo,
-		sys.CIRClassifyType,
-		sys.CIRClassifyType,
-		sys.UVClassifyType,
-		sys.UVClassifyType,
-		sys.WeightClassifyTpye,
-		sys.WeightClassifyTpye,
-		sys.InternalClassifyType,
-		sys.InternalClassifyType,
-		sys.UltrasonicClassifyType,
-		sys.UltrasonicClassifyType,
-	)
-}
-
-func cacheStGlobalClassifyFields(remoteAddr string, head cTCPServerCommandHead, stg StGlobal) {
-	cTCPStGlobalClassifyFieldsMu.Lock()
-	cTCPStGlobalClassifyFieldsLatest = cTCPStGlobalClassifyFieldsSnapshot{
+func cacheStParasImageFields(remoteAddr string, head cTCPServerCommandHead, stg StGlobal) {
+	cTCPStParasImageFieldsMu.Lock()
+	cTCPStParasImageFieldsLatest = cTCPStParasImageFieldsSnapshot{
 		RemoteAddr: remoteAddr,
 		SrcID:      head.NSrcId,
 		DstID:      head.NDstId,
 		SubsysID:   stg.NSubsysId,
-		Summary:    stGlobalClassifyFieldsSummary(stg),
 		ReceivedAt: time.Now(),
+		Paras:      stg.Paras,
 	}
-	cTCPStGlobalClassifyFieldsHasLatest = true
-	cTCPStGlobalClassifyFieldsMu.Unlock()
+	cTCPStParasImageFieldsHasLatest = true
+	cTCPStParasImageFieldsMu.Unlock()
 }
 
-func latestStGlobalClassifyFieldsSnapshot() (cTCPStGlobalClassifyFieldsSnapshot, bool) {
-	cTCPStGlobalClassifyFieldsMu.Lock()
-	defer cTCPStGlobalClassifyFieldsMu.Unlock()
-	return cTCPStGlobalClassifyFieldsLatest, cTCPStGlobalClassifyFieldsHasLatest
+func latestStParasImageFieldsSnapshot() (cTCPStParasImageFieldsSnapshot, bool) {
+	cTCPStParasImageFieldsMu.Lock()
+	defer cTCPStParasImageFieldsMu.Unlock()
+	return cTCPStParasImageFieldsLatest, cTCPStParasImageFieldsHasLatest
 }
 
-func LogLatestStGlobalClassifyFields() {
-	snapshot, ok := latestStGlobalClassifyFieldsSnapshot()
-	if !ok {
-		return
+func cacheStGlobalExitInfo(remoteAddr string, head cTCPServerCommandHead, stg StGlobal) {
+	cTCPStGlobalExitInfoMu.Lock()
+	cTCPStGlobalExitInfoLatest = cTCPStGlobalExitInfoSnapshot{
+		RemoteAddr: remoteAddr,
+		SrcID:      head.NSrcId,
+		DstID:      head.NDstId,
+		SubsysID:   stg.NSubsysId,
+		ReceivedAt: time.Now(),
+		GExit:      stg.GExit,
 	}
-	appendCTCPLogChunks(
-		"CTCP StGlobal 分类字段 1秒打印",
-		fmt.Sprintf(
-			"remote=%s, src=0x%04X, dst=0x%04X, nSubsysId=%d, cachedAt=%s, %s",
-			snapshot.RemoteAddr,
-			uint32(snapshot.SrcID),
-			uint32(snapshot.DstID),
-			snapshot.SubsysID,
-			snapshot.ReceivedAt.Format("15:04:05.000"),
-			snapshot.Summary,
-		),
+	cTCPStGlobalExitInfoHasLatest = true
+	cTCPStGlobalExitInfoMu.Unlock()
+}
+
+func latestStGlobalExitInfoSnapshot() (cTCPStGlobalExitInfoSnapshot, bool) {
+	cTCPStGlobalExitInfoMu.Lock()
+	defer cTCPStGlobalExitInfoMu.Unlock()
+	return cTCPStGlobalExitInfoLatest, cTCPStGlobalExitInfoHasLatest
+}
+
+func formatStFruitCupImageFields(index int, cup StFruitCup) string {
+	return fmt.Sprintf(
+		"cup%d{NLeft=%v,NTop=%d,NBottom=%d,NOffsetX=%d,NOffsetY=%d}",
+		index,
+		cup.NLeft,
+		cup.NTop,
+		cup.NBottom,
+		cup.NOffsetX,
+		cup.NOffsetY,
 	)
 }
 
-func StartStGlobalClassifyFieldsPeriodicLog() {
-	StartStGlobalClassifyFieldsPeriodicLogWithInterval(time.Second)
+func formatStColorCameraParasFields(index int, camera StCameraParas) string {
+	return fmt.Sprintf(
+		"Color%d{MeanValue={R=%d,G=%d,B=%d},NShutter=%d,FGammaCorrection=%.3f,NTriggerDelay=%d,NDetectionThreshold=%v,NDetectWhiteTh=%v,FPixelRatio=%v,FFruitCupRangeTh=%v,NXYEdgeBreakTh=%v,NROIOffsetY=%v,CCameraNum=%d,%s,%s}",
+		index,
+		camera.MeanValue.MeanR,
+		camera.MeanValue.MeanG,
+		camera.MeanValue.MeanB,
+		camera.NShutter,
+		camera.FGammaCorrection,
+		camera.NTriggerDelay,
+		camera.NDetectionThreshold,
+		camera.NDetectWhiteTh,
+		camera.FPixelRatio,
+		camera.FFruitCupRangeTh,
+		camera.NXYEdgeBreakTh,
+		camera.NROIOffsetY,
+		camera.CCameraNum,
+		formatStFruitCupImageFields(0, camera.Cup[0]),
+		formatStFruitCupImageFields(1, camera.Cup[1]),
+	)
 }
 
-func StartStGlobalClassifyFieldsPeriodicLogWithInterval(interval time.Duration) {
+func formatStIRCameraParasFields(index int, camera StIRCameraParas) string {
+	return fmt.Sprintf(
+		"NIR%d{NShutter=%d,FGammaCorrection=%.3f,NTriggerDelay=%d,NIRDetectionThreshold=%v,FPixelRatio=%v,FFruitCupRangeTh=%v,NXYEdgeBreakTh=%v,NROIOffsetY=%v,CCameraNum=%d,%s,%s}",
+		index,
+		camera.NShutter,
+		camera.FGammaCorrection,
+		camera.NTriggerDelay,
+		camera.NIRDetectionThreshold,
+		camera.FPixelRatio,
+		camera.FFruitCupRangeTh,
+		camera.NXYEdgeBreakTh,
+		camera.NROIOffsetY,
+		camera.CCameraNum,
+		formatStFruitCupImageFields(0, camera.Cup[0]),
+		formatStFruitCupImageFields(1, camera.Cup[1]),
+	)
+}
+
+func formatStParasImageFieldsLine(ipmIndex int, paras StParas) string {
+	parts := []string{fmt.Sprintf("ipm%02d NCupNum=%d", ipmIndex+1, paras.NCupNum)}
+	for cameraIndex, camera := range paras.CameraParas {
+		parts = append(parts, formatStColorCameraParasFields(cameraIndex, camera))
+	}
+	for cameraIndex, camera := range paras.IRCameraParas {
+		parts = append(parts, formatStIRCameraParasFields(cameraIndex, camera))
+	}
+	return strings.Join(parts, " | ")
+}
+
+func LogLatestStParasImageFields() {
+	snapshot, ok := latestStParasImageFieldsSnapshot()
+	if !ok {
+		return
+	}
+	setCTCPServerLastMessage(
+		"CTCP StParas 图像区域/偏移 10秒打印: remote=%s, src=0x%04X, dst=0x%04X, nSubsysId=%d, cachedAt=%s",
+		snapshot.RemoteAddr,
+		uint32(snapshot.SrcID),
+		uint32(snapshot.DstID),
+		snapshot.SubsysID,
+		snapshot.ReceivedAt.Format("15:04:05.000"),
+	)
+	for ipmIndex, paras := range snapshot.Paras {
+		setCTCPServerLastMessage("CTCP StParas 图像区域/偏移 10秒打印: %s", formatStParasImageFieldsLine(ipmIndex, paras))
+	}
+}
+
+func StartStParasImageFieldsPeriodicLog() {
+	StartStParasImageFieldsPeriodicLogWithInterval(10 * time.Second)
+}
+
+func StartStParasImageFieldsPeriodicLogWithInterval(interval time.Duration) {
 	if interval <= 0 {
-		interval = time.Second
+		interval = 10 * time.Second
 	}
 
-	cTCPStGlobalClassifyFieldsMu.Lock()
-	if cTCPStGlobalClassifyFieldsStop != nil {
-		cTCPStGlobalClassifyFieldsMu.Unlock()
+	cTCPStParasImageFieldsMu.Lock()
+	if cTCPStParasImageFieldsStop != nil {
+		cTCPStParasImageFieldsMu.Unlock()
 		return
 	}
 	stop := make(chan struct{})
-	cTCPStGlobalClassifyFieldsStop = stop
-	cTCPStGlobalClassifyFieldsMu.Unlock()
+	cTCPStParasImageFieldsStop = stop
+	cTCPStParasImageFieldsMu.Unlock()
 
 	go func() {
 		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
-		setCTCPServerLastMessage("StGlobal 分类字段周期输出已启动: 每 %s 打印一次", interval)
+		setCTCPServerLastMessage("StParas 图像区域/偏移周期输出已启动: 每 %s 打印一次", interval)
 		for {
 			select {
 			case <-stop:
-				setCTCPServerLastMessage("StGlobal 分类字段周期输出已停止")
+				setCTCPServerLastMessage("StParas 图像区域/偏移周期输出已停止")
 				return
 			case <-ticker.C:
-				LogLatestStGlobalClassifyFields()
+				LogLatestStParasImageFields()
 			}
 		}
 	}()
 }
 
-func StopStGlobalClassifyFieldsPeriodicLog() {
-	cTCPStGlobalClassifyFieldsMu.Lock()
-	stop := cTCPStGlobalClassifyFieldsStop
-	cTCPStGlobalClassifyFieldsStop = nil
-	cTCPStGlobalClassifyFieldsLatest = cTCPStGlobalClassifyFieldsSnapshot{}
-	cTCPStGlobalClassifyFieldsHasLatest = false
-	cTCPStGlobalClassifyFieldsMu.Unlock()
+func StopStParasImageFieldsPeriodicLog() {
+	cTCPStParasImageFieldsMu.Lock()
+	stop := cTCPStParasImageFieldsStop
+	cTCPStParasImageFieldsStop = nil
+	cTCPStParasImageFieldsLatest = cTCPStParasImageFieldsSnapshot{}
+	cTCPStParasImageFieldsHasLatest = false
+	cTCPStParasImageFieldsMu.Unlock()
 	if stop != nil {
 		close(stop)
 	}
 }
 
-func stStatisticsSubsysIndex(subsysID int32) int {
-	if subsysID >= 1 && subsysID <= cTCPServerMaxSubsysNum {
-		return int(subsysID - 1)
-	}
-	index := int(((subsysID >> 8) & 0x0F) - 1)
-	if index >= 0 && index < cTCPServerMaxSubsysNum {
-		return index
-	}
-	return -1
-}
-
-func sumUint64Array48(values [48]uint64) uint64 {
-	var sum uint64
-	for _, value := range values {
-		sum += value
-	}
-	return sum
-}
-
-func sumUint64Array256(values [256]uint64) uint64 {
-	var sum uint64
-	for _, value := range values {
-		sum += value
-	}
-	return sum
-}
-
-func sumInt32Array(values [256]int32) int64 {
-	var sum int64
-	for _, value := range values {
-		sum += int64(value)
-	}
-	return sum
-}
-
-func sumUint32Array(values [48]uint32) uint64 {
-	var sum uint64
-	for _, value := range values {
-		sum += uint64(value)
-	}
-	return sum
-}
-
-func stStatisticsPreview(state StStatistics, payload []byte) string {
-	nSubsysNum, nChannelInfo := lastSysConfigSummary()
-	subsysIndex := stStatisticsSubsysIndex(state.NSubsysId)
-	channelNum := uint8(0)
-	if subsysIndex >= 0 && subsysIndex < len(nChannelInfo) {
-		channelNum = nChannelInfo[subsysIndex]
-	}
-	effectiveCupNum := int64(state.NTotalCupNum) * int64(channelNum)
+func formatStGlobalExitInfoFields(info StGlobalExitInfo) string {
 	return fmt.Sprintf(
-		"payload=%d bytes, sizeof(StStatistics)=%d bytes, nSubsysNum=%d, nChannelInfo=%v, nSubsysId=%d, channelNum=%d, "+
-			"nChannelTotalCount=%d, nChannelWeightCount=%d, nTotalCupNum=%d, "+
-			"effectiveCupNum=nTotalCupNum*channelNum=%d, "+
-			"nInterval=%d, nIntervalSumperminute=%d, nPulseInterval=%d, nNetState=%d, nWeightSetting=%d, "+
-			"sumGradeCount=%d, sumWeightGradeCount=%d, sumExitCount=%d, sumExitWeightCount=%d, sumBoxGradeCount=%d, sumBoxGradeWeight=%d, sumExitBoxNum=%d, "+
-			"gradeCount[0:8]=%v, weightGradeCount[0:8]=%v, exitCount[0:12]=%v, exitWeightCount[0:12]=%v, exitBoxNum[0:12]=%v",
-		len(payload),
-		int(unsafe.Sizeof(StStatistics{})),
-		nSubsysNum,
-		nChannelInfo,
-		state.NSubsysId,
-		channelNum,
-		state.NChannelTotalCount,
-		state.NChannelWeightCount,
-		state.NTotalCupNum,
-		effectiveCupNum,
-		state.NInterval,
-		state.NIntervalSumperminute,
-		state.NPulseInterval,
-		state.NNetState,
-		state.NWeightSetting,
-		sumUint64Array256(state.NGradeCount),
-		sumUint64Array256(state.NWeightGradeCount),
-		sumUint64Array48(state.NExitCount),
-		sumUint64Array48(state.NExitWeightCount),
-		sumInt32Array(state.NBoxGradeCount),
-		sumInt32Array(state.NBoxGradeWeight),
-		sumUint32Array(state.ExitBoxNum),
-		state.NGradeCount[:8],
-		state.NWeightGradeCount[:8],
-		state.NExitCount[:12],
-		state.NExitWeightCount[:12],
-		state.ExitBoxNum[:12],
+		"NPulse=%d, VersionFlag=%d, NLabelPulse=%d, NDriverPin=%v, DelayTime=%v, HoldTime=%v",
+		info.NPulse,
+		info.VersionFlag,
+		info.NLabelPulse,
+		info.NDriverPin,
+		info.DelayTime,
+		info.HoldTime,
 	)
 }
 
-func stStatisticsManualDeltaSummary(prev StStatistics, current StStatistics) string {
-	_, nChannelInfo := lastSysConfigSummary()
-	subsysIndex := stStatisticsSubsysIndex(current.NSubsysId)
-	channelNum := uint8(0)
-	if subsysIndex >= 0 && subsysIndex < len(nChannelInfo) {
-		channelNum = nChannelInfo[subsysIndex]
-	}
-
-	deltaCount := int64(current.NChannelTotalCount) - int64(prev.NChannelTotalCount)
-	deltaWeight := int64(current.NChannelWeightCount) - int64(prev.NChannelWeightCount)
-	deltaCup := int64(current.NTotalCupNum-prev.NTotalCupNum) * int64(channelNum)
-	efficiency := 0.0
-	if deltaCup > 0 {
-		efficiency = float64(deltaCount) * 100.0 / float64(deltaCup)
-	}
-	return fmt.Sprintf(
-		"deltaSinceLastPrint: deltaCount=%d, deltaWeight=%d, deltaCup=nTotalCupNumDelta*channelNum=%d, manualEfficiency=deltaCount*100/deltaCup=%.1f%%",
-		deltaCount,
-		deltaWeight,
-		deltaCup,
-		efficiency,
-	)
-}
-
-func logStStatisticsEvery3Seconds(remoteAddr string, head cTCPServerCommandHead, state StStatistics, payload []byte) {
-	cTCPStStatisticsLogMu.Lock()
-	now := time.Now()
-	last := cTCPStStatisticsLogLastBySubsys[state.NSubsysId]
-	if !last.IsZero() && now.Sub(last) < 3*time.Second {
-		cTCPStStatisticsLogMu.Unlock()
+func LogLatestStGlobalExitInfo() {
+	size := int(unsafe.Sizeof(StGlobalExitInfo{}))
+	snapshot, ok := latestStGlobalExitInfoSnapshot()
+	if !ok {
+		setCTCPServerLastMessage(
+			"CTCP StGlobalExitInfo 全字段 5秒打印: sizeof(StGlobalExitInfo)=%d bytes, expected=%d bytes, 尚无缓存数据（等待 FSM_CMD_CONFIG/StGlobal）",
+			size,
+			cTCP48StGlobalExitInfoSize,
+		)
 		return
 	}
-	prev, hasPrev := cTCPStStatisticsLogPrevBySubsys[state.NSubsysId]
-	cTCPStStatisticsLogLastBySubsys[state.NSubsysId] = now
-	cTCPStStatisticsLogPrevBySubsys[state.NSubsysId] = state
-	cTCPStStatisticsLogMu.Unlock()
-
-	deltaSummary := "deltaSinceLastPrint: first sample for this subsys"
-	if hasPrev {
-		deltaSummary = stStatisticsManualDeltaSummary(prev, state)
-	}
 	setCTCPServerLastMessage(
-		"CTCP StStatistics 3秒打印: remote=%s, src=0x%04X, dst=0x%04X, %s, %s",
-		remoteAddr,
-		uint32(head.NSrcId),
-		uint32(head.NDstId),
-		stStatisticsPreview(state, payload),
-		deltaSummary,
+		"CTCP StGlobalExitInfo 全字段 5秒打印: remote=%s, src=0x%04X, dst=0x%04X, nSubsysId=%d, cachedAt=%s, sizeof(StGlobalExitInfo)=%d bytes, expected=%d bytes, %s",
+		snapshot.RemoteAddr,
+		uint32(snapshot.SrcID),
+		uint32(snapshot.DstID),
+		snapshot.SubsysID,
+		snapshot.ReceivedAt.Format("15:04:05.000"),
+		size,
+		cTCP48StGlobalExitInfoSize,
+		formatStGlobalExitInfoFields(snapshot.GExit),
 	)
-	appendCTCPLogChunks("CTCP StStatistics 手算字段 3秒打印", stStatisticsPreview(state, payload)+"\n"+deltaSummary)
-	appendCTCPLogChunks("CTCP StStatistics Go结构体全字段 3秒打印", fmt.Sprintf("%+v", state))
+}
+
+func StartStGlobalExitInfoPeriodicLog() {
+	StartStGlobalExitInfoPeriodicLogWithInterval(5 * time.Second)
+}
+
+func StartStGlobalExitInfoPeriodicLogWithInterval(interval time.Duration) {
+	if interval <= 0 {
+		interval = 5 * time.Second
+	}
+
+	cTCPStGlobalExitInfoMu.Lock()
+	if cTCPStGlobalExitInfoStop != nil {
+		cTCPStGlobalExitInfoMu.Unlock()
+		return
+	}
+	stop := make(chan struct{})
+	cTCPStGlobalExitInfoStop = stop
+	cTCPStGlobalExitInfoMu.Unlock()
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		setCTCPServerLastMessage("StGlobalExitInfo 全字段周期输出已启动: 每 %s 打印一次", interval)
+		LogLatestStGlobalExitInfo()
+		for {
+			select {
+			case <-stop:
+				setCTCPServerLastMessage("StGlobalExitInfo 全字段周期输出已停止")
+				return
+			case <-ticker.C:
+				LogLatestStGlobalExitInfo()
+			}
+		}
+	}()
+}
+
+func StopStGlobalExitInfoPeriodicLog() {
+	cTCPStGlobalExitInfoMu.Lock()
+	stop := cTCPStGlobalExitInfoStop
+	cTCPStGlobalExitInfoStop = nil
+	cTCPStGlobalExitInfoLatest = cTCPStGlobalExitInfoSnapshot{}
+	cTCPStGlobalExitInfoHasLatest = false
+	cTCPStGlobalExitInfoMu.Unlock()
+	if stop != nil {
+		close(stop)
+	}
 }
 
 func normalizeStStatisticsSubsysID(srcID int32, payloadSubsysID int32) int32 {
@@ -505,7 +500,8 @@ func StopCTCPServer() int {
 
 	StopStGradeInfoPeriodicLog()
 	StopStMotorInfoPeriodicLog()
-	StopStGlobalClassifyFieldsPeriodicLog()
+	StopStParasImageFieldsPeriodicLog()
+	StopStGlobalExitInfoPeriodicLog()
 	setCTCPServerLastMessage("CTCP servers stopped")
 	return 0
 }
@@ -750,8 +746,8 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		if err != nil {
 			return
 		}
-		setLastSysConfigSummary(stg.Sys.NSubsysNum, stg.Sys.NChannelInfo)
-		cacheStGlobalClassifyFields(remoteAddr, head, stg)
+		cacheStParasImageFields(remoteAddr, head, stg)
+		cacheStGlobalExitInfo(remoteAddr, head, stg)
 		cacheLatestGradeInfo(head.NSrcId, stg.Grade)
 		stgJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
@@ -769,7 +765,6 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			if err := PublishWebSocketJSON(webSocketTopicStGlobal, stgJSON); err != nil { //发送给前端
 				setCTCPServerLastMessage("CTCP StGlobal WebSocket 推送失败: %v", err)
 			}
-			appendCTCPLogChunks("CTCP StGlobal 全量", stgJSON)
 		} else {
 			setCTCPServerLastMessage("CTCP StGlobal 全量 JSON 生成失败: %v", jsonErr)
 		}
@@ -783,7 +778,6 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		state.NSubsysId = normalizeStStatisticsSubsysID(head.NSrcId, state.NSubsysId)
 
 		// appendPayloadHexChunks("CTCP StStatistics 原始payload", payload)
-		logStStatisticsEvery3Seconds(remoteAddr, head, state, payload)
 
 		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
 		if stateJSON != "" && jsonErr == nil {
@@ -818,7 +812,43 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 	case cmdFSMGetVersion, cmdWAMVersionInfo:
 		setCTCPServerLastMessage("CTCP handled %s: version bytes=%q", cTCPCommandName(head.NCmdId), strings.TrimRight(string(payload), "\x00\r\n "))
 	case cmdFSMWeightInfo, cmdWAMWeightInfo:
-		setCTCPServerLastMessage("CTCP handled %s: raw StWeightResult saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
+		weight, err := ParseData[StWeightResult](payload)
+		if err != nil {
+			setCTCPServerLastMessage("CTCP handled %s: parse StWeightResult failed (%v), payload=%d bytes, need sizeof=%d",
+				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StWeightResult{})))
+			return
+		}
+		setCTCPServerLastMessage(
+			"CTCP StWeightResult 回推: remote=%s, src=0x%04X, dst=0x%04X, cmd=%s, payload=%d bytes, channel=0x%04X, data{CupId=%d, FruitWeight=%.3f, CupWeight=%.3f, DataADFruit=%d, DataADVehicle=%d}, paras{CupAverageWeight=%.3f, AD0=%d, AD1=%d, StandardAD0=%d, StandardAD1=%d}, FVehicleWeight0=%.3f, FVehicleWeight1=%.3f, State=%d",
+			remoteAddr,
+			uint32(head.NSrcId),
+			uint32(head.NDstId),
+			cTCPCommandName(head.NCmdId),
+			len(payload),
+			uint32(weight.NChannelId),
+			weight.Data.NVehicleId,
+			weight.Data.FFruitWeight,
+			weight.Data.FVehicleWeight,
+			weight.Data.NADFruit,
+			weight.Data.NADVehicle,
+			weight.Paras.FCupAverageWeight,
+			weight.Paras.NAD0,
+			weight.Paras.NAD1,
+			weight.Paras.NStandardAD0,
+			weight.Paras.NStandardAD1,
+			weight.FVehicleWeight0,
+			weight.FVehicleWeight1,
+			weight.State,
+		)
+		appendPayloadHexChunks("CTCP StWeightResult 回推", payload)
+		weightJSON, jsonErr := FormatDataFullJSON(weight)
+		if weightJSON != "" && jsonErr == nil {
+			if err := PublishWebSocketJSON(webSocketTopicWeightInfo, weightJSON); err != nil {
+				setCTCPServerLastMessage("CTCP StWeightResult WebSocket 推送失败: %v", err)
+			}
+			return
+		}
+		setCTCPServerLastMessage("CTCP StWeightResult JSON 生成失败: %v", jsonErr)
 	case cmdFSMWaveInfo, cmdWAMWaveInfo:
 		setCTCPServerLastMessage("CTCP handled %s: raw StWaveInfo saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
 	case cmdFSMVersionError, cmdFSMBurnFlashProgress, cmdFSMBootFlashProgress:
@@ -830,7 +860,42 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 	case cmdSIMDisplayOn, cmdSIMInspectionOn, cmdSIMInspectionOff:
 		setCTCPServerLastMessage("CTCP handled %s: raw SIM payload saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
 	case cmdWAMWeightGlobal:
-		setCTCPServerLastMessage("CTCP handled %s: raw StWeightGlobal saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
+		weightGlobal, err := ParseData[StWeightGlobal](payload)
+		if err != nil {
+			setCTCPServerLastMessage("CTCP handled %s: parse StWeightGlobal failed (%v), payload=%d bytes, need sizeof=%d",
+				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StWeightGlobal{})))
+			return
+		}
+		setCTCPServerLastMessage(
+			"CTCP StWeightGlobal 回读: remote=%s, src=0x%04X, dst=0x%04X, nWAMId=0x%04X, gWeight{FFilterParam=%.6f, AD_Filter_ALG=%d, NEffectCupThreshold=%d, NMinGradeThreshold=%d, NCupDeviationThreshold=%d, NCupBreakageThreshold=%d, NBaseCupNum=%d, NTotalCupNums=%v, RefWeight=%d, WeightTh=%d}, weight0{FGADParam=[%.6f %.6f], FTemperatureParams=%.6f, WaveInterval=[%d %d]}",
+			remoteAddr,
+			uint32(head.NSrcId),
+			uint32(head.NDstId),
+			uint32(weightGlobal.NWAMId),
+			weightGlobal.GWeight.FFilterParam,
+			weightGlobal.GWeight.AD_Filter_ALG,
+			weightGlobal.GWeight.NEffectCupThreshold,
+			weightGlobal.GWeight.NMinGradeThreshold,
+			weightGlobal.GWeight.NCupDeviationThreshold,
+			weightGlobal.GWeight.NCupBreakageThreshold,
+			weightGlobal.GWeight.NBaseCupNum,
+			weightGlobal.GWeight.NTotalCupNums,
+			weightGlobal.GWeight.RefWeight,
+			weightGlobal.GWeight.WeightTh,
+			weightGlobal.Weights[0].FGADParam[0],
+			weightGlobal.Weights[0].FGADParam[1],
+			weightGlobal.Weights[0].FTemperatureParams,
+			weightGlobal.Weights[0].WaveInterval[0],
+			weightGlobal.Weights[0].WaveInterval[1],
+		)
+		weightGlobalJSON, jsonErr := FormatDataFullJSON(weightGlobal)
+		if weightGlobalJSON != "" && jsonErr == nil {
+			if err := PublishWebSocketJSON(webSocketTopicWeightGlobal, weightGlobalJSON); err != nil {
+				setCTCPServerLastMessage("CTCP StWeightGlobal WebSocket 推送失败: %v", err)
+			}
+			return
+		}
+		setCTCPServerLastMessage("CTCP StWeightGlobal JSON 生成失败: %v", jsonErr)
 	case cmdIPMImage, cmdIPMImageSplice, cmdIPMImageSpot:
 		setCTCPServerLastMessage("CTCP handled %s: raw image payload saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
 	case cmdIPMAutoBalanceCoefficient:

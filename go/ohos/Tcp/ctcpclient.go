@@ -38,11 +38,41 @@ const (
 
 	cTCPHCDisplayOff     = int32(0x0000) // 关闭显示
 	cTCPHCClearData      = int32(0x0001) // 数据清零
+	cTCPHCTestCupOn      = int32(0x0006) // 果杯测试开，HC-->FSM
+	cTCPHCTestCupOff     = int32(0x0007) // 果杯测试关，HC-->FSM
 	cTCPHCDisplayOn      = int32(0x0019) // 打开显示
 	cTCPHCSysConfig      = int32(0x0050) // 系统配置
 	cTCPHCGradeInfo      = int32(0x0051) // 等级设置 StGradeInfo
+	cTCPHCExitInfo       = int32(0x0052) // 出口信息 StExitInfo
+	cTCPHCParasInfo      = int32(0x0054) // 通道范围参数 StParas
+	cTCPHCGlobalExitInfo = int32(0x0058) // 全局出口信息 StGlobalExitInfo
 	cTCPHCMotorInfo      = int32(0x005C) // 电机使能参数 StMotorInfo
 	cTCPHCColorGradeInfo = int32(0x005D) // 品质等级设置 StGradeInfo
+
+	cTCPHCSingleSample        = int32(0x2000) // 单张图像采集，无 payload
+	cTCPHCContinuousSampleOn  = int32(0x2001) // 连续采集开，payload: StContinousCapture
+	cTCPHCContinuousSampleOff = int32(0x2002) // 连续采集关，payload: StCameraNum
+	cTCPHCShowBlobOn          = int32(0x2003) // 显示 blob 开，payload: int32 cameraNum
+	cTCPHCAutoBalanceOnCamera = int32(0x2004) // 相机自带白平衡，payload: StWhiteBalanceParam
+	cTCPHCAutoBalanceOn       = int32(0x2005) // 启动白平衡，payload: StWhiteBalanceParam
+	cTCPHCSingleSampleSpot    = int32(0x2006) // 单张采集瑕疵图，无 payload
+	cTCPHCShutterAdjustOn     = int32(0x200A) // 快门调节开，无 payload
+	cTCPHCShutterAdjustOff    = int32(0x200B) // 快门调节关，无 payload
+
+	cTCPHCWAMWeightOn          = int32(0x0110) // 启动/请求 WAM 重量参数
+	cTCPHCWAMWeightReset       = int32(0x0111) // 称重复位
+	cTCPHCWAMSimulatedPulseOn  = int32(0x0113) // 内信号源开
+	cTCPHCWAMSimulatedPulseOff = int32(0x0114) // 内信号源关
+	cTCPHCWAMTestCupOn         = int32(0x0115) // 果杯测试开
+	cTCPHCWAMTestCupOff        = int32(0x0116) // 果杯测试关
+	cTCPHCWAMWaveFormOn        = int32(0x0117) // 波形捕捉开
+	cTCPHCWAMWaveFormOff       = int32(0x0118) // 波形捕捉关
+	cTCPHCWAMDataTrackingOn    = int32(0x0119) // 数据追踪开
+	cTCPHCWAMDataTrackingOff   = int32(0x011A) // 数据追踪关
+	cTCPHCWAMResetAD           = int32(0x011B) // AD 归零，payload: StResetAD
+	cTCPHCWAMGlobalWeightInfo  = int32(0x011C) // 全局重量参数，payload: StGlobalWeightBaseInfo
+	cTCPHCWAMWeightInfo        = int32(0x011D) // 通道重量参数，payload: StWeightBaseInfo
+	cTCPHCWAMGetWAMInfo        = int32(0x0F00) // 请求 WAM 版本信息
 )
 
 var cTCPMutex sync.Mutex

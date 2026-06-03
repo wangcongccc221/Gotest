@@ -7,6 +7,25 @@ const DOMAIN = 0x0000;
 
 export default class EntryAbility extends UIAbility {
   private tcpServerLogTimer: number = 0;
+  private nativeServicesStarted: boolean = false;
+
+  private startWebSocketServer(): void {
+    if (!testNapi) {
+      hilog.error(DOMAIN, 'testTag', 'Native module libentry.so export object is undefined, skip WebSocket server start.');
+      return;
+    }
+
+    if (!testNapi.startServer) {
+      hilog.error(DOMAIN, 'testTag', 'Native module libentry.so has no startServer export, skip WebSocket server start.');
+      return;
+    }
+
+    const serverResult = testNapi.startServer();
+    hilog.info(DOMAIN, 'testTag', 'HTTP/WebSocket server start result = %{public}d', serverResult);
+    if (serverResult < 0 && testNapi.nativeLastError) {
+      hilog.error(DOMAIN, 'testTag', 'HTTP/WebSocket server native error: %{public}s', testNapi.nativeLastError());
+    }
+  }
 
   private startTcpServer(): void {
     if (!testNapi) {
@@ -66,6 +85,86 @@ export default class EntryAbility extends UIAbility {
     hilog.info(DOMAIN, 'testTag', 'TCP server stop result = %{public}d', tcpServerResult);
   }
 
+  private startOpcuaServer(): void {
+    if (!testNapi || !testNapi.startOpcuaServer) {
+      hilog.error(DOMAIN, 'testTag', 'Native module has no startOpcuaServer export, skip OPC UA server start.');
+      return;
+    }
+
+    const opcuaServerResult = testNapi.startOpcuaServer();
+    hilog.info(DOMAIN, 'testTag', 'OPC UA server start result = %{public}d', opcuaServerResult);
+  }
+
+  private startModbusServer(): void {
+    if (!testNapi || !testNapi.startModbusServer) {
+      hilog.error(DOMAIN, 'testTag', 'Native module has no startModbusServer export, skip Modbus server start.');
+      return;
+    }
+
+    const modbusServerResult = testNapi.startModbusServer();
+    hilog.info(DOMAIN, 'testTag', 'Modbus TCP server start result = %{public}d', modbusServerResult);
+  }
+
+  private initOrm(): void {
+    if (!testNapi || !testNapi.initOrm) {
+      hilog.error(DOMAIN, 'testTag', 'Native module has no initOrm export, skip ORM init.');
+      return;
+    }
+
+    const ormDatabasePath = `${this.context.databaseDir}/harmony_go_orm.db`;
+    const ormResult = testNapi.initOrm(ormDatabasePath);
+    hilog.info(DOMAIN, 'testTag', 'GORM init result = %{public}d, database = %{public}s', ormResult, ormDatabasePath);
+  }
+
+  private startNativeServices(): void {
+    if (this.nativeServicesStarted) {
+      return;
+    }
+    this.nativeServicesStarted = true;
+
+    this.startWebSocketServer();
+    this.startOpcuaServer();
+    this.startModbusServer();
+    this.initOrm();
+    this.startTcpServer();
+    this.startTcpServerLogPolling();
+  }
+
+  private stopWebSocketServer(): void {
+    if (!testNapi || !testNapi.stopServer) {
+      return;
+    }
+
+    const serverResult = testNapi.stopServer();
+    hilog.info(DOMAIN, 'testTag', 'HTTP/WebSocket server stop result = %{public}d', serverResult);
+  }
+
+  private stopOpcuaServer(): void {
+    if (!testNapi || !testNapi.stopOpcuaServer) {
+      return;
+    }
+
+    const opcuaServerResult = testNapi.stopOpcuaServer();
+    hilog.info(DOMAIN, 'testTag', 'OPC UA server stop result = %{public}d', opcuaServerResult);
+  }
+
+  private stopModbusServer(): void {
+    if (!testNapi || !testNapi.stopModbusServer) {
+      return;
+    }
+
+    const modbusServerResult = testNapi.stopModbusServer();
+    hilog.info(DOMAIN, 'testTag', 'Modbus TCP server stop result = %{public}d', modbusServerResult);
+  }
+
+  private stopNativeServices(): void {
+    this.nativeServicesStarted = false;
+    this.stopTcpServer();
+    this.stopModbusServer();
+    this.stopOpcuaServer();
+    this.stopWebSocketServer();
+  }
+
   onCreate(want: Want, launchParam: AbilityConstant.LaunchParam): void {
     try {
       this.context.getApplicationContext().setColorMode(ConfigurationConstant.ColorMode.COLOR_MODE_NOT_SET);
@@ -77,7 +176,7 @@ export default class EntryAbility extends UIAbility {
   }
 
   onDestroy(): void {
-    this.stopTcpServer();
+    this.stopNativeServices();
     hilog.info(DOMAIN, 'testTag', '%{public}s', 'Ability onDestroy');
   }
 
@@ -91,8 +190,9 @@ export default class EntryAbility extends UIAbility {
         return;
       }
       hilog.info(DOMAIN, 'testTag', 'Succeeded in loading the content.');
-      this.startTcpServer();
-      this.startTcpServerLogPolling();
+      setTimeout(() => {
+        this.startNativeServices();
+      }, 0);
       // 不在 Ability 启动时主动给下位机发 DISPLAY_ON。
       // 现在由前端 WebSocket 连接成功后发送 requestStGlobal，
       // Go 后端收到该信号后再触发 CTCP client，避免前端还没连上就错过 StGlobal。

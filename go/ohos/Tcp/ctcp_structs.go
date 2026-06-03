@@ -11,8 +11,11 @@ import (
 
 const (
 	cTCP48StSysConfigWireSize  = 504
-	cTCP48StGradeInfoWireSize  = 11600
+	cTCP48StGradeInfoWireSize  = 11596
+	cTCP48StParasWireSize      = 928
 	cTCP48StMotorInfoWireSize  = 20
+	cTCP48StGlobalExitInfoSize = 484
+	cTCP48StExitInfoWireSize   = 304
 	cTCP48StGlobalExpectedSize = 28712
 	cTCP48MaxChannelNum        = 12
 	cTCP48MaxIPMNum            = 12
@@ -38,7 +41,7 @@ uint8    // quint8       1
 
 type StGlobal struct {
 	Sys   StSysConfig      // 系统配置   已完成  504
-	Grade StGradeInfo      // 等级信息  已完成  11600
+	Grade StGradeInfo      // 等级信息  L4线宽 11596
 	GExit StGlobalExitInfo //全局出口信息  已完成  484
 
 	//#ifndef
@@ -57,10 +60,9 @@ type StGlobal struct {
 	NSubsysId int32
 	NVersion  int32 //版本号
 
-	// 先注释 后面在使用 查找一下问题
-	// NNetState   uint8
-	// NFsmRestart uint8
-	// NFsmModule  uint8
+	// L4版本没有 nNetState，只有 FSM 重启/模块标志。
+	NFsmRestart uint8
+	NFsmModule  uint8
 }
 
 type StSysConfig struct {
@@ -143,8 +145,7 @@ type StGradeInfo struct {
 	NClassifyType    uint8
 
 	NCheckNum int16
-	//ifdef
-	ForceChannel int16 // 强制通道
+	// L4下位机回包里没有 ForceChannel；否则 StGlobal.gexit 会整体后移 4 字节。
 }
 
 type StColorIntervalItem struct { //等级设置信息,发送给每一个FSM (HC_ID, FSM, HC_CMD_GRADE_INFO, stGradeInfo)
@@ -215,7 +216,16 @@ type StGlobalWeightBaseInfo struct {
 	NBaseCupNum            int16
 	NTotalCupNums          [4]int16
 	RefWeight              int16
-	WeightTh               uint8
+	WeightTh               uint16
+}
+
+type StWeightGlobal struct {
+	NAccuracy uint8
+	NVersion  int32
+	NWAMId    int32
+	CFSMInfo  [30]uint8
+	GWeight   StGlobalWeightBaseInfo
+	Weights   [12]StWeightBaseInfo
 }
 
 type StAnalogDensity struct { //水果设置界面  //128
@@ -259,6 +269,10 @@ type StWeightBaseInfo struct { //IPM参数中的重量信息 16字节
 	FGADParam          [2]float32
 	FTemperatureParams float32
 	WaveInterval       [2]uint16
+}
+
+type StResetAD struct {
+	Value int32
 }
 
 type StOldWeightBaseInfo struct { //IPM参数中的重量信息 16字节
