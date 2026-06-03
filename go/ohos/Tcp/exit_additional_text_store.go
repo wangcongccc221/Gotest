@@ -21,20 +21,29 @@ var (
 )
 
 func LoadExitAdditionalTextInfoFromLocalConfig() {
+	info, err := ReadExitAdditionalTextInfoFromLocalConfig()
+	if err != nil {
+		setCTCPServerLastMessage("出口附加信息配置读取失败: %v", err)
+		return
+	}
+
+	setLastExitAdditionalTextInfoSnapshot(0, info)
+	setCTCPServerLastMessage("出口附加信息配置已加载")
+}
+
+func ReadExitAdditionalTextInfoFromLocalConfig() (ExitAdditionalTextInfo, error) {
 	values := make(map[string]string, cTCP48MaxExitNum)
 	for i := 0; i < cTCP48MaxExitNum; i++ {
 		key := exitAdditionalTextConfigName(i)
 		text, err := database.GetConfigValue(key)
 		if err != nil {
-			setCTCPServerLastMessage("出口附加信息配置读取失败: key=%s, err=%v", key, err)
-			return
+			return ExitAdditionalTextInfo{}, fmt.Errorf("read %s: %w", key, err)
 		}
 		values[key] = text
 	}
 
 	info := parseExitAdditionalTextInfoConfigValues(values)
-	setLastExitAdditionalTextInfoSnapshot(0, info)
-	setCTCPServerLastMessage("出口附加信息配置已加载")
+	return info, nil
 }
 
 func SaveExitAdditionalTextInfoToLocalConfig(fsmID int32, info ExitAdditionalTextInfo) error {

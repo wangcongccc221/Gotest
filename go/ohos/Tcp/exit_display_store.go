@@ -27,12 +27,22 @@ var (
 )
 
 func LoadExitDisplayInfoFromLocalConfig() {
+	info, err := ReadExitDisplayInfoFromLocalConfig()
+	if err != nil {
+		setCTCPServerLastMessage("出口显示名称配置读取失败: %v", err)
+		return
+	}
+
+	setLastExitDisplayInfoSnapshot(0, info)
+	setCTCPServerLastMessage("出口显示名称配置已加载: displayType=%d", info.DisplayType)
+}
+
+func ReadExitDisplayInfoFromLocalConfig() (ExitDisplayInfo, error) {
 	values := make(map[string]string, cTCP48MaxExitNum+1)
 
 	text, err := database.GetConfigValue(cTCPExitDisplayTypeConfigName)
 	if err != nil {
-		setCTCPServerLastMessage("出口显示名称配置读取失败: key=%s, err=%v", cTCPExitDisplayTypeConfigName, err)
-		return
+		return ExitDisplayInfo{}, fmt.Errorf("read %s: %w", cTCPExitDisplayTypeConfigName, err)
 	}
 	values[cTCPExitDisplayTypeConfigName] = text
 
@@ -40,20 +50,16 @@ func LoadExitDisplayInfoFromLocalConfig() {
 		key := exitDisplayNameConfigName(i)
 		text, err := database.GetConfigValue(key)
 		if err != nil {
-			setCTCPServerLastMessage("出口显示名称配置读取失败: key=%s, err=%v", key, err)
-			return
+			return ExitDisplayInfo{}, fmt.Errorf("read %s: %w", key, err)
 		}
 		values[key] = text
 	}
 
 	info, err := parseExitDisplayInfoConfigValues(values)
 	if err != nil {
-		setCTCPServerLastMessage("出口显示名称配置解析失败: %v", err)
-		return
+		return ExitDisplayInfo{}, err
 	}
-
-	setLastExitDisplayInfoSnapshot(0, info)
-	setCTCPServerLastMessage("出口显示名称配置已加载: displayType=%d", info.DisplayType)
+	return info, nil
 }
 
 func SaveExitDisplayInfoToLocalConfig(fsmID int32, info ExitDisplayInfo) error {

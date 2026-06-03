@@ -25,6 +25,7 @@ const (
 	webSocketTopicExitAdditionalText = "exitAdditionalText"
 	webSocketTopicLevelAuxConfig     = "levelAuxConfig"
 	webSocketTopicFruitTypeConfig    = "fruitTypeConfig"
+	webSocketTopicProjectSchemeFile  = "projectSettingsSchemeFile"
 	webSocketTopicWeightGlobal       = "weightGlobal"
 	webSocketTopicWeightInfo         = "weightInfo"
 
@@ -74,6 +75,7 @@ type webSocketControlMessage struct {
 	ExitAdditionalText  *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
 	LevelAuxConfig      *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
 	FruitTypeConfig     *webSocketFruitTypeConfigControl    `json:"fruitTypeConfig,omitempty"`
+	ProjectScheme       *webSocketProjectSchemeControl      `json:"projectScheme,omitempty"`
 	DensityInfo         *StAnalogDensity                    `json:"densityInfo,omitempty"`
 	Motor               *StMotorInfo                        `json:"motor,omitempty"`
 	GradeExits          []webSocketGradeExit                `json:"gradeExits,omitempty"`
@@ -129,6 +131,16 @@ type webSocketExitAdditionalTextControl struct {
 type webSocketExitAdditionalTextData struct {
 	FSMID              int32                  `json:"fsmId"`
 	ExitAdditionalText ExitAdditionalTextInfo `json:"exitAdditionalText"`
+}
+
+type webSocketProjectSchemeControl struct {
+	Name     string `json:"name,omitempty"`
+	JSONText string `json:"jsonText,omitempty"`
+}
+
+type webSocketProjectSchemeFileData struct {
+	FileName string `json:"fileName"`
+	JSONText string `json:"jsonText"`
 }
 
 type webSocketLevelAuxConfigControl struct {
@@ -424,6 +436,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleLevelAuxConfigInfo(control)
 	case "saveFruitTypeConfig":
 		c.handleFruitTypeConfigInfo(control)
+	case "saveProjectSettingsScheme":
+		c.handleSaveProjectSettingsScheme(control)
+	case "importProjectSettingsScheme":
+		c.handleImportProjectSettingsScheme(control)
 	case "saveMotorInfo":
 		c.handleMotorInfoData(control)
 	}
@@ -661,6 +677,37 @@ func (c *webSocketClient) handleFruitTypeConfigInfo(control webSocketControlMess
 	if err := saveFruitTypeConfigFromControl(control.FSMID, *control.FruitTypeConfig); err != nil {
 		return
 	}
+}
+
+func (c *webSocketClient) handleSaveProjectSettingsScheme(control webSocketControlMessage) {
+	if control.ProjectScheme == nil {
+		setCTCPServerLastMessage("WebSocket saveProjectSettingsScheme failed: empty projectScheme, fsmId=0x%04X", uint32(control.FSMID))
+		c.sendCommandAck("saveProjectSettingsScheme", 0, control.FSMID, 0, -1)
+		return
+	}
+	scheme, err := BuildCurrentProjectSettingsSchemeForLocalFile(control.FSMID, control.ProjectScheme.Name)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket saveProjectSettingsScheme failed: %v", err)
+		c.sendCommandAck("saveProjectSettingsScheme", 0, control.FSMID, 0, -1)
+		return
+	}
+	c.sendProjectSettingsSchemeFileData(scheme)
+	c.sendCommandAck("saveProjectSettingsScheme", 0, control.FSMID, len(scheme.Name), 0)
+}
+
+func (c *webSocketClient) handleImportProjectSettingsScheme(control webSocketControlMessage) {
+	if control.ProjectScheme == nil {
+		setCTCPServerLastMessage("WebSocket importProjectSettingsScheme failed: empty projectScheme, fsmId=0x%04X", uint32(control.FSMID))
+		c.sendCommandAck("importProjectSettingsScheme", 0, control.FSMID, 0, -1)
+		return
+	}
+	scheme, err := ApplyProjectSettingsSchemeJSON(control.FSMID, control.ProjectScheme.JSONText)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket importProjectSettingsScheme failed: %v", err)
+		c.sendCommandAck("importProjectSettingsScheme", 0, control.FSMID, len(control.ProjectScheme.JSONText), -1)
+		return
+	}
+	c.sendCommandAck("importProjectSettingsScheme", 0, control.FSMID, len(scheme.Name), 0)
 }
 
 func saveFruitTypeConfigFromControl(fsmID int32, update webSocketFruitTypeConfigControl) error {
@@ -904,6 +951,22 @@ func (c *webSocketClient) sendFruitTypeConfigData(fsmID int32, info FruitTypeCon
 		Type:  webSocketTopicData,
 		Topic: webSocketTopicFruitTypeConfig,
 		Data:  rawJSONFromValue(webSocketFruitTypeConfigData{FSMID: fsmID, FruitTypeConfig: normalizeFruitTypeConfigInfo(info)}),
+	})
+}
+
+func (c *webSocketClient) sendProjectSettingsSchemeFileData(scheme ProjectSettingsScheme) {
+	jsonText, err := formatProjectSettingsSchemeJSON(scheme)
+	if err != nil {
+		setCTCPServerLastMessage("WebSocket send projectSettingsSchemeFile failed: %v", err)
+		return
+	}
+	c.sendFrame(webSocketFrame{
+		Type:  webSocketTopicData,
+		Topic: webSocketTopicProjectSchemeFile,
+		Data: rawJSONFromValue(webSocketProjectSchemeFileData{
+			FileName: projectSettingsSchemeFileName(scheme),
+			JSONText: jsonText,
+		}),
 	})
 }
 
