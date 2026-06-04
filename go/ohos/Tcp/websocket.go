@@ -366,6 +366,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
 	case "fsmTestCupOff":
 		c.handleSimpleFSMCommand("fsmTestCupOff", cTCPHCTestCupOff, control)
+	case "fruitGradeInfoOn":
+		c.handleSimpleFSMCommand("fruitGradeInfoOn", cTCPHCFruitGradeOn, control)
+	case "fruitGradeInfoOff":
+		c.handleSimpleFSMCommand("fruitGradeInfoOff", cTCPHCFruitGradeOff, control)
 
 	case "wamGetInfo":
 		c.handleSimpleWAMCommand("wamGetInfo", cTCPHCWAMWeightOn, control)

@@ -220,6 +220,138 @@ func appendPayloadHexChunks(tag string, payload []byte) {
 	appendCTCPLogChunks(tag+" 原始字节HEX", b.String())
 }
 
+const cTCPFruitGradeInvalidValue = uint32(0x7f7f7f7f)
+
+func fruitParamHasAnyData(param StFruitParam) bool {
+	if param.UnGrade == cTCPFruitGradeInvalidValue {
+		return false
+	}
+	return param.FWeight != 0 ||
+		param.FDensity != 0 ||
+		param.UnGrade != 0 ||
+		param.UnWhichExit != 0 ||
+		param.VisionParam.UnColorRate0 != 0 ||
+		param.VisionParam.UnColorRate1 != 0 ||
+		param.VisionParam.UnColorRate2 != 0 ||
+		param.VisionParam.UnArea != 0 ||
+		param.VisionParam.UnFlawArea != 0 ||
+		param.VisionParam.UnVolume != 0 ||
+		param.VisionParam.UnFlawNum != 0 ||
+		param.VisionParam.UnMaxR != 0 ||
+		param.VisionParam.UnMinR != 0 ||
+		param.VisionParam.UnSelectBasis != 0 ||
+		param.VisionParam.FDiameterRatio != 0 ||
+		param.VisionParam.FMinDRatio != 0 ||
+		param.UVParam.UnBruiseArea != 0 ||
+		param.UVParam.UnBruiseNum != 0 ||
+		param.UVParam.UnRotArea != 0 ||
+		param.UVParam.UnRotNumy != 0 ||
+		param.UVParam.UnRigidity != 0 ||
+		param.UVParam.UnWater != 0 ||
+		param.NIRParam.FSugar != 0 ||
+		param.NIRParam.FAcidity != 0 ||
+		param.NIRParam.FHollow != 0 ||
+		param.NIRParam.FSkin != 0 ||
+		param.NIRParam.FBrown != 0 ||
+		param.NIRParam.FTangxin != 0
+}
+
+type cTCPFruitGradeInfoRealtimeFrame struct {
+	SrcID          int32            `json:"srcId"`
+	FruitGradeInfo StFruitGradeInfo `json:"fruitGradeInfo"`
+}
+
+func cTCPGradeInfoIPMIndex(srcID int32) int {
+	ipmIndex := int((srcID>>4)&0x0F) - 1
+	if ipmIndex < 0 {
+		return 0
+	}
+	return ipmIndex
+}
+
+func cTCPFruitGradeInfoSourceID(head cTCPServerCommandHead, grade StFruitGradeInfo) int32 {
+	if grade.NRouteId > 0 {
+		return grade.NRouteId
+	}
+	return head.NSrcId
+}
+
+func sanitizeFruitGradeInfoForRealtime(grade StFruitGradeInfo) StFruitGradeInfo {
+	for index := range grade.Param {
+		if grade.Param[index].UnGrade == cTCPFruitGradeInvalidValue {
+			grade.Param[index] = StFruitParam{}
+		}
+	}
+	return grade
+}
+
+func appendFruitGradeInfoLog(remoteAddr string, head cTCPServerCommandHead, grade StFruitGradeInfo, payloadBytes int) {
+	var b strings.Builder
+	sourceID := cTCPFruitGradeInfoSourceID(head, grade)
+	ipmIndex := cTCPGradeInfoIPMIndex(sourceID)
+	fmt.Fprintf(
+		&b,
+		"CTCP StFruitGradeInfo 回推: remote=%s, src=0x%04X, route=0x%04X, dst=0x%04X, cmd=%s, payload=%d bytes",
+		remoteAddr,
+		uint32(head.NSrcId),
+		uint32(sourceID),
+		uint32(head.NDstId),
+		cTCPCommandName(head.NCmdId),
+		payloadBytes,
+	)
+	count := 0
+	for laneIndex := 0; laneIndex < len(grade.Param); laneIndex++ {
+		param := grade.Param[laneIndex]
+		if !fruitParamHasAnyData(param) {
+			continue
+		}
+		channelNo := ipmIndex*len(grade.Param) + laneIndex + 1
+		gradeText := fmt.Sprintf("%d", param.UnGrade)
+		if param.UnGrade == cTCPFruitGradeInvalidValue {
+			gradeText = "INVALID(0x7F7F7F7F)"
+		}
+		fmt.Fprintf(
+			&b,
+			"\n  detectChannel=%d ipm=%d lane=%d route=%d data{Weight=%.3f, Density=%.3f, Grade=%s, Outlet=%d, Diameter=%.3f, MaxR=%.3f, MinR=%.3f, Area=%d, Volume=%d, Color=[%d,%d,%d], FlawArea=%d, FlawNum=%d, BruiseArea=%d, BruiseNum=%d, RotArea=%d, RotNum=%d, Sugar=%.3f, Acidity=%.3f, Hollow=%.3f, Skin=%.3f, Brown=%.3f, Tangxin=%.3f, Rigidity=%d, Water=%d}",
+			channelNo,
+			ipmIndex,
+			laneIndex,
+			grade.NRouteId,
+			param.FWeight,
+			param.FDensity,
+			gradeText,
+			param.UnWhichExit,
+			param.VisionParam.UnSelectBasis,
+			param.VisionParam.UnMaxR,
+			param.VisionParam.UnMinR,
+			param.VisionParam.UnArea,
+			param.VisionParam.UnVolume,
+			param.VisionParam.UnColorRate0,
+			param.VisionParam.UnColorRate1,
+			param.VisionParam.UnColorRate2,
+			param.VisionParam.UnFlawArea,
+			param.VisionParam.UnFlawNum,
+			param.UVParam.UnBruiseArea,
+			param.UVParam.UnBruiseNum,
+			param.UVParam.UnRotArea,
+			param.UVParam.UnRotNumy,
+			param.NIRParam.FSugar,
+			param.NIRParam.FAcidity,
+			param.NIRParam.FHollow,
+			param.NIRParam.FSkin,
+			param.NIRParam.FBrown,
+			param.NIRParam.FTangxin,
+			param.UVParam.UnRigidity,
+			param.UVParam.UnWater,
+		)
+		count++
+	}
+	if count == 0 {
+		b.WriteString("\n  <no non-empty channel data>")
+	}
+	appendCTCPLogChunks("CTCP StFruitGradeInfo 回推", b.String())
+}
+
 func cacheStParasImageFields(remoteAddr string, head cTCPServerCommandHead, stg StGlobal) {
 	cTCPStParasImageFieldsMu.Lock()
 	cTCPStParasImageFieldsLatest = cTCPStParasImageFieldsSnapshot{
@@ -792,22 +924,28 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 
 	case cmdFSMGradeInfo: // 0x1002
 		// -------------
-		grade, err := ParseData[StFruitGradeInfos](payload)
+		grade, err := ParseData[StFruitGradeInfo](payload)
 		if err != nil {
 			setCTCPServerLastMessage("CTCP handled %s: parse failed (%v), payload=%d bytes, need sizeof=%d",
-				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StFruitGradeInfos{})))
+				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StFruitGradeInfo{})))
 			return
 		}
+		appendFruitGradeInfoLog(remoteAddr, head, grade, len(payload))
+		appendPayloadHexChunks("CTCP StFruitGradeInfo 回推", payload)
 		//--------
-		gradeJSON, jsonErr := FormatDataFullJSON(grade) //转成json 字符串
+		sourceID := cTCPFruitGradeInfoSourceID(head, grade)
+		gradeJSON, jsonErr := FormatDataFullJSON(cTCPFruitGradeInfoRealtimeFrame{
+			SrcID:          sourceID,
+			FruitGradeInfo: sanitizeFruitGradeInfoForRealtime(grade),
+		}) //转成json 字符串
 		if gradeJSON != "" && jsonErr == nil {
 			//----------------
 			if err := PublishWebSocketJSON(webSocketTopicGrade, gradeJSON); err != nil {
-				setCTCPServerLastMessage("CTCP StFruitGradeInfos WebSocket 推送失败: %v", err)
+				setCTCPServerLastMessage("CTCP StFruitGradeInfo WebSocket 推送失败: %v", err)
 			}
 			return
 		}
-		setCTCPServerLastMessage("CTCP StFruitGradeInfos JSON 生成失败: %v", jsonErr)
+		setCTCPServerLastMessage("CTCP StFruitGradeInfo JSON 生成失败: %v", jsonErr)
 
 	case cmdFSMGetVersion, cmdWAMVersionInfo:
 		setCTCPServerLastMessage("CTCP handled %s: version bytes=%q", cTCPCommandName(head.NCmdId), strings.TrimRight(string(payload), "\x00\r\n "))

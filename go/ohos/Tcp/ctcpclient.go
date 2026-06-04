@@ -40,6 +40,8 @@ const (
 	cTCPHCClearData      = int32(0x0001) // 数据清零
 	cTCPHCTestCupOn      = int32(0x0006) // 果杯测试开，HC-->FSM
 	cTCPHCTestCupOff     = int32(0x0007) // 果杯测试关，HC-->FSM
+	cTCPHCFruitGradeOn   = int32(0x000F) // 水果实时分级信息开，HC-->FSM
+	cTCPHCFruitGradeOff  = int32(0x0010) // 水果实时分级信息关，HC-->FSM
 	cTCPHCDisplayOn      = int32(0x0019) // 打开显示
 	cTCPHCSysConfig      = int32(0x0050) // 系统配置
 	cTCPHCGradeInfo      = int32(0x0051) // 等级设置 StGradeInfo
