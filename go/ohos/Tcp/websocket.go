@@ -1235,13 +1235,14 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 
 	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCGradeInfo, "", 0)
 	setCTCPServerLastMessage(
-		"WebSocket dropdata: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, activeExits=%s",
+		"WebSocket dropdata: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, activeExits=%s, byExit=%s",
 		uint32(cTCPHCGradeInfo),
 		uint32(destID),
 		targetIP,
 		targetPort,
 		len(payload),
 		summarizeGradeExitMappings(grade),
+		summarizeGradeExitMappingsByExit(grade),
 	)
 
 	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCGradeInfo, payload)
@@ -1251,7 +1252,8 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 	}
 
 	cacheLatestGradeInfo(destID, grade)
-	setCTCPServerLastMessage("WebSocket dropdata success: HC_CMD_GRADE_INFO sent, dest=0x%04X", uint32(destID))
+	requestStGlobalAfterConfigCommand("dropdata", destID)
+	setCTCPServerLastMessage("WebSocket dropdata success: HC_CMD_GRADE_INFO sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
 	return 0, destID, len(payload)
 }
 
@@ -1264,6 +1266,7 @@ func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) { //æ
 	}
 
 	before := summarizeGradeExitMappings(grade)
+	beforeByExit := summarizeGradeExitMappingsByExit(grade)
 	clearGradeExitMappings(&grade)
 
 	payload, err := encodeGradeInfoPayload(grade)
@@ -1274,14 +1277,16 @@ func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) { //æ
 
 	targetIP, targetPort := resolveCTCPTarget(destID, cTCPHCGradeInfo, "", 0)
 	setCTCPServerLastMessage(
-		"WebSocket clearExitGrades: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, activeExitsBefore=%s, activeExitsAfter=%s",
+		"WebSocket clearExitGrades: sending HC_CMD_GRADE_INFO(0x%04X), dest=0x%04X, target=%s:%d, payload=%d bytes, activeExitsBefore=%s, byExitBefore=%s, activeExitsAfter=%s, byExitAfter=%s",
 		uint32(cTCPHCGradeInfo),
 		uint32(destID),
 		targetIP,
 		targetPort,
 		len(payload),
 		before,
+		beforeByExit,
 		summarizeGradeExitMappings(grade),
+		summarizeGradeExitMappingsByExit(grade),
 	)
 
 	result := StartCTCPClient(targetIP, targetPort, destID, cTCPHCGradeInfo, payload)
@@ -1291,7 +1296,8 @@ func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) { //æ
 	}
 
 	cacheLatestGradeInfo(destID, grade)
-	setCTCPServerLastMessage("WebSocket clearExitGrades success: HC_CMD_GRADE_INFO sent, dest=0x%04X", uint32(destID))
+	requestStGlobalAfterConfigCommand("clearExitGrades", destID)
+	setCTCPServerLastMessage("WebSocket clearExitGrades success: HC_CMD_GRADE_INFO sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
 	return 0, destID, len(payload)
 }
 
@@ -1309,10 +1315,26 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	}
 
 	grade := *control.Grade
+	setCTCPServerLastMessage(
+		"WebSocket %s received StGradeInfo: dest=0x%04X, sizeGrade=%d, qualityGrade=%d, activeExits=%s, byExit=%s",
+		topic,
+		uint32(destID),
+		grade.NSizeGradeNum,
+		grade.NQualityGradeNum,
+		summarizeGradeExitMappings(grade),
+		summarizeGradeExitMappingsByExit(grade),
+	)
 	if commandID == cTCPHCGradeInfo {
 		if cached, ok := latestGradeInfo(destID); ok {
 			if shouldPreserveCachedGradeExits(grade, cached) {
 				mergeGradeExitState(&grade, cached)
+				setCTCPServerLastMessage(
+					"WebSocket %s merged cached exit state: dest=0x%04X, activeExits=%s, byExit=%s",
+					topic,
+					uint32(destID),
+					summarizeGradeExitMappings(grade),
+					summarizeGradeExitMappingsByExit(grade),
+				)
 			}
 		}
 	}
@@ -1325,7 +1347,7 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 
 	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
 	setCTCPServerLastMessage(
-		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes, sizeGrade=%d, qualityGrade=%d, activeExits=%s",
+		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes, sizeGrade=%d, qualityGrade=%d, activeExits=%s, byExit=%s",
 		topic,
 		uint32(commandID),
 		uint32(destID),
@@ -1335,6 +1357,7 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 		grade.NSizeGradeNum,
 		grade.NQualityGradeNum,
 		summarizeGradeExitMappings(grade),
+		summarizeGradeExitMappingsByExit(grade),
 	)
 
 	result := StartCTCPClient(targetIP, targetPort, destID, commandID, payload)
@@ -1344,7 +1367,8 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	}
 
 	cacheLatestGradeInfo(destID, grade)
-	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X", topic, uint32(commandID), uint32(destID))
+	requestStGlobalAfterConfigCommand(topic, destID)
+	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X, refresh StGlobal scheduled", topic, uint32(commandID), uint32(destID))
 	return 0, destID, len(payload)
 }
 
@@ -1875,6 +1899,41 @@ func summarizeGradeExitMappings(grade StGradeInfo) string {
 	}
 	if total > len(parts) {
 		return fmt.Sprintf("%s (+%d more)", strings.Join(parts, ","), total-len(parts))
+	}
+	return strings.Join(parts, ",")
+}
+
+func summarizeGradeExitMappingsByExit(grade StGradeInfo) string {
+	const maxExitSummaryItems = 12
+	const maxGradeSummaryItems = 16
+
+	parts := make([]string, 0, maxExitSummaryItems)
+	for exitNo := 1; exitNo <= 48; exitNo++ {
+		mask := uint64(1) << uint(exitNo-1)
+		gradeIndexes := make([]string, 0, maxGradeSummaryItems)
+		total := 0
+		for gradeIndex, item := range grade.Grades {
+			if item.Exit()&mask == 0 {
+				continue
+			}
+			total++
+			if len(gradeIndexes) < maxGradeSummaryItems {
+				gradeIndexes = append(gradeIndexes, fmt.Sprintf("%d", gradeIndex))
+			}
+		}
+		if total == 0 {
+			continue
+		}
+		if total > len(gradeIndexes) {
+			gradeIndexes = append(gradeIndexes, fmt.Sprintf("+%d", total-len(gradeIndexes)))
+		}
+		parts = append(parts, fmt.Sprintf("exit%d=[%s]", exitNo, strings.Join(gradeIndexes, "|")))
+		if len(parts) >= maxExitSummaryItems {
+			break
+		}
+	}
+	if len(parts) == 0 {
+		return "none"
 	}
 	return strings.Join(parts, ",")
 }

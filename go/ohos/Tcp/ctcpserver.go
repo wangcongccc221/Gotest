@@ -1052,13 +1052,15 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		stgJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
 		setCTCPServerLastMessage(
-			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysNum=%d, nSubsysId=%d, nVersion=%d",
+			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysNum=%d, nSubsysId=%d, nVersion=%d, gradeActiveExits=%s, gradeByExit=%s",
 			cTCPCommandName(head.NCmdId),
 			goSz,
 			len(payload),
 			stg.Sys.NSubsysNum,
 			stg.NSubsysId,
 			stg.NVersion,
+			summarizeGradeExitMappings(stg.Grade),
+			summarizeGradeExitMappingsByExit(stg.Grade),
 		)
 		if jsonErr == nil && stgJSON != "" {
 			setCTCPLastStGlobalFullJSON(stgJSON)
