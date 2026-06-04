@@ -10,18 +10,64 @@ import (
 func migrateORMTables(db *gorm.DB) error {
 	if err := db.AutoMigrate(
 		&DeviceRecord{},
+		&TbBarcodeRules{},
+		&TbBaseFault{},
+		&TbBinTipInfo{},
+		&TbClientInfo{},
+		&TbConfigs{},
+		&TbCustomer{},
+		&TbCustomField{},
+		&TbCustomFieldSource{},
+		&TbCustomFieldValue{},
+		&TbDeviceConfig{},
+		&TbDeviceConfigDetails{},
+		&TbEfficiencyInfo{},
+		&TbEmptyBoxInfo{},
 		&TbFruitInfo{},
 		&TbGradeInfo{},
 		&TbExportInfo{},
+		&TbExportConfigs{},
+		&TbExportDetailInfo{},
+		&TbExitGroupInfo{},
+		&TbFaultInfo{},
+		&TbFeedingInfo{},
+		&TbGradeDetailInfo{},
+		&TbQualityInfo{},
+		&TbSortExitInfo{},
+		&TbFruitDetails{},
+		&TbProcessInfoTable{},
+		&TbFruitStatisticsInfo{},
+		&TbSortExitSumInfo{},
+		&TbFruitFactorInterval{},
+		&TbFruitFactorStatisticInfo{},
+		&TbFruitWeightFactorStatisticInfo{},
+		&TbGradeRankDetail{},
+		&TbGradeRankInfo{},
+		&TbInfruscanFruitInfo{},
+		&TbOrderInfo{},
+		&TbOutletBoxDetailInfo{},
+		&TbOutletBoxInfo{},
+		&TbPackingInfo{},
+		&TbPackingSpec{},
+		&TbPalletBoxInfo{},
+		&TbPalletInfo{},
+		&TbParamDetail{},
+		&TbParamType{},
+		&TbProductBatchInfo{},
+		&TbProductInfo{},
+		&TbRSSLog{},
+		&TbSampleInfo{},
+		&TbSelectMaterialInfo{},
+		&TbSoftSortBelts{},
+		&TbSoftSortEvents{},
+		&TbSpectrometerJDXInfo{},
+		&TbSpectrometerRawInfo{},
+		&TbSpectrometerSampleRawInfo{},
 		&TbSysFruitInfo{},
 		&TbFruitProcessInfoPercent{},
 		&TbRunningTimeInfo{},
 		&TbSeparationEfficiencyInfo{},
-		&TbClientInfo{},
 		&TbSysConfigs{},
-		&TbCustomer{},
-		&TbBaseFault{},
-		&TbFaultInfo{},
 		&TbPriceInfo{},
 		&TbSqlInfo{},
 		&TbUploadInfo{},
@@ -32,7 +78,14 @@ func migrateORMTables(db *gorm.DB) error {
 	); err != nil {
 		return err
 	}
-	return EnsureFruitProcessInfoYearTable(db, time.Now().Year())
+	year := time.Now().Year()
+	if err := EnsureFruitProcessInfoYearTable(db, year); err != nil {
+		return err
+	}
+	if err := EnsureFruitDetailsMonthTables(db, year); err != nil {
+		return err
+	}
+	return EnsurePackingInfoMonthTables(db, year)
 }
 
 func EnsureFruitProcessInfoYearTable(db *gorm.DB, year int) error {
@@ -40,4 +93,36 @@ func EnsureFruitProcessInfoYearTable(db *gorm.DB, year int) error {
 		return fmt.Errorf("invalid fruit process info year: %d", year)
 	}
 	return db.Table(fruitProcessInfoTableName(year)).AutoMigrate(&TbFruitProcessInfo{})
+}
+
+func EnsureFruitDetailsMonthTables(db *gorm.DB, year int) error {
+	if year < 2000 || year > 9999 {
+		return fmt.Errorf("invalid fruit details year: %d", year)
+	}
+	for month := 1; month <= 12; month++ {
+		if err := db.Table(fruitDetailsMonthTableName(year, month)).AutoMigrate(&TbFruitDetails{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func EnsurePackingInfoMonthTables(db *gorm.DB, year int) error {
+	if year < 2000 || year > 9999 {
+		return fmt.Errorf("invalid packing info year: %d", year)
+	}
+	for month := 1; month <= 12; month++ {
+		if err := db.Table(packingInfoMonthTableName(year, month)).AutoMigrate(&TbPackingInfo{}); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func fruitDetailsMonthTableName(year int, month int) string {
+	return fmt.Sprintf("tb_fruitdetails_%04d%02d", year, month)
+}
+
+func packingInfoMonthTableName(year int, month int) string {
+	return fmt.Sprintf("tb_packinginfo%04d%02d", year, month)
 }

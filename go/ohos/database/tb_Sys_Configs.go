@@ -9,19 +9,20 @@ import (
 
 type TbSysConfigs struct {
 	FID              int        `json:"FID" gorm:"column:FID;primaryKey;autoIncrement"`
-	FModuleName      string     `json:"FModuleName" gorm:"column:FModuleName;size:50;not null;default:RSS"`
-	FType            string     `json:"FType" gorm:"column:FType;size:200"`
-	FValue           string     `json:"FValue" gorm:"column:FValue;type:text"`
-	FCreateDate      *time.Time `json:"FCreateDate" gorm:"column:FCreateDate;type:datetime"`
+	FType            string     `json:"FType" gorm:"column:FType;type:longtext"`
+	FValue           string     `json:"FValue" gorm:"column:FValue;type:longtext"`
+	FModuleName      string     `json:"FModuleName" gorm:"column:FModuleName;type:longtext"`
 	FVisible         int        `json:"FVisible" gorm:"column:FVisible;not null;default:0"`
-	FEnType          string     `json:"FEnType" gorm:"column:FEnType;size:200"`
-	FValueType       int        `json:"FValueType" gorm:"column:FValueType;type:varchar(200);default:0"`
-	FValueTypeDetail string     `json:"FValueTypeDetail" gorm:"column:FValueTypeDetail;size:200"`
-	FZhType          string     `json:"FZhType" gorm:"column:FZhType;size:200"`
+	FEnType          string     `json:"FEnType" gorm:"column:FEnType;type:longtext"`
+	FValueType       int        `json:"FValueType" gorm:"column:FValueType;not null;default:0"`
+	FValueTypeDetail string     `json:"FValueTypeDetail" gorm:"column:FValueTypeDetail;type:longtext"`
+	FSubSystem       *int       `json:"FSubSystem" gorm:"column:FSubSystem"`
+	FCreateDate      *time.Time `json:"FCreateDate" gorm:"column:FCreateDate;type:datetime(6)"`
+	FZhType          string     `json:"FZhType" gorm:"-"`
 }
 
 func (TbSysConfigs) TableName() string {
-	return "tb_Sys_Configs"
+	return "tb_sys_configs"
 }
 
 func GetConfigValue(configType string) (string, error) {

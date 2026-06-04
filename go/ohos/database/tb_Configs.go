@@ -2,16 +2,15 @@ package database
 
 import "time"
 
-type TbClientInfo struct {
+type TbConfigs struct {
 	FID         int        `json:"FID" gorm:"column:FID;primaryKey;autoIncrement"`
 	FCreateDate *time.Time `json:"FCreateDate" gorm:"column:FCreateDate;type:datetime(6)"`
 	FModifyDate *time.Time `json:"FModifyDate" gorm:"column:FModifyDate;type:datetime(6)"`
-	FCode       string     `json:"FCode" gorm:"column:FCode;type:longtext"`
+	FModuleName string     `json:"FModuleName" gorm:"column:FModuleName;type:longtext"`
 	FName       string     `json:"FName" gorm:"column:FName;type:longtext"`
-	FType       *int       `json:"FType" gorm:"column:FType"`
-	FIsCurrent  bool       `json:"FIsCurrent" gorm:"-"`
+	FFileData   []byte     `json:"FFileData" gorm:"column:FFileData;type:longblob;not null"`
 }
 
-func (TbClientInfo) TableName() string {
-	return "tb_clientinfo"
+func (TbConfigs) TableName() string {
+	return "tb_configs"
 }
