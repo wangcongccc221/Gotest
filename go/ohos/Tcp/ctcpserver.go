@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net"
 	"strconv"
 	"strings"
@@ -38,6 +39,9 @@ const (
 	cTCPServerMaxFruitNameLength = 50
 	cTCPServerParasTagInfoNum    = 6
 	cTCPServerMinorGradeNum      = 6
+
+	cTCPStStatisticsSpeedPublishInterval = time.Second
+	cTCPStStatisticsSpeedStaleInterval   = 2500 * time.Millisecond
 )
 
 const (
@@ -86,6 +90,12 @@ type cTCPStoredPayload struct {
 	ReceivedAt time.Time
 }
 
+type cTCPStStatisticsSpeedState struct {
+	Latest    StStatistics
+	LatestAt  time.Time
+	HasLatest bool
+}
+
 type cTCPStParasImageFieldsSnapshot struct {
 	RemoteAddr string
 	SrcID      int32
@@ -132,6 +142,10 @@ var (
 	cTCPStGlobalExitInfoLatest    cTCPStGlobalExitInfoSnapshot
 	cTCPStGlobalExitInfoHasLatest bool
 	cTCPStGlobalExitInfoStop      chan struct{}
+
+	cTCPStStatisticsSpeedMu    sync.Mutex
+	cTCPStStatisticsSpeedBySys = make(map[int32]*cTCPStStatisticsSpeedState)
+	cTCPStStatisticsSpeedStop  chan struct{}
 )
 
 func StartCTCPServer() int {
@@ -178,6 +192,7 @@ func StartCTCPServer() int {
 	LoadLevelAuxConfigInfoFromLocalConfig()
 	StartStParasImageFieldsPeriodicLog()
 	StartStGlobalExitInfoPeriodicLog()
+	StartStStatisticsSpeedPublisher()
 	return cTCPServerStatPort
 }
 
@@ -602,6 +617,157 @@ func StopStGlobalExitInfoPeriodicLog() {
 	}
 }
 
+func StartStStatisticsSpeedPublisher() {
+	StartStStatisticsSpeedPublisherWithInterval(cTCPStStatisticsSpeedPublishInterval)
+}
+
+func StartStStatisticsSpeedPublisherWithInterval(interval time.Duration) {
+	if interval <= 0 {
+		interval = cTCPStStatisticsSpeedPublishInterval
+	}
+
+	cTCPStStatisticsSpeedMu.Lock()
+	if cTCPStStatisticsSpeedStop != nil {
+		cTCPStStatisticsSpeedMu.Unlock()
+		return
+	}
+	stop := make(chan struct{})
+	cTCPStStatisticsSpeedStop = stop
+	cTCPStStatisticsSpeedMu.Unlock()
+
+	go func() {
+		ticker := time.NewTicker(interval)
+		defer ticker.Stop()
+		setCTCPServerLastMessage("CTCP StStatistics 分选速度后端计算已启动: 每 %s 推送一次", interval)
+		for {
+			select {
+			case <-stop:
+				setCTCPServerLastMessage("CTCP StStatistics 分选速度后端计算已停止")
+				return
+			case now := <-ticker.C:
+				publishLatestStStatisticsSpeed(now)
+			}
+		}
+	}()
+}
+
+func StopStStatisticsSpeedPublisher() {
+	cTCPStStatisticsSpeedMu.Lock()
+	stop := cTCPStStatisticsSpeedStop
+	cTCPStStatisticsSpeedStop = nil
+	cTCPStStatisticsSpeedBySys = make(map[int32]*cTCPStStatisticsSpeedState)
+	cTCPStStatisticsSpeedMu.Unlock()
+	if stop != nil {
+		close(stop)
+	}
+}
+
+func sanitizeStStatisticsSpeed(speed int32) int32 {
+	if speed <= 0 {
+		return 0
+	}
+	return speed
+}
+
+func calculateStStatisticsSpeedFromPulse(state StStatistics) (int32, bool) {
+	if state.NInterval <= 0 {
+		return 0, true
+	}
+	if state.NPulseInterval > 2000 {
+		return 0, true
+	}
+	if state.NPulseInterval > 0 {
+		speed := math.Round(60000.0 / float64(state.NPulseInterval))
+		if speed <= 0 {
+			return 0, true
+		}
+		if speed > 2147483647 {
+			return 2147483647, true
+		}
+		return int32(speed), true
+	}
+	return 0, false
+}
+
+func resolveStStatisticsDisplaySpeed(state StStatistics) int32 {
+	if speed, ok := calculateStStatisticsSpeedFromPulse(state); ok {
+		return speed
+	}
+	return sanitizeStStatisticsSpeed(state.NIntervalSumperminute)
+}
+
+func cacheStStatisticsForSpeed(state StStatistics, receivedAt time.Time) {
+	subsysID := state.NSubsysId
+	if subsysID <= 0 {
+		subsysID = 1
+	}
+
+	cTCPStStatisticsSpeedMu.Lock()
+	entry := cTCPStStatisticsSpeedBySys[subsysID]
+	if entry == nil {
+		entry = &cTCPStStatisticsSpeedState{}
+		cTCPStStatisticsSpeedBySys[subsysID] = entry
+	}
+	rawSpeed := sanitizeStStatisticsSpeed(state.NIntervalSumperminute)
+	pulseSpeed, hasPulseSpeed := calculateStStatisticsSpeedFromPulse(state)
+	state.NIntervalSumperminute = resolveStStatisticsDisplaySpeed(state)
+	if hasPulseSpeed {
+		setCTCPServerLastMessage("CTCP StStatistics 分选速度对照: subsys=%d, rawNIntervalSumperminute=%d, pulseSpeed=%d, nInterval=%d, nPulseInterval=%dms, final=%d",
+			subsysID,
+			rawSpeed,
+			pulseSpeed,
+			state.NInterval,
+			state.NPulseInterval,
+			state.NIntervalSumperminute,
+		)
+	} else {
+		setCTCPServerLastMessage("CTCP StStatistics 分选速度对照: subsys=%d, rawNIntervalSumperminute=%d, pulseSpeed=invalid, nInterval=%d, nPulseInterval=%dms, final=%d",
+			subsysID,
+			rawSpeed,
+			state.NInterval,
+			state.NPulseInterval,
+			state.NIntervalSumperminute,
+		)
+	}
+	entry.Latest = state
+	entry.LatestAt = receivedAt
+	entry.HasLatest = true
+	cTCPStStatisticsSpeedMu.Unlock()
+}
+
+func latestStStatisticsSpeedSnapshots(now time.Time) []StStatistics {
+	cTCPStStatisticsSpeedMu.Lock()
+	defer cTCPStStatisticsSpeedMu.Unlock()
+
+	snapshots := make([]StStatistics, 0, len(cTCPStStatisticsSpeedBySys))
+	for _, entry := range cTCPStStatisticsSpeedBySys {
+		if entry == nil || !entry.HasLatest {
+			continue
+		}
+		latest := entry.Latest
+		if now.Sub(entry.LatestAt) > cTCPStStatisticsSpeedStaleInterval {
+			latest.NIntervalSumperminute = 0
+		}
+		snapshots = append(snapshots, latest)
+	}
+	return snapshots
+}
+
+func publishLatestStStatisticsSpeed(now time.Time) {
+	snapshots := latestStStatisticsSpeedSnapshots(now)
+	for _, state := range snapshots {
+		stateJSON, jsonErr := FormatDataFullJSON(state)
+		if stateJSON == "" || jsonErr != nil {
+			setCTCPServerLastMessage("CTCP StStatistics 后端分选速度 JSON 生成失败: %v", jsonErr)
+			continue
+		}
+		if err := PublishWebSocketJSON(webSocketTopicStatistics, stateJSON); err != nil {
+			setCTCPServerLastMessage("CTCP StStatistics 后端分选速度 WebSocket 推送失败: %v", err)
+		}
+	}
+	publishLatestHomeStats(now)
+}
+
 func normalizeStStatisticsSubsysID(srcID int32, payloadSubsysID int32) int32 {
 	if idx := getSubsysIndex(srcID); idx >= 0 && idx < cTCPServerMaxSubsysNum {
 		return int32(idx + 1)
@@ -634,6 +800,7 @@ func StopCTCPServer() int {
 	StopStMotorInfoPeriodicLog()
 	StopStParasImageFieldsPeriodicLog()
 	StopStGlobalExitInfoPeriodicLog()
+	StopStStatisticsSpeedPublisher()
 	setCTCPServerLastMessage("CTCP servers stopped")
 	return 0
 }
@@ -880,6 +1047,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 		cacheStParasImageFields(remoteAddr, head, stg)
 		cacheStGlobalExitInfo(remoteAddr, head, stg)
+		cacheHomeStatsGlobalConfig(stg)
 		cacheLatestGradeInfo(head.NSrcId, stg.Grade)
 		stgJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
@@ -908,19 +1076,8 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			return
 		}
 		state.NSubsysId = normalizeStStatisticsSubsysID(head.NSrcId, state.NSubsysId)
-
-		// appendPayloadHexChunks("CTCP StStatistics 原始payload", payload)
-
-		stateJSON, jsonErr := FormatDataFullJSON(state) //转成json字符串
-		if stateJSON != "" && jsonErr == nil {
-			// appendCTCPLogChunks("CTCP StStatistics JSON字符串", stateJSON)
-			if err := PublishWebSocketJSON(webSocketTopicStatistics, stateJSON); err != nil { //通过websocket 发送到前端
-				setCTCPServerLastMessage("CTCP StStatistics WebSocket 推送失败: %v", err)
-			}
-			return
-		} else {
-			setCTCPServerLastMessage("CTCP StStatistics JSON 生成失败: %v", jsonErr) //生成失败记录日志
-		}
+		cacheStStatisticsForSpeed(state, time.Now())
+		return
 
 	case cmdFSMGradeInfo: // 0x1002
 		// -------------

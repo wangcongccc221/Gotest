@@ -19,6 +19,7 @@ const (
 	webSocketTopicData               = "data"     //
 	webSocketTopicStGlobal           = "stglobal" // StGlobal 全量数据
 	webSocketTopicStatistics         = "statistics"
+	webSocketTopicHomeStats          = "homeStats"
 	webSocketTopicGrade              = "grade"
 	webSocketTopicExitInfos          = "exitInfos"
 	webSocketTopicExitDisplay        = "exitDisplay"
