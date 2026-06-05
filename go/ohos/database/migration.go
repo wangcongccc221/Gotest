@@ -2,13 +2,14 @@ package database
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
 )
 
 func migrateORMTables(db *gorm.DB) error {
-	if err := db.AutoMigrate(
+	models := []any{
 		&DeviceRecord{},
 		&TbBarcodeRules{},
 		&TbBaseFault{},
@@ -75,8 +76,14 @@ func migrateORMTables(db *gorm.DB) error {
 		&TbLocation{},
 		&TbFTPInfo{},
 		&TbUpdateVersion{},
-	); err != nil {
-		return err
+	}
+	for _, model := range models {
+		if err := db.AutoMigrate(model); err != nil {
+			if isSQLiteTableAlreadyExistsError(err) {
+				continue
+			}
+			return err
+		}
 	}
 	year := time.Now().Year()
 	if err := EnsureFruitProcessInfoYearTable(db, year); err != nil {
@@ -86,6 +93,14 @@ func migrateORMTables(db *gorm.DB) error {
 		return err
 	}
 	return EnsurePackingInfoMonthTables(db, year)
+}
+
+func isSQLiteTableAlreadyExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	text := strings.ToLower(err.Error())
+	return strings.Contains(text, "table") && strings.Contains(text, "already exists")
 }
 
 func EnsureFruitProcessInfoYearTable(db *gorm.DB, year int) error {

@@ -25,5 +25,5 @@ type TbBaseFault struct {
 }
 
 func (TbBaseFault) TableName() string {
-	return "tb_base_fault"
+	return "tb_Base_Fault"
 }

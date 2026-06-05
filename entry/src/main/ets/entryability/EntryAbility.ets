@@ -122,10 +122,10 @@ export default class EntryAbility extends UIAbility {
     }
     this.nativeServicesStarted = true;
 
+    this.initOrm();
     this.startWebSocketServer();
     this.startOpcuaServer();
     this.startModbusServer();
-    this.initOrm();
     this.startTcpServer();
     this.startTcpServerLogPolling();
   }

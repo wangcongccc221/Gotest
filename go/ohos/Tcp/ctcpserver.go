@@ -697,6 +697,7 @@ func cacheStStatisticsForSpeed(state StStatistics, receivedAt time.Time) {
 	entry.LatestAt = receivedAt
 	entry.HasLatest = true
 	cTCPStStatisticsSpeedMu.Unlock()
+	maybeSaveRealtimeStatistics(receivedAt)
 }
 
 func latestStStatisticsSpeedSnapshots(now time.Time) []StStatistics {
@@ -765,6 +766,7 @@ func StopCTCPServer() int {
 	StopStParasImageFieldsPeriodicLog()
 	StopStGlobalExitInfoPeriodicLog()
 	StopStStatisticsSpeedPublisher()
+	resetRealtimeSaveState()
 	setCTCPServerLastMessage("CTCP servers stopped")
 	return 0
 }
@@ -1012,6 +1014,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		cacheStParasImageFields(remoteAddr, head, stg)
 		cacheStGlobalExitInfo(remoteAddr, head, stg)
 		cacheHomeStatsGlobalConfig(stg)
+		cacheRealtimeSaveGlobalConfig(stg)
 		cacheLatestGradeInfo(head.NSrcId, stg.Grade)
 		stgJSON, jsonErr := FormatDataFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))

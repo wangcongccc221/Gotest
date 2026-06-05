@@ -215,16 +215,7 @@ func getORMDBWithInfo() (*gorm.DB, string, error) {
 	if db != nil {
 		return db, database, initErr
 	}
-	if err := initORM(); err != nil {
-		return nil, "", err
-	}
-
-	ormMu.Lock()
-	defer ormMu.Unlock() //自动解锁
-	if activeORM == nil {
-		return nil, "", errors.New("ORM database is not initialized")
-	}
-	return activeORM, activeORMDatabase, ormInitErr
+	return nil, "", errors.New("ORM database is not initialized")
 }
 
 func seedORMDevices(db *gorm.DB) error {
