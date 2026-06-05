@@ -32,7 +32,7 @@ func (c *webSocketClient) handleEndProcess(control webSocketControlMessage) {
 }
 
 func SendEndProcessCommand(control webSocketControlMessage) (int, int32, int32, int) {
-	now := time.Now()
+	now := cTCPNow()
 	commandID, action := endProcessCommandFromControl(control)
 	destIDs := endProcessDestIDs(control)
 	ackDestID := int32(-1)

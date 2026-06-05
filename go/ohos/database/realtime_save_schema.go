@@ -23,6 +23,7 @@ func realtimeSaveFruitInfoValues(input RealtimeFruitSaveInput, startTime string,
 		"DensityGradeName":     input.DensityGradeName,
 		"SugarDegreeGradeName": input.SugarDegreeGradeName,
 		"ProgramName":          programName,
+		"FVisible":             1,
 	}
 }
 
@@ -47,6 +48,7 @@ func realtimeSaveFruitInfoColumns() []string {
 		"DensityGradeName",
 		"SugarDegreeGradeName",
 		"ProgramName",
+		"FVisible",
 	}
 }
 

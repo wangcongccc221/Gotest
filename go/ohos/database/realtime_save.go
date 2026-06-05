@@ -81,7 +81,9 @@ func SaveRealtimeFruitInfo(input RealtimeFruitSaveInput) (int, error) {
 
 	savedAt := input.SavedAt
 	if savedAt.IsZero() {
-		savedAt = time.Now()
+		savedAt = databaseNow()
+	} else {
+		savedAt = databaseLocalTime(savedAt)
 	}
 
 	customerID := 0
@@ -123,6 +125,7 @@ func SaveRealtimeFruitInfo(input RealtimeFruitSaveInput) (int, error) {
 			qualityGradeSum := input.QualityGradeSum
 			weightOrSizeGradeSum := input.WeightOrSizeGradeSum
 			exportSum := input.ExportSum
+			fVisible := 1
 			fruit = TbFruitInfo{
 				CustomerName:         input.CustomerName,
 				FarmName:             input.FarmName,
@@ -143,6 +146,7 @@ func SaveRealtimeFruitInfo(input RealtimeFruitSaveInput) (int, error) {
 				DensityGradeName:     input.DensityGradeName,
 				SugarDegreeGradeName: input.SugarDegreeGradeName,
 				ProgramName:          programName,
+				FVisible:             &fVisible,
 			}
 			if err := tx.Select(realtimeSaveFruitInfoColumns()).Create(&fruit).Error; err != nil {
 				return err

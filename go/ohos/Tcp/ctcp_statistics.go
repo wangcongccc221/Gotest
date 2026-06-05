@@ -68,6 +68,12 @@ func StopStStatisticsSpeedPublisher() {
 	}
 }
 
+func resetStStatisticsCacheAfterEndProcess() {
+	cTCPStStatisticsSpeedMu.Lock()
+	cTCPStStatisticsSpeedBySys = make(map[int32]*cTCPStStatisticsSpeedState)
+	cTCPStStatisticsSpeedMu.Unlock()
+}
+
 func sanitizeStStatisticsSpeed(speed int32) int32 {
 	if speed <= 0 {
 		return 0

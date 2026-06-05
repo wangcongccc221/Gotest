@@ -3,6 +3,7 @@ package tcp
 import (
 	"context"
 	"errors"
+	"gotest/ohos/database"
 	"net"
 	"net/http"
 	"sync"
@@ -41,6 +42,7 @@ func newRouter() http.Handler {
 			"message":   "pong from Go",
 		})
 	})
+	database.RegisterRoutes(router)
 	registerWebSocketRoutes(router)
 	return router
 }

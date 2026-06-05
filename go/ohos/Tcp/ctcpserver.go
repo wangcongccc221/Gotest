@@ -509,7 +509,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			return
 		}
 		state.NSubsysId = normalizeStStatisticsSubsysID(head.NSrcId, state.NSubsysId)
-		cacheStStatisticsForSpeed(state, time.Now())
+		cacheStStatisticsForSpeed(state, cTCPNow())
 		return
 
 	case cmdFSMGradeInfo: // 0x1002
@@ -648,7 +648,7 @@ func saveCTCPPayload(serverName string, port int, remoteAddr string, head cTCPSe
 		Port:       port,
 		ServerName: serverName,
 		RemoteAddr: remoteAddr,
-		ReceivedAt: time.Now(),
+		ReceivedAt: cTCPNow(),
 	}
 	cTCPPayloadMu.Unlock()
 }
@@ -776,7 +776,7 @@ func cTCPCommandName(cmd int32) string {
 }
 
 func setCTCPServerLastMessage(format string, args ...any) { //格式化字符串并保存最后的消息
-	message := time.Now().Format("15:04:05.000 ") + fmt.Sprintf(format, args...)
+	message := cTCPNow().Format("15:04:05.000 ") + fmt.Sprintf(format, args...)
 	cTCPServerLastMu.Lock()
 	cTCPServerLastMessage = message
 	cTCPServerMessages = append(cTCPServerMessages, message)

@@ -50,6 +50,8 @@ var (
 	realtimeSaveLastSkipAt     time.Time
 	realtimeSaveProcessHistory realtimeSaveProcessSnapshot
 	realtimeSavePausedAfterEnd bool
+	realtimeSaveEndBaseline    database.RealtimeFruitSaveInput
+	realtimeSaveHasEndBaseline bool
 )
 
 func cacheRealtimeSaveGlobalConfig(stg StGlobal) {
@@ -72,6 +74,8 @@ func resetRealtimeSaveState() {
 	realtimeSaveLastSkipAt = time.Time{}
 	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{}
 	realtimeSavePausedAfterEnd = false
+	realtimeSaveEndBaseline = database.RealtimeFruitSaveInput{}
+	realtimeSaveHasEndBaseline = false
 	realtimeSaveMu.Unlock()
 }
 
@@ -86,11 +90,7 @@ func maybeSaveRealtimeStatistics(now time.Time) {
 		logRealtimeSaveSkip("等待 StGlobal/FSM_CMD_CONFIG，暂不保存")
 		return
 	}
-	if realtimeSavePausedAfterEnd {
-		realtimeSaveMu.Unlock()
-		logRealtimeSaveSkip("结束加工后等待下位机统计清零，暂不保存")
-		return
-	}
+	pausedAfterEnd := realtimeSavePausedAfterEnd
 	if !realtimeSaveLastAt.IsZero() && now.Sub(realtimeSaveLastAt) < cTCPRealtimeSaveInterval {
 		realtimeSaveMu.Unlock()
 		return
@@ -103,6 +103,15 @@ func maybeSaveRealtimeStatistics(now time.Time) {
 	if !ok {
 		finishRealtimeSaveSkip(reason)
 		return
+	}
+	if pausedAfterEnd {
+		deltaInput, hasDelta := realtimeSaveDeltaAfterEnd(input)
+		if !hasDelta {
+			finishRealtimeSaveSkip("结束加工后等待下位机统计清零或新批次增量，暂不保存")
+			return
+		}
+		input = deltaInput
+		resumeRealtimeSaveAfterEnd("StStatistics increased after end process; saving delta as new batch")
 	}
 
 	go func() {
@@ -149,11 +158,15 @@ func finishRealtimeSave(customerID int, input database.RealtimeFruitSaveInput, e
 }
 
 func markRealtimeSaveProcessEnded() {
+	baseline, hasBaseline, _ := buildRealtimeSaveInput(cTCPNow())
 	realtimeSaveMu.Lock()
 	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{}
 	realtimeSaveLastAt = time.Time{}
 	realtimeSavePausedAfterEnd = true
+	realtimeSaveEndBaseline = baseline
+	realtimeSaveHasEndBaseline = hasBaseline
 	realtimeSaveMu.Unlock()
+	resetStStatisticsCacheAfterEndProcess()
 }
 
 func maybeResumeRealtimeSaveAfterStatisticsReset() {
@@ -180,9 +193,25 @@ func maybeResumeRealtimeSaveAfterStatisticsReset() {
 		realtimeSaveLastAt = time.Time{}
 		realtimeSaveLastSkip = ""
 		realtimeSaveLastSkipAt = time.Time{}
+		realtimeSaveEndBaseline = database.RealtimeFruitSaveInput{}
+		realtimeSaveHasEndBaseline = false
 	}
 	realtimeSaveMu.Unlock()
 	setCTCPServerLastMessage("CTCP realtime save resumed: StStatistics total count reset to 0")
+}
+
+func resumeRealtimeSaveAfterEnd(reason string) {
+	realtimeSaveMu.Lock()
+	if realtimeSavePausedAfterEnd {
+		realtimeSavePausedAfterEnd = false
+		realtimeSaveLastAt = time.Time{}
+		realtimeSaveLastSkip = ""
+		realtimeSaveLastSkipAt = time.Time{}
+		realtimeSaveEndBaseline = database.RealtimeFruitSaveInput{}
+		realtimeSaveHasEndBaseline = false
+	}
+	realtimeSaveMu.Unlock()
+	setCTCPServerLastMessage("CTCP realtime save resumed: %s", reason)
 }
 
 func logRealtimeSaveSkip(reason string) {

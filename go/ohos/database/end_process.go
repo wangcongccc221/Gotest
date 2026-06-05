@@ -24,7 +24,9 @@ func EndCurrentFruitProcess(endAt time.Time) (EndProcessResult, error) {
 		return EndProcessResult{}, err
 	}
 	if endAt.IsZero() {
-		endAt = time.Now()
+		endAt = databaseNow()
+	} else {
+		endAt = databaseLocalTime(endAt)
 	}
 
 	result := EndProcessResult{}

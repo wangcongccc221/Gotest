@@ -51,6 +51,11 @@ func registerORMRoutes(router *gin.Engine) {
 
 }
 
+func RegisterRoutes(router *gin.Engine) {
+	registerORMRoutes(router)
+	registerFruitInfoRoutes(router)
+}
+
 func handleORMStatus(ctx *gin.Context) {
 	status, code := ormStatus()
 	ctx.JSON(code, status)
