@@ -36,21 +36,22 @@ const (
 	cTCPMaxChannelNum = 12
 	cTCPMaxExitNum    = 48
 
-	cTCPHCDisplayOff     = int32(0x0000) // 关闭显示
-	cTCPHCClearData      = int32(0x0001) // 数据清零
-	cTCPHCTestCupOn      = int32(0x0006) // 果杯测试开，HC-->FSM
-	cTCPHCTestCupOff     = int32(0x0007) // 果杯测试关，HC-->FSM
-	cTCPHCFruitGradeOn   = int32(0x000F) // 水果实时分级信息开，HC-->FSM
-	cTCPHCFruitGradeOff  = int32(0x0010) // 水果实时分级信息关，HC-->FSM
-	cTCPHCDisplayOn      = int32(0x0019) // 打开显示
-	cTCPHCSysConfig      = int32(0x0050) // 系统配置
-	cTCPHCGradeInfo      = int32(0x0051) // 等级设置 StGradeInfo
-	cTCPHCExitInfo       = int32(0x0052) // 出口信息 StExitInfo
-	cTCPHCParasInfo      = int32(0x0054) // 通道范围参数 StParas
-	cTCPHCGlobalExitInfo = int32(0x0058) // 全局出口信息 StGlobalExitInfo
-	cTCPHCMotorInfo      = int32(0x005C) // 电机使能参数 StMotorInfo
-	cTCPHCColorGradeInfo = int32(0x005D) // 品质等级设置 StGradeInfo
-	cTCPHCDensityInfo    = int32(0x005E) // 水果密度信息 StAnalogDensity
+	cTCPHCDisplayOff      = int32(0x0000) // 关闭显示
+	cTCPHCClearData       = int32(0x0001) // 数据清零
+	cTCPHCSaveCurrentData = int32(0x0002) // 清理批量加工数据，保留当前出口装箱量
+	cTCPHCTestCupOn       = int32(0x0006) // 果杯测试开，HC-->FSM
+	cTCPHCTestCupOff      = int32(0x0007) // 果杯测试关，HC-->FSM
+	cTCPHCFruitGradeOn    = int32(0x000F) // 水果实时分级信息开，HC-->FSM
+	cTCPHCFruitGradeOff   = int32(0x0010) // 水果实时分级信息关，HC-->FSM
+	cTCPHCDisplayOn       = int32(0x0019) // 打开显示
+	cTCPHCSysConfig       = int32(0x0050) // 系统配置
+	cTCPHCGradeInfo       = int32(0x0051) // 等级设置 StGradeInfo
+	cTCPHCExitInfo        = int32(0x0052) // 出口信息 StExitInfo
+	cTCPHCParasInfo       = int32(0x0054) // 通道范围参数 StParas
+	cTCPHCGlobalExitInfo  = int32(0x0058) // 全局出口信息 StGlobalExitInfo
+	cTCPHCMotorInfo       = int32(0x005C) // 电机使能参数 StMotorInfo
+	cTCPHCColorGradeInfo  = int32(0x005D) // 品质等级设置 StGradeInfo
+	cTCPHCDensityInfo     = int32(0x005E) // 水果密度信息 StAnalogDensity
 
 	cTCPHCSingleSample        = int32(0x2000) // 单张图像采集，无 payload
 	cTCPHCContinuousSampleOn  = int32(0x2001) // 连续采集开，payload: StContinousCapture

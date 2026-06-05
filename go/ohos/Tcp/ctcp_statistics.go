@@ -119,6 +119,7 @@ func cacheStStatisticsForSpeed(state StStatistics, receivedAt time.Time) {
 	entry.LatestAt = receivedAt
 	entry.HasLatest = true
 	cTCPStStatisticsSpeedMu.Unlock()
+	maybeResumeRealtimeSaveAfterStatisticsReset()
 	maybeSaveRealtimeStatistics(receivedAt)
 }
 

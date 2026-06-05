@@ -49,6 +49,7 @@ var (
 	realtimeSaveLastSkip       string
 	realtimeSaveLastSkipAt     time.Time
 	realtimeSaveProcessHistory realtimeSaveProcessSnapshot
+	realtimeSavePausedAfterEnd bool
 )
 
 func cacheRealtimeSaveGlobalConfig(stg StGlobal) {
@@ -70,6 +71,7 @@ func resetRealtimeSaveState() {
 	realtimeSaveLastSkip = ""
 	realtimeSaveLastSkipAt = time.Time{}
 	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{}
+	realtimeSavePausedAfterEnd = false
 	realtimeSaveMu.Unlock()
 }
 
@@ -82,6 +84,11 @@ func maybeSaveRealtimeStatistics(now time.Time) {
 	if !realtimeSaveHasGlobal {
 		realtimeSaveMu.Unlock()
 		logRealtimeSaveSkip("等待 StGlobal/FSM_CMD_CONFIG，暂不保存")
+		return
+	}
+	if realtimeSavePausedAfterEnd {
+		realtimeSaveMu.Unlock()
+		logRealtimeSaveSkip("结束加工后等待下位机统计清零，暂不保存")
 		return
 	}
 	if !realtimeSaveLastAt.IsZero() && now.Sub(realtimeSaveLastAt) < cTCPRealtimeSaveInterval {
@@ -139,6 +146,43 @@ func finishRealtimeSave(customerID int, input database.RealtimeFruitSaveInput, e
 		setCTCPServerLastMessage("CTCP realtime save ok: CustomerID=%d, database=%s", customerID, database.RealtimeSaveDatabaseForLog())
 		appendCTCPLogChunks("CTCP realtime save rows", formatRealtimeSaveInputForLog(customerID, input))
 	}
+}
+
+func markRealtimeSaveProcessEnded() {
+	realtimeSaveMu.Lock()
+	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{}
+	realtimeSaveLastAt = time.Time{}
+	realtimeSavePausedAfterEnd = true
+	realtimeSaveMu.Unlock()
+}
+
+func maybeResumeRealtimeSaveAfterStatisticsReset() {
+	realtimeSaveMu.Lock()
+	paused := realtimeSavePausedAfterEnd
+	realtimeSaveMu.Unlock()
+	if !paused {
+		return
+	}
+
+	statsList := latestRealtimeSaveStatisticsSnapshots()
+	if len(statsList) == 0 {
+		return
+	}
+	for _, stats := range statsList {
+		if homeStatsTotalCount(stats) > 0 {
+			return
+		}
+	}
+
+	realtimeSaveMu.Lock()
+	if realtimeSavePausedAfterEnd {
+		realtimeSavePausedAfterEnd = false
+		realtimeSaveLastAt = time.Time{}
+		realtimeSaveLastSkip = ""
+		realtimeSaveLastSkipAt = time.Time{}
+	}
+	realtimeSaveMu.Unlock()
+	setCTCPServerLastMessage("CTCP realtime save resumed: StStatistics total count reset to 0")
 }
 
 func logRealtimeSaveSkip(reason string) {

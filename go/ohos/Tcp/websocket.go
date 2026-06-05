@@ -363,6 +363,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 
 	case "clearData": //数据清零
 		c.handleSimpleFSMCommand("clearData", cTCPHCClearData, control)
+	case "endProcess":
+		c.handleEndProcess(control)
 	case "fsmTestCupOn":
 		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
 	case "fsmTestCupOff":
