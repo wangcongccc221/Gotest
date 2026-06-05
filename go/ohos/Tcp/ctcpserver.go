@@ -190,7 +190,6 @@ func StartCTCPServer() int {
 	LoadExitDisplayInfoFromLocalConfig()
 	LoadExitAdditionalTextInfoFromLocalConfig()
 	LoadLevelAuxConfigInfoFromLocalConfig()
-	StartStParasImageFieldsPeriodicLog()
 	StartStGlobalExitInfoPeriodicLog()
 	StartStStatisticsSpeedPublisher()
 	return cTCPServerStatPort
@@ -471,21 +470,6 @@ func formatStParasImageFieldsLine(ipmIndex int, paras StParas) string {
 }
 
 func LogLatestStParasImageFields() {
-	snapshot, ok := latestStParasImageFieldsSnapshot()
-	if !ok {
-		return
-	}
-	setCTCPServerLastMessage(
-		"CTCP StParas 图像区域/偏移 10秒打印: remote=%s, src=0x%04X, dst=0x%04X, nSubsysId=%d, cachedAt=%s",
-		snapshot.RemoteAddr,
-		uint32(snapshot.SrcID),
-		uint32(snapshot.DstID),
-		snapshot.SubsysID,
-		snapshot.ReceivedAt.Format("15:04:05.000"),
-	)
-	for ipmIndex, paras := range snapshot.Paras {
-		setCTCPServerLastMessage("CTCP StParas 图像区域/偏移 10秒打印: %s", formatStParasImageFieldsLine(ipmIndex, paras))
-	}
 }
 
 func StartStParasImageFieldsPeriodicLog() {
@@ -708,27 +692,7 @@ func cacheStStatisticsForSpeed(state StStatistics, receivedAt time.Time) {
 		entry = &cTCPStStatisticsSpeedState{}
 		cTCPStStatisticsSpeedBySys[subsysID] = entry
 	}
-	rawSpeed := sanitizeStStatisticsSpeed(state.NIntervalSumperminute)
-	pulseSpeed, hasPulseSpeed := calculateStStatisticsSpeedFromPulse(state)
 	state.NIntervalSumperminute = resolveStStatisticsDisplaySpeed(state)
-	if hasPulseSpeed {
-		setCTCPServerLastMessage("CTCP StStatistics 分选速度对照: subsys=%d, rawNIntervalSumperminute=%d, pulseSpeed=%d, nInterval=%d, nPulseInterval=%dms, final=%d",
-			subsysID,
-			rawSpeed,
-			pulseSpeed,
-			state.NInterval,
-			state.NPulseInterval,
-			state.NIntervalSumperminute,
-		)
-	} else {
-		setCTCPServerLastMessage("CTCP StStatistics 分选速度对照: subsys=%d, rawNIntervalSumperminute=%d, pulseSpeed=invalid, nInterval=%d, nPulseInterval=%dms, final=%d",
-			subsysID,
-			rawSpeed,
-			state.NInterval,
-			state.NPulseInterval,
-			state.NIntervalSumperminute,
-		)
-	}
 	entry.Latest = state
 	entry.LatestAt = receivedAt
 	entry.HasLatest = true
