@@ -343,6 +343,7 @@ func getWAMIP(id int32) int {
 	return int((id | 0x00D0) >> 4)
 }
 
+
 func encodeChannel(x int, y int, z int) int32 {
 	return int32((x+1)<<8 | (y+1)<<4 | (z + 1))
 }
