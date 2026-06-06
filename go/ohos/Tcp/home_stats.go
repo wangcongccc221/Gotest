@@ -15,7 +15,7 @@ const (
 	homeStatsDefaultMaxSpeed           = 680.0
 	homeStatsDefaultMaxRealWeightCount = 66.0
 	homeStatsWeightScale               = 1000000.0
-	homeStatsHistoryInterval           = 15 * time.Second
+	homeStatsHistoryInterval           = 20 * time.Second
 	homeStatsMaxProcessInfoPoints      = 90
 )
 
@@ -60,6 +60,8 @@ type homeStatsConfigState struct {
 type homeStatsHistoryState struct {
 	PrevTotalCount             uint64
 	PrevTotalCupNum            uint64
+	PrevExitCount              uint64
+	PrevGradeCount             uint64
 	PrevTotalWeight            float64
 	PrevAt                     time.Time
 	HasPrev                    bool
@@ -74,6 +76,8 @@ type homeStatsHistoryState struct {
 type homeStatsAggregate struct {
 	TotalCount         uint64
 	TotalCupNum        uint64
+	TotalExitCount     uint64
+	TotalGradeCount    uint64
 	TotalWeight        float64
 	SortSpeedPerMinute float64
 	IntervalSpeedMs    float64
@@ -86,6 +90,31 @@ var (
 	homeStatsHistory homeStatsHistoryState
 )
 
+func resetHomeStatsHistoryAfterEndProcess() {
+	homeStatsMu.Lock()
+	homeStatsHistory = homeStatsHistoryState{}
+	homeStatsMu.Unlock()
+}
+
+func resetHomeStatsEfficiencyWindow(reason string) {
+	homeStatsMu.Lock()
+	homeStatsHistory.PrevTotalCount = 0
+	homeStatsHistory.PrevTotalCupNum = 0
+	homeStatsHistory.PrevExitCount = 0
+	homeStatsHistory.PrevGradeCount = 0
+	homeStatsHistory.PrevTotalWeight = 0
+	homeStatsHistory.PrevAt = time.Time{}
+	homeStatsHistory.HasPrev = false
+	homeStatsHistory.CupFillEfficiency = 0
+	homeStatsHistory.RealtimeOutputTonPerHour = 0
+	homeStatsHistory.RealtimeOutputPercent = 0
+	homeStatsMu.Unlock()
+
+	if reason != "" {
+		setCTCPServerLastMessage("homeStats 20秒效率基准已清空: %s", reason)
+	}
+}
+
 func cacheHomeStatsGlobalConfig(stg StGlobal) {
 	homeStatsMu.Lock()
 	defer homeStatsMu.Unlock()
@@ -95,10 +124,20 @@ func cacheHomeStatsGlobalConfig(stg StGlobal) {
 		homeStatsConfig.ChannelInfo[i] = normalizeHomeStatsChannelCount(int(stg.Sys.NChannelInfo[i]))
 	}
 
-	fruitName := cleanTCPServerCString(stg.Grade.StrFruitName[:])
-	if fruitName != "" {
+	fruitName := realtimeSaveFixedText(stg.Grade.StrFruitName[:])
+	if fruitName != "" && homeStatsConfig.ProgramName == "" {
 		homeStatsConfig.ProgramName = fruitName
 	}
+}
+
+func cacheHomeStatsProgramName(programName string) {
+	if programName == "" {
+		return
+	}
+
+	homeStatsMu.Lock()
+	homeStatsConfig.ProgramName = programName
+	homeStatsMu.Unlock()
 }
 
 func publishLatestHomeStats(now time.Time) {
@@ -127,12 +166,14 @@ func buildLatestHomeStatsPayload(now time.Time) (homeStatsPayload, bool) {
 
 	subsysNum := resolveHomeStatsSubsysNumLocked(statsList)
 	aggregate := aggregateHomeStatsLocked(statsList, subsysNum)
-	if aggregate.HasStats && homeStatsHistory.StartAt.IsZero() {
-		homeStatsHistory.StartAt = now
-	}
 
 	sortSpeedPerMinute := aggregate.SortSpeedPerMinute
 	sortSpeedPercent := calculateHomeStatsSortSpeedPercent(sortSpeedPerMinute)
+	isProcessing := aggregate.TotalCount > 0 || sortSpeedPerMinute > 0
+	if isProcessing && homeStatsHistory.StartAt.IsZero() {
+		homeStatsHistory.StartAt = now
+	}
+
 	averageWeightG := 0.0
 	if aggregate.TotalCount > 0 {
 		averageWeightG = roundHomeStats(aggregate.TotalWeight/float64(aggregate.TotalCount), 2)
@@ -170,7 +211,7 @@ func buildLatestHomeStatsPayload(now time.Time) (homeStatsPayload, bool) {
 		RunningTimeSeconds:       runningTimeSeconds,
 		RunningTimeText:          formatHomeStatsDuration(runningTimeSeconds),
 		ProgramName:              programName,
-		IsProcessing:             aggregate.TotalCount > 0 || sortSpeedPerMinute > 0,
+		IsProcessing:             isProcessing,
 		ProcessInfoPoints:        append([]homeStatsProcessInfoPoint(nil), homeStatsHistory.ProcessInfoPoints...),
 		TopProductionTonPerHour:  homeStatsHistory.RealtimeOutputTonPerHour,
 		TopSumWeightTon:          aggregate.TotalWeight / homeStatsWeightScale,
@@ -184,26 +225,42 @@ func updateHomeStatsHistoryLocked(now time.Time, aggregate homeStatsAggregate, s
 	if !aggregate.HasStats {
 		return
 	}
+	if aggregate.TotalCount > 0 && aggregate.TotalCupNum == 0 {
+		homeStatsHistory.CupFillEfficiency = 0
+		homeStatsHistory.RealtimeOutputTonPerHour = 0
+		homeStatsHistory.RealtimeOutputPercent = 0
+		return
+	}
 	if !homeStatsHistory.HasPrev {
 		homeStatsHistory.PrevTotalCount = aggregate.TotalCount
 		homeStatsHistory.PrevTotalCupNum = aggregate.TotalCupNum
+		homeStatsHistory.PrevExitCount = aggregate.TotalExitCount
+		homeStatsHistory.PrevGradeCount = aggregate.TotalGradeCount
 		homeStatsHistory.PrevTotalWeight = aggregate.TotalWeight
 		homeStatsHistory.PrevAt = now
 		homeStatsHistory.HasPrev = true
+		setCTCPServerLastMessage(
+			"homeStats 20秒效率基准建立: at=%s, 总个数=%d, 总果杯数=%d, 出口个数=%d, 等级个数=%d",
+			now.Format("15:04:05.000"),
+			aggregate.TotalCount,
+			aggregate.TotalCupNum,
+			aggregate.TotalExitCount,
+			aggregate.TotalGradeCount,
+		)
 		return
 	}
 	if now.Sub(homeStatsHistory.PrevAt) < homeStatsHistoryInterval {
 		return
 	}
 
+	prevAt := homeStatsHistory.PrevAt
 	deltaCount := int64(aggregate.TotalCount) - int64(homeStatsHistory.PrevTotalCount)
 	deltaCup := int64(aggregate.TotalCupNum) - int64(homeStatsHistory.PrevTotalCupNum)
+	deltaExit := int64(aggregate.TotalExitCount) - int64(homeStatsHistory.PrevExitCount)
+	deltaGrade := int64(aggregate.TotalGradeCount) - int64(homeStatsHistory.PrevGradeCount)
 	deltaWeight := aggregate.TotalWeight - homeStatsHistory.PrevTotalWeight
 
-	efficiency := 0.0
-	if deltaCup > 0 && deltaCount >= 0 {
-		efficiency = clampHomeStats((float64(deltaCount)*100.0)/float64(deltaCup), 0, 100)
-	}
+	efficiency := calculateHomeStatsEfficiencyPercent(deltaExit, deltaCup)
 
 	realtimeOutput := 0.0
 	if deltaWeight > 0 {
@@ -216,9 +273,12 @@ func updateHomeStatsHistoryLocked(now time.Time, aggregate homeStatsAggregate, s
 	homeStatsHistory.RealtimeOutputPercent = realtimeOutputPercent
 	homeStatsHistory.PrevTotalCount = aggregate.TotalCount
 	homeStatsHistory.PrevTotalCupNum = aggregate.TotalCupNum
+	homeStatsHistory.PrevExitCount = aggregate.TotalExitCount
+	homeStatsHistory.PrevGradeCount = aggregate.TotalGradeCount
 	homeStatsHistory.PrevTotalWeight = aggregate.TotalWeight
 	homeStatsHistory.PrevAt = now
 
+	logHomeStatsEfficiencyWindow(now, prevAt, deltaCount, deltaCup, deltaExit, deltaGrade, efficiency)
 	upsertHomeStatsProcessInfoPointLocked(now, realtimeOutput, realtimeOutputPercent, efficiency, sortSpeedPercent, averageWeightG)
 }
 
@@ -272,11 +332,17 @@ func aggregateHomeStatsLocked(statsList []StStatistics, subsysNum int) homeStats
 		}
 		aggregate.HasStats = true
 		totalCount := homeStatsTotalCount(stats)
+		exitCount := sumHomeStatsUint64(stats.NExitCount[:])
+		gradeCount := sumHomeStatsUint64(stats.NGradeCount[:])
 		totalWeight := homeStatsTotalWeight(stats)
+		totalCupNum := uint64(maxInt64(0, int64(stats.NTotalCupNum)))
+		channelCount := homeStatsChannelCountLocked(subsysID)
 		aggregate.TotalCount += totalCount
+		aggregate.TotalExitCount += exitCount
+		aggregate.TotalGradeCount += gradeCount
 		aggregate.TotalWeight += totalWeight
 		if totalCount > 0 {
-			aggregate.TotalCupNum += uint64(maxInt64(0, int64(stats.NTotalCupNum))) * uint64(homeStatsChannelCountLocked(subsysID))
+			aggregate.TotalCupNum += totalCupNum * uint64(channelCount)
 		}
 
 		speed := float64(stats.NIntervalSumperminute)
@@ -300,14 +366,20 @@ func aggregateHomeStatsLocked(statsList []StStatistics, subsysNum int) homeStats
 }
 
 func homeStatsTotalCount(stats StStatistics) uint64 {
-	if stats.NChannelTotalCount > 0 {
-		return stats.NChannelTotalCount
-	}
-	exitSum := sumHomeStatsUint64(stats.NExitCount[:])
-	if exitSum > 0 {
-		return exitSum
-	}
-	return sumHomeStatsUint64(stats.NGradeCount[:])
+	return stats.NChannelTotalCount
+}
+
+func logHomeStatsEfficiencyWindow(now time.Time, prevAt time.Time, deltaCount int64, deltaCup int64, deltaExit int64, deltaGrade int64, efficiency float64) {
+	setCTCPServerLastMessage(
+		"homeStats 20秒效率计算: prevAt=%s, currAt=%s, Δ总个数=%d, Δ总果杯数=%d, Δ出口个数=%d, Δ等级个数=%d, 效率=%.1f%%",
+		prevAt.Format("15:04:05.000"),
+		now.Format("15:04:05.000"),
+		deltaCount,
+		deltaCup,
+		deltaExit,
+		deltaGrade,
+		roundHomeStats(efficiency, 1),
+	)
 }
 
 func homeStatsTotalWeight(stats StStatistics) float64 {
@@ -319,6 +391,13 @@ func homeStatsTotalWeight(stats StStatistics) float64 {
 		return float64(exitSum)
 	}
 	return float64(sumHomeStatsUint64(stats.NWeightGradeCount[:]))
+}
+
+func calculateHomeStatsEfficiencyPercent(deltaExit int64, deltaCup int64) float64 {
+	if deltaCup <= 0 || deltaExit < 0 {
+		return 0
+	}
+	return clampHomeStats((float64(deltaExit)*100.0)/float64(deltaCup), 0, 100)
 }
 
 func sumHomeStatsUint64(values []uint64) uint64 {

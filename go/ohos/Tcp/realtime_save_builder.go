@@ -107,6 +107,7 @@ func aggregateRealtimeSaveStats(statsList []StStatistics, sys StSysConfig) realt
 			aggregate.ExitCount[i] += stats.NExitCount[i]
 			aggregate.ExitWeightCount[i] += stats.NExitWeightCount[i]
 		}
+		aggregate.TotalExitCount += sumHomeStatsUint64(stats.NExitCount[:])
 
 		if stats.NIntervalSumperminute > 0 {
 			speedSum += float64(stats.NIntervalSumperminute)

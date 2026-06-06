@@ -96,6 +96,44 @@ func buildRealtimeSaveSystems(aggregate realtimeSaveAggregate) []database.Realti
 }
 
 func buildRealtimeSaveProcess(now time.Time, aggregate realtimeSaveAggregate) *database.RealtimeFruitProcessSaveInput {
+	if aggregate.TotalCount > 0 && aggregate.TotalCupNum == 0 {
+		return nil
+	}
+
+	realtimeSaveMu.Lock()
+	prev := realtimeSaveProcessHistory
+	if !prev.HasPrev {
+		realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{
+			TotalExitCount: aggregate.TotalExitCount,
+			TotalCount:     aggregate.TotalCount,
+			TotalCupNum:    aggregate.TotalCupNum,
+			TotalWeight:    aggregate.TotalWeight,
+			At:             now,
+			HasPrev:        true,
+		}
+		realtimeSaveMu.Unlock()
+		return nil
+	}
+	if !now.After(prev.At) || now.Sub(prev.At) < homeStatsHistoryInterval {
+		realtimeSaveMu.Unlock()
+		return nil
+	}
+
+	elapsed := now.Sub(prev.At)
+	deltaExit := int64(aggregate.TotalExitCount) - int64(prev.TotalExitCount)
+	deltaCount := int64(aggregate.TotalCount) - int64(prev.TotalCount)
+	deltaCup := int64(aggregate.TotalCupNum) - int64(prev.TotalCupNum)
+	deltaWeight := aggregate.TotalWeight - prev.TotalWeight
+	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{
+		TotalExitCount: aggregate.TotalExitCount,
+		TotalCount:     aggregate.TotalCount,
+		TotalCupNum:    aggregate.TotalCupNum,
+		TotalWeight:    aggregate.TotalWeight,
+		At:             now,
+		HasPrev:        true,
+	}
+	realtimeSaveMu.Unlock()
+
 	avgWeight := 0.0
 	if aggregate.TotalCount > 0 {
 		avgWeight = roundHomeStats(aggregate.TotalWeight/float64(aggregate.TotalCount), 2)
@@ -106,30 +144,12 @@ func buildRealtimeSaveProcess(now time.Time, aggregate realtimeSaveAggregate) *d
 		SpeedPercent: roundHomeStats((aggregate.SortSpeed*100.0)/homeStatsDefaultMaxSpeed, 2),
 		AvgWeight:    avgWeight,
 	}
-
-	realtimeSaveMu.Lock()
-	prev := realtimeSaveProcessHistory
-	if prev.HasPrev && now.After(prev.At) {
-		elapsed := now.Sub(prev.At)
-		deltaCount := int64(aggregate.TotalCount) - int64(prev.TotalCount)
-		deltaCup := int64(aggregate.TotalCupNum) - int64(prev.TotalCupNum)
-		deltaWeight := aggregate.TotalWeight - prev.TotalWeight
-
-		if deltaCup > 0 && deltaCount >= 0 {
-			process.SeparationEfficiency = roundHomeStats(clampHomeStats((float64(deltaCount)*100.0)/float64(deltaCup), 0, 100), 1)
-		}
-		if deltaWeight > 0 && elapsed > 0 {
-			process.RealWeightCount = (deltaWeight / homeStatsWeightScale) * (float64(time.Hour) / float64(elapsed))
-			process.RealWeightCountPer = clampHomeStats(math.Round((process.RealWeightCount*100.0)/homeStatsDefaultMaxRealWeightCount), 0, 100)
-		}
+	if deltaCount >= 0 {
+		process.SeparationEfficiency = roundHomeStats(calculateHomeStatsEfficiencyPercent(deltaExit, deltaCup), 1)
 	}
-	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{
-		TotalCount:  aggregate.TotalCount,
-		TotalCupNum: aggregate.TotalCupNum,
-		TotalWeight: aggregate.TotalWeight,
-		At:          now,
-		HasPrev:     true,
+	if deltaWeight > 0 && elapsed > 0 {
+		process.RealWeightCount = (deltaWeight / homeStatsWeightScale) * (float64(time.Hour) / float64(elapsed))
+		process.RealWeightCountPer = clampHomeStats(math.Round((process.RealWeightCount*100.0)/homeStatsDefaultMaxRealWeightCount), 0, 100)
 	}
-	realtimeSaveMu.Unlock()
 	return process
 }

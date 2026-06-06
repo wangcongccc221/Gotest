@@ -9,7 +9,7 @@ import (
 )
 
 const (
-	cTCPRealtimeSaveInterval       = 3 * time.Second
+	cTCPRealtimeSaveInterval       = 10 * time.Second
 	cTCPRealtimeSaveErrorLogPeriod = 30 * time.Second
 )
 
@@ -19,6 +19,7 @@ type realtimeSaveAggregate struct {
 	BoxGradeCount    [256]int64
 	ExitCount        [MAX_EXIT_NUM]uint64
 	ExitWeightCount  [MAX_EXIT_NUM]uint64
+	TotalExitCount   uint64
 	SystemCount      [cTCPServerMaxSubsysNum]uint64
 	SystemWeight     [cTCPServerMaxSubsysNum]uint64
 	TotalCount       uint64
@@ -30,11 +31,12 @@ type realtimeSaveAggregate struct {
 }
 
 type realtimeSaveProcessSnapshot struct {
-	TotalCount  uint64
-	TotalCupNum uint64
-	TotalWeight float64
-	At          time.Time
-	HasPrev     bool
+	TotalExitCount uint64
+	TotalCount     uint64
+	TotalCupNum    uint64
+	TotalWeight    float64
+	At             time.Time
+	HasPrev        bool
 }
 
 var (
@@ -178,6 +180,7 @@ func markRealtimeSaveProcessEnded() {
 	realtimeSaveEndBaseline = baseline
 	realtimeSaveHasEndBaseline = hasBaseline
 	realtimeSaveMu.Unlock()
+	resetHomeStatsHistoryAfterEndProcess()
 	resetStStatisticsCacheAfterEndProcess()
 }
 

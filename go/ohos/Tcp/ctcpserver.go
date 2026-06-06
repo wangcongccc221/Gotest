@@ -146,7 +146,6 @@ func StartCTCPServer() int {
 	LoadExitDisplayInfoFromLocalConfig()
 	LoadExitAdditionalTextInfoFromLocalConfig()
 	LoadLevelAuxConfigInfoFromLocalConfig()
-	StartStGlobalExitInfoPeriodicLog()
 	StartStStatisticsSpeedPublisher()
 	return cTCPServerStatPort
 }
@@ -503,12 +502,13 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 
 	case cmdFSMStatistics: //0x1001
-		state, err := ParseData[StStatistics](payload)
+		state, programName, err := parseStStatisticsPayload(payload)
 		if err != nil {
 			setCTCPServerLastMessage("CTCP StStatistics 解析失败: %v", err)
 			return
 		}
 		state.NSubsysId = normalizeStStatisticsSubsysID(head.NSrcId, state.NSubsysId)
+		cacheHomeStatsProgramName(programName)
 		cacheStStatisticsForSpeed(state, cTCPNow())
 		return
 
@@ -680,6 +680,19 @@ func ParseData[T any](payload []byte) (T, error) {
 		return zero, fmt.Errorf("payload too short for %T: need %d, got %d", zero, n, len(payload))
 	}
 	return *(*T)(unsafe.Pointer(&payload[0])), nil
+}
+
+func parseStStatisticsPayload(payload []byte) (StStatistics, string, error) {
+	if len(payload) >= int(unsafe.Sizeof(StBroadcastStatistics{})) {
+		broadcast, err := ParseData[StBroadcastStatistics](payload)
+		if err != nil {
+			return StStatistics{}, "", err
+		}
+		return broadcast.Statistics, realtimeSaveFixedText(broadcast.StrProgramName[:]), nil
+	}
+
+	state, err := ParseData[StStatistics](payload)
+	return state, "", err
 }
 
 // func parseStStatistics(payload []byte) (StStatistics, error) {

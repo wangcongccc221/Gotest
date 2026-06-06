@@ -58,10 +58,11 @@ var webSocketUpgrader = websocket.Upgrader{
 }
 
 type webSocketFrame struct { //数据帧
-	Type  string          `json:"type"`
-	Topic string          `json:"topic,omitempty"`
-	Data  json.RawMessage `json:"data,omitempty"`
-	At    int64           `json:"at"` //时间戳
+	Type      string          `json:"type"`
+	Topic     string          `json:"topic,omitempty"`
+	Data      json.RawMessage `json:"data,omitempty"`
+	RequestID string          `json:"requestId,omitempty"`
+	At        int64           `json:"at"` //时间戳
 }
 
 type webSocketControlMessage struct {
@@ -234,6 +235,8 @@ func handleWebSocket(ctx *gin.Context) {
 	client.hub.register <- client
 	go client.writePump()
 
+	resetHomeStatsEfficiencyWindow("WebSocket client connected")
+
 	client.sendFrame(webSocketFrame{
 		Type: "ready",
 	})
@@ -363,6 +366,12 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 	}
 
 	switch control.Type {
+	case "ping":
+		c.sendFrame(webSocketFrame{
+			Type:      "pong",
+			RequestID: control.RequestID,
+		})
+
 	case "requestStGlobal":
 		c.handleRequestStGlobal()
 
