@@ -113,9 +113,9 @@ func SaveRealtimeFruitInfo(input RealtimeFruitSaveInput) (int, error) {
 			startTime = savedAt.Format("2006-01-02 15:04:05")
 		}
 
-		update := realtimeSaveFruitInfoValues(input, startTime, programName)
 		if hasFruit {
 			customerID = fruit.CustomerID
+			update := realtimeSaveExistingFruitInfoValues(input, startTime, programName)
 			if err := tx.Model(&TbFruitInfo{}).Where("CustomerID = ?", customerID).Updates(update).Error; err != nil {
 				return err
 			}

@@ -50,6 +50,23 @@ type updateFruitCustomerInfoRequest struct {
 	FBatchNo     *string `json:"FBatchNo"`
 }
 
+type UpdateFruitCustomerInfoInput struct {
+	CustomerID   int
+	CustomerName *string
+	FarmName     *string
+	FruitName    *string
+	SortBaseName *string
+	ProgramName  *string
+	FBatchNo     *string
+}
+
+type FruitCustomerInfoSnapshot struct {
+	CustomerID   int
+	CustomerName string
+	FarmName     string
+	FruitName    string
+}
+
 type fruitInfoAPIModel struct {
 	CustomerID           int                  `json:"CustomerID"`
 	SysID                int                  `json:"SysID"`
@@ -308,45 +325,84 @@ func handleFruitInfoUpdateCustomer(ctx *gin.Context) {
 		fruitInfoAPIFail(ctx, "invalid request: "+err.Error())
 		return
 	}
-	if request.CustomerID <= 0 {
-		fruitInfoAPIFail(ctx, "CustomerID is required")
-		return
-	}
-
-	updates := make(map[string]any)
-	if request.CustomerName != nil {
-		updates["CustomerName"] = strings.TrimSpace(*request.CustomerName)
-	}
-	if request.FarmName != nil {
-		updates["FarmName"] = strings.TrimSpace(*request.FarmName)
-	}
-	if request.FruitName != nil {
-		updates["FruitName"] = strings.TrimSpace(*request.FruitName)
-	}
-	if request.SortBaseName != nil {
-		updates["ProgramName"] = strings.TrimSpace(*request.SortBaseName)
-	}
-	if request.ProgramName != nil {
-		updates["ProgramName"] = strings.TrimSpace(*request.ProgramName)
-	}
-	if request.FBatchNo != nil {
-		updates["FBatchNo"] = strings.TrimSpace(*request.FBatchNo)
-	}
-	if len(updates) == 0 {
-		fruitInfoAPIOKRaw(ctx, "")
-		return
-	}
-
-	db, err := getInitializedFileORMDB()
+	err := UpdateFruitCustomerInfo(UpdateFruitCustomerInfoInput{
+		CustomerID:   request.CustomerID,
+		CustomerName: request.CustomerName,
+		FarmName:     request.FarmName,
+		FruitName:    request.FruitName,
+		SortBaseName: request.SortBaseName,
+		ProgramName:  request.ProgramName,
+		FBatchNo:     request.FBatchNo,
+	})
 	if err != nil {
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
-	if err := db.Model(&TbFruitInfo{}).Where("CustomerID = ?", request.CustomerID).Updates(updates).Error; err != nil {
-		fruitInfoAPIFail(ctx, err.Error())
-		return
-	}
 	fruitInfoAPIOKRaw(ctx, "")
+}
+
+func UpdateFruitCustomerInfo(input UpdateFruitCustomerInfoInput) error {
+	if input.CustomerID <= 0 {
+		return errors.New("CustomerID is required")
+	}
+
+	updates := make(map[string]any)
+	if input.CustomerName != nil {
+		updates["CustomerName"] = strings.TrimSpace(*input.CustomerName)
+	}
+	if input.FarmName != nil {
+		updates["FarmName"] = strings.TrimSpace(*input.FarmName)
+	}
+	if input.FruitName != nil {
+		updates["FruitName"] = strings.TrimSpace(*input.FruitName)
+	}
+	if input.SortBaseName != nil {
+		updates["ProgramName"] = strings.TrimSpace(*input.SortBaseName)
+	}
+	if input.ProgramName != nil {
+		updates["ProgramName"] = strings.TrimSpace(*input.ProgramName)
+	}
+	if input.FBatchNo != nil {
+		updates["FBatchNo"] = strings.TrimSpace(*input.FBatchNo)
+	}
+	if len(updates) == 0 {
+		return nil
+	}
+
+	db, err := getInitializedFileORMDB()
+	if err != nil {
+		return err
+	}
+	result := db.Model(&TbFruitInfo{}).Where("CustomerID = ?", input.CustomerID).Updates(updates)
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return errors.New("CustomerID not found")
+	}
+	return nil
+}
+
+func GetFruitCustomerInfoSnapshot(customerID int) (FruitCustomerInfoSnapshot, error) {
+	if customerID <= 0 {
+		return FruitCustomerInfoSnapshot{}, errors.New("CustomerID is required")
+	}
+	db, err := getInitializedFileORMDB()
+	if err != nil {
+		return FruitCustomerInfoSnapshot{}, err
+	}
+	var row TbFruitInfo
+	if err := db.Select("CustomerID", "CustomerName", "FarmName", "FruitName").
+		Where("CustomerID = ?", customerID).
+		First(&row).Error; err != nil {
+		return FruitCustomerInfoSnapshot{}, err
+	}
+	return FruitCustomerInfoSnapshot{
+		CustomerID:   row.CustomerID,
+		CustomerName: row.CustomerName,
+		FarmName:     row.FarmName,
+		FruitName:    row.FruitName,
+	}, nil
 }
 
 func applyFruitInfoFilters(query *gorm.DB, request fruitInfoAPIRequest) *gorm.DB {

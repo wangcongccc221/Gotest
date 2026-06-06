@@ -11,6 +11,8 @@ import (
 	"time"
 	"unsafe"
 
+	"gotest/ohos/database"
+
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
 )
@@ -64,6 +66,7 @@ type webSocketFrame struct { //数据帧
 
 type webSocketControlMessage struct {
 	Type                string                              `json:"type"`
+	RequestID           string                              `json:"requestId,omitempty"`
 	FSMID               int32                               `json:"fsmId,omitempty"`
 	DestID              int32                               `json:"destId,omitempty"`
 	SysConfig           *StSysConfig                        `json:"sysConfig,omitempty"`
@@ -90,6 +93,17 @@ type webSocketControlMessage struct {
 	ResetADValue        *int                                `json:"resetADValue,omitempty"`
 	WeightInfo          *StWeightBaseInfo                   `json:"weightInfo,omitempty"`
 	GlobalWeightInfo    *StGlobalWeightBaseInfo             `json:"globalWeightInfo,omitempty"`
+	FruitCustomerInfo   *webSocketFruitCustomerInfoControl  `json:"fruitCustomerInfo,omitempty"`
+}
+
+type webSocketFruitCustomerInfoControl struct {
+	CustomerID   int     `json:"CustomerID,omitempty"`
+	CustomerName *string `json:"CustomerName,omitempty"`
+	FarmName     *string `json:"FarmName,omitempty"`
+	FruitName    *string `json:"FruitName,omitempty"`
+	SortBaseName *string `json:"SortBaseName,omitempty"`
+	ProgramName  *string `json:"ProgramName,omitempty"`
+	FBatchNo     *string `json:"FBatchNo,omitempty"`
 }
 
 type webSocketGradeExit struct {
@@ -365,6 +379,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleSimpleFSMCommand("clearData", cTCPHCClearData, control)
 	case "endProcess":
 		c.handleEndProcess(control)
+	case "updateFruitCustomerInfo":
+		c.handleFruitCustomerInfoUpdate(control)
 	case "fsmTestCupOn":
 		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
 	case "fsmTestCupOff":
@@ -1027,6 +1043,50 @@ func publishFruitTypeConfigData(fsmID int32, info FruitTypeConfigInfo) {
 	defaultWebSocketHub.publish(webSocketTopicFruitTypeConfig, frame)
 }
 
+func (c *webSocketClient) handleFruitCustomerInfoUpdate(control webSocketControlMessage) {
+	go func() {
+		info := control.FruitCustomerInfo
+		if info == nil {
+			c.sendCommandAckDetail("updateFruitCustomerInfo", 0, 0, 0, -1, "fruitCustomerInfo is required", control.RequestID)
+			return
+		}
+		err := database.UpdateFruitCustomerInfo(database.UpdateFruitCustomerInfoInput{
+			CustomerID:   info.CustomerID,
+			CustomerName: info.CustomerName,
+			FarmName:     info.FarmName,
+			FruitName:    info.FruitName,
+			SortBaseName: info.SortBaseName,
+			ProgramName:  info.ProgramName,
+			FBatchNo:     info.FBatchNo,
+		})
+		if err != nil {
+			setCTCPServerLastMessage("WebSocket updateFruitCustomerInfo failed: CustomerID=%d, err=%v", info.CustomerID, err)
+			c.sendCommandAckDetail("updateFruitCustomerInfo", 0, int32(info.CustomerID), 0, -1, err.Error(), control.RequestID)
+			return
+		}
+		snapshot, readErr := database.GetFruitCustomerInfoSnapshot(info.CustomerID)
+		if readErr != nil {
+			setCTCPServerLastMessage(
+				"WebSocket updateFruitCustomerInfo success but readback failed: CustomerID=%d, database=%s, err=%v",
+				info.CustomerID,
+				database.RealtimeSaveDatabaseForLog(),
+				readErr,
+			)
+			c.sendCommandAckDetail("updateFruitCustomerInfo", 0, int32(info.CustomerID), 0, -1, readErr.Error(), control.RequestID)
+			return
+		}
+		setCTCPServerLastMessage(
+			"WebSocket updateFruitCustomerInfo success: CustomerID=%d, database=%s, readback CustomerName=%s, FarmName=%s, FruitName=%s",
+			snapshot.CustomerID,
+			database.RealtimeSaveDatabaseForLog(),
+			snapshot.CustomerName,
+			snapshot.FarmName,
+			snapshot.FruitName,
+		)
+		c.sendCommandAckDetail("updateFruitCustomerInfo", 0, int32(info.CustomerID), 0, 0, "database updated and verified", control.RequestID)
+	}()
+}
+
 func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendSimpleFSMCommand(topic, commandID, control)
@@ -1109,6 +1169,10 @@ func (c *webSocketClient) handleWAMGlobalWeightInfoData(control webSocketControl
 }
 
 func (c *webSocketClient) sendCommandAck(topic string, commandID int32, destID int32, payloadBytes int, result int) {
+	c.sendCommandAckDetail(topic, commandID, destID, payloadBytes, result, commandAckMessage(result), "")
+}
+
+func (c *webSocketClient) sendCommandAckDetail(topic string, commandID int32, destID int32, payloadBytes int, result int, message string, requestID string) {
 	c.sendFrame(webSocketFrame{
 		Type:  "commandAck",
 		Topic: topic,
@@ -1119,7 +1183,8 @@ func (c *webSocketClient) sendCommandAck(topic string, commandID int32, destID i
 			"cmdId":        commandID,
 			"destId":       destID,
 			"payloadBytes": payloadBytes,
-			"message":      commandAckMessage(result),
+			"message":      message,
+			"requestId":    requestID,
 		}),
 	})
 }

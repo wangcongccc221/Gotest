@@ -27,6 +27,14 @@ func realtimeSaveFruitInfoValues(input RealtimeFruitSaveInput, startTime string,
 	}
 }
 
+func realtimeSaveExistingFruitInfoValues(input RealtimeFruitSaveInput, startTime string, programName string) map[string]any {
+	values := realtimeSaveFruitInfoValues(input, startTime, programName)
+	delete(values, "CustomerName")
+	delete(values, "FarmName")
+	delete(values, "FruitName")
+	return values
+}
+
 func realtimeSaveFruitInfoColumns() []string {
 	return []string{
 		"CustomerName",

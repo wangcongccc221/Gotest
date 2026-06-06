@@ -152,7 +152,19 @@ func finishRealtimeSave(customerID int, input database.RealtimeFruitSaveInput, e
 	realtimeSaveMu.Unlock()
 
 	if shouldLog {
-		setCTCPServerLastMessage("CTCP realtime save ok: CustomerID=%d, database=%s", customerID, database.RealtimeSaveDatabaseForLog())
+		snapshot, readErr := database.GetFruitCustomerInfoSnapshot(customerID)
+		if readErr == nil {
+			setCTCPServerLastMessage(
+				"CTCP realtime save ok: CustomerID=%d, database=%s, db CustomerName=%s, FarmName=%s, FruitName=%s",
+				customerID,
+				database.RealtimeSaveDatabaseForLog(),
+				snapshot.CustomerName,
+				snapshot.FarmName,
+				snapshot.FruitName,
+			)
+		} else {
+			setCTCPServerLastMessage("CTCP realtime save ok: CustomerID=%d, database=%s, readback failed: %v", customerID, database.RealtimeSaveDatabaseForLog(), readErr)
+		}
 		appendCTCPLogChunks("CTCP realtime save rows", formatRealtimeSaveInputForLog(customerID, input))
 	}
 }
