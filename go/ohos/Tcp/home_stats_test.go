@@ -1,8 +1,11 @@
 package tcp
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
+
+	"gotest/ohos/database"
 )
 
 func resetHomeStatsTestState() {
@@ -371,5 +374,59 @@ func TestBuildRealtimeSaveProcessUsesExitCountForSeparationEfficiency(t *testing
 	}
 	if process.SeparationEfficiency != 86.6 {
 		t.Fatalf("SeparationEfficiency = %.1f, want 86.6 from deltaExit/deltaCup", process.SeparationEfficiency)
+	}
+}
+
+func TestBuildRealtimeSaveProcessUsesConfiguredOutputAndSpeedPercent(t *testing.T) {
+	resetHomeStatsTestState()
+	t.Cleanup(resetHomeStatsTestState)
+	t.Cleanup(func() {
+		_ = database.InitORMWithPath("")
+	})
+
+	dbPath := filepath.Join(t.TempDir(), "config.db")
+	if err := database.InitORMWithPath(dbPath); err != nil {
+		t.Fatalf("InitORMWithPath() error = %v", err)
+	}
+	if err := database.SaveConfigValue("MaxRealWeightCount", "120"); err != nil {
+		t.Fatalf("SaveConfigValue(MaxRealWeightCount) error = %v", err)
+	}
+	if err := database.SaveConfigValue("MaxSpeed", "1000"); err != nil {
+		t.Fatalf("SaveConfigValue(MaxSpeed) error = %v", err)
+	}
+
+	start := time.Date(2026, 6, 6, 9, 0, 0, 0, cTCPChinaLocation)
+	first := realtimeSaveAggregate{
+		TotalCount:     100,
+		TotalCupNum:    200,
+		TotalExitCount: 100,
+		TotalWeight:    1000000,
+		SortSpeed:      500,
+		HasStats:       true,
+	}
+	if process := buildRealtimeSaveProcess(start, first); process != nil {
+		t.Fatalf("first process = %#v, want nil baseline sample", process)
+	}
+
+	second := realtimeSaveAggregate{
+		TotalCount:     120,
+		TotalCupNum:    240,
+		TotalExitCount: 120,
+		TotalWeight:    1200000,
+		SortSpeed:      500,
+		HasStats:       true,
+	}
+	process := buildRealtimeSaveProcess(start.Add(20*time.Second), second)
+	if process == nil {
+		t.Fatal("20s process = nil, want process point")
+	}
+	if process.RealWeightCount != 36 {
+		t.Fatalf("RealWeightCount = %.1f, want 36.0", process.RealWeightCount)
+	}
+	if process.RealWeightCountPer != 30 {
+		t.Fatalf("RealWeightCountPer = %.1f, want 30.0 from configured MaxRealWeightCount", process.RealWeightCountPer)
+	}
+	if process.SpeedPercent != 50 {
+		t.Fatalf("SpeedPercent = %.1f, want 50.0 from configured MaxSpeed", process.SpeedPercent)
 	}
 }

@@ -610,3 +610,189 @@ throw EndProcessReportService.toError(e, `创建报表输出目录失败: ${dirP
 这轮关于“字段设置没生效”的部分我只做了读取和确认，没有继续改代码。前面已经改过的报表预览、目录创建、按本次 `customerId` 取报表这些改动还在。
 
 ---
+
+
+**User**
+
+下面按「数据从哪来 → 怎么查 → 怎么画」说明 48 历史模式下**时间效率图（整批曲线）**的实现：
+1. 这张图是什么
+控件：QCustomPlot（RealTimeChart）
+两条折线（0~100%）：
+曲线	字段	中文
+graph(0) 橙色 #FE8A02
+SeparationEfficiency
+分选效率
+graph(1) 绿色 #97CC31
+RealWeightCountPer
+实时产量%
+X 轴：时间（hh:mm）
+Y 轴：固定 0 ~ 100
+2. 数据从哪来
+加工过程中，CalculateStatics() 每 20 秒算一次，并按分钟写入内存/数据库：
+
+
+globaldatainterface.cpp
+Lines 2052-2056
+// 每分钟一条，RunningDate = "yyyy-MM-dd hh:mm"
+temp_fruitProcessInfo->SeparationEfficiency = ...  // 20秒增量效率
+temp_fruitProcessInfo->RealWeightCountPer = ...    // 实时产量占最大产能%
+temp_fruitProcessInfo->SpeedPercent = ...
+GlobalDataInterface::global_processinfo.insert(NowDateTime, temp_fruitProcessInfo);
+落库表：tb_fruitprocessinfo_{年}（按年分表）
+
+字段	含义
+RunningDate
+分钟时间键，如 2026-06-06 14:35
+SeparationEfficiency
+分选效率 %
+RealWeightCountPer
+实时产量 %
+SpeedPercent
+速度 %（历史画图时作过滤）
+RealWeightCount
+实时产量（吨/小时，图上不用）
+AvgWeight
+平均果重（图上不用）
+历史报告打开时，用批次的 StartTime ~ EndTime 查这一段的分钟点。
+
+3. 查库 SQL（你要实现的 API）
+
+databaseoperation.cpp
+Lines 1230-1328
+// 时间范围内查 tb_fruitprocessinfo_{year}
+// 跨年则 UNION 两张年表
+// ORDER BY RunningDate DESC
+GetProcessInfo(startDateTime, endDateTime)
+  → QMap<RunningDate字符串, tb_FruitProcessInfo*>
+鸿蒙/SQLite 建议 SQL：
+
+SELECT RunningDate, SeparationEfficiency, RealWeightCountPer, SpeedPercent
+FROM tb_fruitprocessinfo_2026
+WHERE RunningDate >= ? AND RunningDate <= ?
+ORDER BY RunningDate;
+注意：48 内存键是 yyyy-MM-dd hh:mm（无秒），查询边界用的是带秒的 StartTime/EndTime，对齐时要把秒清零。
+
+4. 历史模式画图算法（核心）
+代码在 StatisticsInfoForm1::currentSelectTabpage6()，bIsSourceDB == true：
+
+Step 1：取批次时间并规整到分钟
+start = parse(tb_FruitInfo.StartTime)  // "yyyy-MM-dd hh:mm:ss"
+start = start 秒置 0
+end   = parse(tb_FruitInfo.EndTime) 秒置 0
+Step 2：查过程数据
+processMap = queryProcessInfo(start, end)
+// Map key: "yyyy-MM-dd hh:mm"
+Step 3：按分钟遍历整段加工
+minutes = floor((end - start) / 60秒) + 1
+timePoints = []
+effPoints  = []  // SeparationEfficiency
+outPoints  = []  // RealWeightCountPer
+for i = 0 .. minutes:
+  minuteKey = format(start + i*60秒, "yyyy-MM-dd hh:mm")
+  x = unixTimestamp(start + i*60秒)
+  row = processMap.get(minuteKey)
+  if (row && row.SpeedPercent > 0) {
+    timePoints.push(x)
+    effPoints.push(row.SeparationEfficiency)
+    outPoints.push(row.RealWeightCountPer)
+  } else {
+    timePoints.push(x)
+    effPoints.push(0)
+    outPoints.push(0)
+  }
+要点：
+
+每分钟一个点，没有数据也补 (time, 0, 0)
+有数据但 SpeedPercent <= 0 也画 0（48 只在 SpeedPercent > 0 时用真实值）
+Step 4：设坐标轴并画线
+
+statisticsinfoform1.cpp
+Lines 1498-1526
+xAxis.setRange(startUnix, startUnix + 1200)  // 初始只显示前 20 分钟，可拖拽缩放
+yAxis.setRange(0, 100)
+xAxis.tickCount = 20
+graph0.setData(time, tempSEP)
+graph1.setData(time, tempRCP)
+replot()
+初始 X 轴窗口只有 20 分钟（1200 秒），整批可能几小时；用户可 拖拽/缩放（iRangeDrag | iRangeZoom）。
+
+5. 图表样式（initTabpage6）
+
+statisticsinfoform1.cpp
+Lines 1571-1634
+X轴: QCPAxisTickerDateTime, 格式 "hh:mm"
+Y轴: 0~100, 6 个刻度
+graph0: 橙色线, 图例「分选效率」
+graph1: 绿色线, 图例「实时产量」
+背景透明, 坐标轴白字, 网格 #828282
+支持拖拽、缩放
+6. 和实时统计 Tab 的区别（别混）
+历史整批	实时统计
+时间范围
+StartTime ~ EndTime
+最近 30 分钟滑动
+刷新
+打开时画一次
+每 3 分钟重查
+缺分钟
+补 0
+补 0
+SpeedPercent 过滤
+历史有
+实时无
+7. goTest 实现伪代码（可直接照写）
+interface ProcessPoint {
+  runningDate: string      // "yyyy-MM-dd HH:mm"
+  separationEfficiency: number
+  realWeightCountPer: number
+  speedPercent: number
+}
+async function loadHistoryEfficiencyChart(customerId: number) {
+  const fruit = await db.getFruitInfo(customerId)
+  const start = floorToMinute(fruit.startTime)
+  const end   = floorToMinute(fruit.endTime)
+  const rows = await db.queryProcessInfo(start, end)
+  const map = new Map(rows.map(r => [r.runningDate, r]))
+  const minutes = Math.floor((end - start) / 60000) + 1
+  const seriesEff: Point[] = []
+  const seriesOut: Point[] = []
+  for (let i = 0; i <= minutes; i++) {
+    const t = new Date(start.getTime() + i * 60000)
+    const key = formatMinuteKey(t)  // 与 48 一致: yyyy-MM-dd HH:mm
+    const row = map.get(key)
+    const x = t.getTime()
+    if (row && row.speedPercent > 0) {
+      seriesEff.push({ x, y: row.separationEfficiency })
+      seriesOut.push({ x, y: row.realWeightCountPer })
+    } else {
+      seriesEff.push({ x, y: 0 })
+      seriesOut.push({ x, y: 0 })
+    }
+  }
+  chart.setOption({
+    xAxis: { type: 'time', min: start.getTime(), max: start.getTime() + 20 * 60000 },
+    yAxis: { min: 0, max: 100 },
+    series: [
+      { name: '分选效率', type: 'line', data: seriesEff, color: '#FE8A02' },
+      { name: '实时产量', type: 'line', data: seriesOut, color: '#97CC31' },
+    ]
+  })
+}
+8. 数据链对照（你要保证 goTest 有落库）
+加工中每20秒 CalculateStatics
+    → 每分钟写 global_processinfo
+    → realtime save 时 Insert tb_fruitprocessinfo_{年}
+历史打开报告 Tab「时间效率图」
+    → GetProcessInfo(StartTime, EndTime)
+    → 按分钟补点 → 双折线图
+若 goTest 只算了主页 20 秒效率、没按分钟写 tb_fruitprocessinfo，历史曲线会是空的或全 0——需要先确认落库逻辑和 48 一致。
+
+9. 实现时注意的细节
+时间键格式必须和 48 一致：yyyy-MM-dd hh:mm（建议统一用 24 小时、秒为 0）。
+跨年批次：查 tb_fruitprocessinfo_{startYear} 和 {endYear} 做 UNION。
+初始视窗只显示前 20 分钟，但要支持滑到整批结束。
+Y 轴固定 0~100，效率和产量都是百分比。
+Form2/3/4 的历史 Tab 逻辑与 Form1 相同，都是 currentSelectTabpage6 + bIsSourceDB。
+这是历史加工中时间效率图的绘画方式
+
+---

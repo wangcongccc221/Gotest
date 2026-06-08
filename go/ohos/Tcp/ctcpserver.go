@@ -84,6 +84,22 @@ type cTCPStoredPayload struct {
 	ReceivedAt time.Time
 }
 
+type cTCPWaveInfoRealtimeFrame struct {
+	SrcID    int32      `json:"srcId"`
+	DstID    int32      `json:"dstId"`
+	CmdID    int32      `json:"cmdId"`
+	WaveInfo StWaveInfo `json:"waveInfo"`
+}
+
+func newCTCPWaveInfoRealtimeFrame(head cTCPServerCommandHead, waveInfo StWaveInfo) cTCPWaveInfoRealtimeFrame {
+	return cTCPWaveInfoRealtimeFrame{
+		SrcID:    head.NSrcId,
+		DstID:    head.NDstId,
+		CmdID:    head.NCmdId,
+		WaveInfo: waveInfo,
+	}
+}
+
 type cTCPServer struct {
 	name     string
 	port     int
@@ -578,7 +594,34 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 		setCTCPServerLastMessage("CTCP StWeightResult JSON 生成失败: %v", jsonErr)
 	case cmdFSMWaveInfo, cmdWAMWaveInfo:
-		setCTCPServerLastMessage("CTCP handled %s: raw StWaveInfo saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
+		waveInfo, err := ParseData[StWaveInfo](payload)
+		if err != nil {
+			setCTCPServerLastMessage("CTCP handled %s: parse StWaveInfo failed (%v), payload=%d bytes, need sizeof=%d",
+				cTCPCommandName(head.NCmdId), err, len(payload), int(unsafe.Sizeof(StWaveInfo{})))
+			return
+		}
+		setCTCPServerLastMessage(
+			"CTCP StWaveInfo 回推: remote=%s, src=0x%04X, dst=0x%04X, cmd=%s, payload=%d bytes, channel=0x%04X, fruitWeight=%.3f, ad0[first=%d,last=%d], ad1[first=%d,last=%d]",
+			remoteAddr,
+			uint32(head.NSrcId),
+			uint32(head.NDstId),
+			cTCPCommandName(head.NCmdId),
+			len(payload),
+			uint32(waveInfo.NChannelId),
+			waveInfo.FruitWeight,
+			waveInfo.Waveform0[0],
+			waveInfo.Waveform0[len(waveInfo.Waveform0)-1],
+			waveInfo.Waveform1[0],
+			waveInfo.Waveform1[len(waveInfo.Waveform1)-1],
+		)
+		waveJSON, jsonErr := FormatDataFullJSON(newCTCPWaveInfoRealtimeFrame(head, waveInfo))
+		if waveJSON != "" && jsonErr == nil {
+			if err := PublishWebSocketJSON(webSocketTopicWaveInfo, waveJSON); err != nil {
+				setCTCPServerLastMessage("CTCP StWaveInfo WebSocket 推送失败: %v", err)
+			}
+			return
+		}
+		setCTCPServerLastMessage("CTCP StWaveInfo JSON 生成失败: %v", jsonErr)
 	case cmdFSMVersionError, cmdFSMBurnFlashProgress, cmdFSMBootFlashProgress:
 		value := int32(0)
 		if len(payload) >= 4 {

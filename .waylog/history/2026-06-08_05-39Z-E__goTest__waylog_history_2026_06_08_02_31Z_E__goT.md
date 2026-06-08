@@ -2134,3 +2134,1179 @@ PLEASE IMPLEMENT THIS PLAN:
 需要人工 review 的点：确认 `sendEndProcess()` 返回成功时，后端是否已经完成 `CompletedState=1` 落库；如果只是“指令发送成功”，现在的 5 秒轮询护栏能兜一部分，但最好后端语义还是落库后再返回成功。
 
 ---
+
+
+**OpenAI Codex**
+
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `workspace-write`: The sandbox permits reading files, and editing files in `cwd` and `writable_roots`. Editing files in other directories requires approval. Network access is restricted.
+# Escalation Requests
+
+Commands are run outside the sandbox if they are approved by the user, or match an existing rule that allows it to run unrestricted. The command string is split into independent command segments at shell control operators, including but not limited to:
+
+- Pipes: |
+- Logical operators: &&, ||
+- Command separators: ;
+- Subshell boundaries: (...), $(...)
+
+Each resulting segment is evaluated independently for sandbox restrictions and approval requirements.
+
+Example:
+
+git pull | tee output.txt
+
+This is treated as two command segments:
+
+["git", "pull"]
+
+["tee", "output.txt"]
+
+Commands that use more advanced shell features like redirection (>, >>, <), substitutions ($(...), ...), environment variables (FOO=bar), or wildcard patterns (*, ?) will not be evaluated against rules, to limit the scope of what an approved rule allows.
+
+## How to request escalation
+
+IMPORTANT: To request approval to execute a command that will require escalated privileges:
+
+- Provide the `sandbox_permissions` parameter with the value `"require_escalated"`
+- Include a short question asking the user if they want to allow the action in `justification` parameter. e.g. "Do you want to download and install dependencies for this project?"
+- Optionally suggest a `prefix_rule` - this will be shown to the user with an option to persist the rule approval for future sessions.
+
+If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with "require_escalated". ALWAYS proceed to use the `justification` parameter - do not message the user before requesting approval for the command.
+
+## When to request escalation
+
+While commands are running inside the sandbox, here are some scenarios that will require escalation outside the sandbox:
+
+- You need to run a command that writes to a directory that requires it (e.g. running tests that write to /var)
+- You need to run a GUI app (e.g., open/xdg-open/osascript) to open browsers or files.
+- If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with `require_escalated`. ALWAYS proceed to use the `sandbox_permissions` and `justification` parameters. do not message the user before requesting approval for the command.
+- You are about to take a potentially destructive action such as an `rm` or `git reset` that the user did not explicitly ask for.
+- Be judicious with escalating, but if completing the user's request requires it, you should do so - don't try and circumvent approvals by using other tools.
+
+## prefix_rule guidance
+
+When choosing a `prefix_rule`, request one that will allow you to fulfill similar requests from the user in the future without re-requesting escalation. It should be categorical and reasonably scoped to similar capabilities. You should rarely pass the entire command into `prefix_rule`.
+
+### Banned prefix_rules 
+Avoid requesting overly broad prefixes that the user would be ill-advised to approve. For example, do not request ["python3"], ["python", "-"], or other similar prefixes that would allow arbitrary scripting.
+NEVER provide a prefix_rule argument for destructive commands like rm.
+NEVER provide a prefix_rule if your command uses a heredoc or herestring. 
+
+### Examples
+Good examples of prefixes:
+- ["npm", "run", "dev"]
+- ["gh", "pr", "check"]
+- ["cargo", "test"]
+
+
+## Approved command prefixes
+The following prefix rules have already been approved: - ["E:\\NEW\\MY_HARMONY\\hvigorw.bat"]
+- ["go", "test"]
+- ["git", "-C", "E:/new/my_harmony"]
+- ["C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-Command", "Remove-Item -Recurse -Force C:\\Users\\AI008\\.hvigor\\project_caches\\821173b1a6052304d2facf3673d35df3\\workspace; D:\\harmSdk\\command-line-tools\\bin\\hvigorw.bat assembleApp"]
+- ["Remove-Item", "-LiteralPath", "entry/src/main/ets/pages/level/LevelDataTable.ets.codex_delete", "-Force"]
+ The writable root is `E:\goTest`.
+</permissions instructions>
+
+---
+
+
+**User**
+
+OK 我们去修改一下这个了历史加工双击显示的的时间效率图  别搞错文件位置：
+
+---
+
+
+**OpenAI Codex**
+
+我先确认一下真实代码入口，不直接猜文件。你说的是“历史加工双击后的统计弹窗里的时间效率图”，我会沿着 `HistoryContent` 双击 → 统计弹窗/数据加载 → 时间效率图组件/API 这条路径查，避免改到实时统计或另一个工程。
+
+---
+
+
+**OpenAI Codex**
+
+你这段说明已经足够明确，我按它当已确认设计来做，不再绕一圈问方案。关键实现点我会放在 `E:\new\my_harmony` 的历史统计数据加载和时间效率图组件上；Go 的 `FruitProcessInfo/GetByTimeRange` 看起来已经存在，我先核对它是否满足跨年、分钟键、字段返回。
+
+---
+
+
+**OpenAI Codex**
+
+现在定位清楚了：前端入口不是 `HistoryContent` 里直接画，而是历史双击打开 `RealtimeStatsContent(sourceMode='history')`，数据在 `pages/realtime/HistoryStatsDataLoader.ets` 组装，曲线组件是 `components/charts/TimeEfficiencyLineChart.ets`。当前问题是 loader 只把 `SpeedPercent>0` 的 DB 点拿出来，没有按 StartTime~EndTime 每分钟补 0，也没有给图表初始 20 分钟窗口的时间轴语义。
+
+---
+
+
+**OpenAI Codex**
+
+根因：历史曲线现在把 DB 点直接过滤后画出来，缺分钟直接消失；48 是按整批分钟轴遍历，缺点补 0，且 `SpeedPercent <= 0` 也补 0。影响范围只在历史模式的 `HistoryStatsDataLoader.buildHistoryCurveSeries()` 和曲线组件的历史显示；实时模式不改。修复方案是让历史曲线携带“每分钟标签 + 两条百分比序列 + 起止时间/初始 20 分钟窗口”，图表仍复用现有 `TimeEfficiencyLineChart`，但历史模式按固定 0~100 和分钟标签画完整批次。潜在新风险是长批次分钟点很多会让前端数据量变大，不过 48 也是逐分钟点，先按一致性优先。
+
+---
+
+
+**OpenAI Codex**
+
+测试用例我先按这几类约束设计：1）Start/End 秒不为 0 时要按分钟对齐；2）中间缺分钟要补 0；3）有行但 `SpeedPercent <= 0` 要补 0；4）跨年由 Go API 查多表，前端不再只强行传 startYear；5）实时模式曲线不受影响。现在开始做最小修改。
+
+---
+
+
+**OpenAI Codex**
+
+顺带确认 Go API：`go/ohos/database/fruit_process_info_api.go` 已经把 Start/End 秒规整成 `yyyy-MM-dd HH:mm`，也支持不传 Year 时按起止时间跨年查多张年表。前端现在反而传了 startYear，会限制跨年；这个我会去掉，让后端按 Start/End 自己决定年份。
+
+---
+
+
+**OpenAI Codex**
+
+我会改两个点：`HistoryStatsDataLoader.ets` 负责把 DB 点扩展成整批分钟轴；`TimeEfficiencyLineChart.ets` 负责历史模式下加 dataZoom，默认显示前 20 分钟，用户可以滑动/缩放看整批。实时模式继续走最近 30 分钟，不碰。
+
+---
+
+
+**OpenAI Codex**
+
+前端逻辑已经改成 48 的分钟轴算法了：Start/End 都秒清零，每一分钟生成一个 label；有 DB 行且 `SpeedPercent > 0` 才用真实值，否则两条曲线都补 0。同时前端调用过程数据 API 时不再传单一年份，避免跨年批次被截断。
+
+---
+
+
+**OpenAI Codex**
+
+现在做静态验证，不跑 hvigor。主要看 diff、占位/路径、跨年 Year 参数、以及新辅助函数引用是否完整。
+
+---
+
+
+**OpenAI Codex**
+
+静态 diff 看起来符合算法，不过我把初始窗口再对齐 48：QCustomPlot 是 `startUnix` 到 `startUnix + 1200`，也就是包含第 20 分钟这个点；这里 dataZoom 的 `endValue` 调成 20，而不是 19。
+
+---
+
+
+**OpenAI Codex**
+
+现在最后复查：不运行 hvigor，只确认源码层面的约束都落上了。
+
+---
+
+
+**OpenAI Codex**
+
+我又看了一眼图表轴：如果按整批长度计算 `axisLabel.interval`，初始 20 分钟窗口反而可能只显示两三个刻度，和 48 的“20 个刻度”相反。这里不要强行算 interval，交给 dataZoom 当前窗口显示，代码更稳。
+
+---
+
+
+**OpenAI Codex**
+
+最后再跑一遍静态检查。
+
+---
+
+
+**OpenAI Codex**
+
+检查结果：`git diff --check` 没有输出；新增修改文件没有尾随空白；源码扫描确认前端过程数据查询已经不传 Year，历史曲线按分钟补点并保留 `SpeedPercent > 0` 过滤。仍按你的要求，没有跑 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+已改对位置：`E:\new\my_harmony`，不是 `E:\my_harmony`。
+
+这次只动了历史双击统计弹窗用到的两处：
+
+- [HistoryStatsDataLoader.ets](E:/new/my_harmony/entry/src/main/ets/pages/realtime/HistoryStatsDataLoader.ets:600)
+  - 历史时间效率图现在按 `StartTime ~ EndTime` 秒清零后的整批分钟轴生成数据。
+  - 每分钟必有一个点；缺 DB 行补 `0, 0`。
+  - 有 DB 行但 `SpeedPercent <= 0` 也补 `0, 0`。
+  - `SpeedPercent > 0` 才使用 `SeparationEfficiency` 和 `RealWeightCountPer`。
+  - 过程数据查询不再传单一年份，让 Go API 按 Start/End 自己处理跨年。
+
+- [TimeEfficiencyLineChart.ets](E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:67)
+  - 历史模式加了 `dataZoom`，初始窗口显示从开始时间到 `+20 分钟`，可拖动/缩放查看整批。
+  - Y 轴仍固定 `0~100`，两条线颜色保持：橙色分选效率、绿色实时产量。
+  - 实时模式仍走原来的最近 30 分钟数据，不受影响。
+
+验证：
+- 跑了 `git diff --check`，无输出。
+- 扫描确认没有再传 `Year` 限制跨年。
+- 扫描确认新增文件无尾随空白。
+- 按你的要求，没有运行 hvigor/编译。
+
+人工 review 点：`@mcui/mccharts` 的 `dataZoom` 如果完全兼容 ECharts，这个初始 20 分钟窗口会生效；如果它忽略 `dataZoom`，数据仍然是正确的整批分钟轴，只是初始视窗可能不会收窄。
+
+---
+
+
+**OpenAI Codex**
+
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `danger-full-access`: No filesystem sandboxing - all commands are permitted. Network access is enabled.
+Approval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.
+</permissions instructions>
+
+---
+
+
+**User**
+
+我给你新添加了一条规则 你看一下 就是生成代码之后的事情
+
+---
+
+
+**OpenAI Codex**
+
+我去看一下项目里的规则文件和最近相关说明，只读不改。重点找“生成代码之后”的新约束，后面我会按它执行。
+
+---
+
+
+**OpenAI Codex**
+
+`E:\goTest` 下面没有实际的 `AGENTS.md` 文件，我现在再搜一下你说的“生成代码之后”这句是不是写进了别的规则/历史文件里。
+
+---
+
+
+**OpenAI Codex**
+
+看到了，规则加在 `C:\Users\AI008\.codex\AGENTS.md` 里，不是在 `E:\goTest` 项目目录下。
+
+新增重点是：**代码改完后，我最后要额外输出一份完整说明**，必须包含这 8 项：
+
+1. 改了哪些文件、函数、关键行
+2. 数据流：从哪里来 → 怎么处理 → 显示/保存到哪里
+3. 每个核心函数的作用
+4. 为什么这么改
+5. 可能影响哪些旧功能
+6. 边界情况：空数据、0 值、跨天/月/年、异常数据
+7. 你应该怎么验证：正常和异常场景
+8. 我不确定、需要你人工确认的地方
+
+我后面生成/修改代码后，会按这个格式收尾。也会继续遵守前面的规则：不主动帮你编译，修 bug 先分析根因和影响范围，不硬编码、不改无关逻辑、不隐藏异常。
+
+---
+
+
+**User**
+
+OK 以后你要记住哈
+
+---
+
+
+**OpenAI Codex**
+
+记住了。以后我改完代码收尾时，会按你这 8 项额外说明来交付，并且继续不主动编译、不硬编码、不改无关逻辑、不藏异常。
+
+---
+
+
+**User**
+
+> hvigor ERROR: ArkTS Compiler Error
+1 ERROR: 10605043 ArkTS Compiler Error
+Error Message: Array literals must contain elements of only inferrable types (arkts-no-noninferrable-arr-literals) At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:184:12
+
+
+2 ERROR: 10605038 ArkTS Compiler Error
+Error Message: Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals) At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:191:7
+
+
+3 ERROR: 10605038 ArkTS Compiler Error
+Error Message: Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals) At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:199:20
+
+
+4 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Type 'ChartDataZoomOption[]' has no properties in common with type 'DataZoomInterface'. At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:135:7
+
+
+COMPILE RESULT:FAIL {ERROR:5 WARN:402}
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+
+> hvigor ERROR: BUILD FAILED in 22 s 947 ms
+
+---
+
+
+**User**
+
+> hvigor ERROR: ArkTS Compiler Error
+1 ERROR: 10605043 ArkTS Compiler Error
+Error Message: Array literals must contain elements of only inferrable types (arkts-no-noninferrable-arr-literals) At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:184:12
+
+
+2 ERROR: 10605038 ArkTS Compiler Error
+Error Message: Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals) At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:191:7
+
+
+3 ERROR: 10605038 ArkTS Compiler Error
+Error Message: Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals) At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:199:20
+
+
+4 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Type 'ChartDataZoomOption[]' has no properties in common with type 'DataZoomInterface'. At File: E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:135:7
+
+
+COMPILE RESULT:FAIL {ERROR:5 WARN:402}
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+
+> hvigor ERROR: BUILD FAILED in 22 s 947 ms
+
+---
+
+
+**OpenAI Codex**
+
+我来按编译错误反推，不跑 hvigor。根因大概率是我按 ECharts 写了 `dataZoom` 数组，但 `@mcui/mccharts` 的 `Options.dataZoom` 类型只接受单个 `DataZoomInterface` 对象，而且 ArkTS 不允许这种松散对象数组。先看库类型和当前文件行号，再做最小修复。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经确认：`dataZoom` 这段是编译错误来源，不是历史分钟补点逻辑。`@mcui/mccharts` 当前类型没有接受数组式 dataZoom，ArkTS 也不允许我这个临时接口数组里的对象字面量。修复会最小化：先去掉 `dataZoom` 配置，保留正确的整批分钟数据和 0 补点；初始 20 分钟窗口如果要严格实现，需要再按该图表库支持的类型另做。
+
+---
+
+
+**OpenAI Codex**
+
+我现在补充看一下 `@mcui/mccharts` 的真实类型定义，确认有没有单对象 dataZoom 的合法写法。如果类型太窄，我就不硬塞配置，避免再制造编译错误。
+
+---
+
+
+**OpenAI Codex**
+
+`rg` 没扫到库定义，可能 oh_modules 里是 ohpm 链接结构。我先按编译错误本身做安全修复：去掉 `dataZoom` 对象数组。这个会牺牲“初始只显示前 20 分钟”的交互配置，但保留核心正确数据，不影响编译。
+
+---
+
+
+**OpenAI Codex**
+
+已经把会导致这 4 个 ArkTS 错误的 `dataZoom` 数组和临时接口移除了。现在我再静态扫一遍，看看有没有残留引用或下一处明显的 ArkTS 类型风险。
+
+---
+
+
+**OpenAI Codex**
+
+`dataZoom` 相关残留已经清掉，只剩 `boundaryGap: false` 这一个新增轴属性。为了稳妥，我会继续确认 `@mcui/mccharts` 的 xAxis 类型；如果拿不到类型或类型不明，就把这个也撤掉，避免下一轮又卡 ArkTS。
+
+---
+
+
+**OpenAI Codex**
+
+类型库能定位到 junction 目标了。接着我查 `Options`/`xAxis` 的定义，确认 `boundaryGap` 是否也会有类型风险。
+
+---
+
+
+**OpenAI Codex**
+
+我先按你那条 bug 修复流程走：这次错误集中在 `TimeEfficiencyLineChart.ets` 的 `dataZoom` 配置类型上，不是历史数据查询逻辑本身。我会只动这个编译阻塞点，保留历史曲线按分钟补点那套改动，不去碰无关页面。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经确认了：`@mcui/mccharts` 这里的 `dataZoom` 不是 ECharts 那种数组，而是一个很小的单对象 `{ show, start, end, num }`。之前用数组和复杂对象，ArkTS 严格模式就炸在非可推断数组和未声明对象字面量上。
+
+---
+
+
+**OpenAI Codex**
+
+修复方案我会用组件库自己的 `DataZoomInterface` 语义：单对象、只放 `show/start/end`，不再传 ECharts 的 `type/startValue/endValue`。这样既解决 ArkTS 类型错误，也保留历史整批曲线“先看前 20 分钟、可拖拽缩放”的意图。
+
+---
+
+
+**OpenAI Codex**
+
+我已经做了最小修改：只把图表缩放配置改成组件库支持的单对象，没有动历史数据查询和补零算法。接下来做源码级检查，不跑 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+静态检查现在干净了：旧的 `ChartDataZoomOption`、`startValue/endValue`、数组式 `dataZoom` 都已经不存在，`git diff --check` 没有空白/格式问题。因为你明确说过不要帮你编译，我这里没有跑 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+我发现一个小的旧功能影响点：`boundaryGap: false` 如果直接写死，会让实时模式的折线端点也从原来的留白变成贴边。这个不是这次 bug 的必要范围，我顺手收窄成“只有历史模式贴边”，实时模式保持组件库默认留白。
+
+---
+
+
+**OpenAI Codex**
+
+这就是最小必要修复后的状态：历史模式按 48 的时间曲线语义处理，实时模式不被图表缩放和轴留白改动波及。最后再做一次源码扫描。
+
+---
+
+
+**OpenAI Codex**
+
+扫描结果只剩下合法的单对象 `dataZoom` 和历史模式条件化的 `boundaryGap`；`diff --check` 也通过了。没有执行 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+我再对照一下你装的 bug 修复/完成前验证规则，确保最终交付不是只说“改了”就完事。
+
+---
+
+
+**OpenAI Codex**
+
+已按 bug 流程修了这次 ArkTS 报错点，没有跑 hvigor。
+
+1. **修改位置**  
+[TimeEfficiencyLineChart.ets](<E:/new/my_harmony/entry/src/main/ets/components/charts/TimeEfficiencyLineChart.ets:46>)：把 `dataZoom` 改成 `@mcui/mccharts` 支持的单对象 `{ show, start, end }`，删除数组式思路；历史模式才启用 20 分钟初始窗口。  
+[HistoryStatsDataLoader.ets](<E:/new/my_harmony/entry/src/main/ets/pages/realtime/HistoryStatsDataLoader.ets:600>)：历史时间效率图按 StartTime~EndTime 逐分钟补点。
+
+2. **根因**  
+`@mcui/mccharts` 的 `Options.dataZoom` 类型是 `DataZoomInterface`，不是 ECharts 的数组。之前传数组和复杂对象，触发 ArkTS 的 `no-noninferrable-arr-literals` / `no-untyped-obj-literals`。
+
+3. **数据流**  
+历史批次 `StartTime/EndTime` → 查 `GetByTimeRange` → 构建分钟 Map → 每分钟生成 label/分选效率/实时产量 → `TimeEfficiencyLineChart` 渲染双折线。
+
+4. **核心函数**  
+`buildHistoryCurveSeries()`：按 48 逻辑补齐整批分钟点，`SpeedPercent <= 0` 或缺数据时补 `0,0`。  
+`shouldEnableHistoryZoom()` / `getHistoryInitialZoomEnd()`：只在历史曲线超过 20 分钟时启用图表内部缩放。
+
+5. **为什么这样改**  
+这是最小必要修复：不硬编码当前 case，不改数据库接口，不改实时统计数据源，只修正图表配置类型并保留 48 的历史曲线语义。
+
+6. **可能影响旧功能**  
+实时模式不启用 `dataZoom`，`boundaryGap` 也保持原来的留白行为；历史模式才贴边显示时间轴。风险主要在 `@mcui/mccharts` 对缩放 end 下标有内部 `+1`，需要真机看首屏窗口是否刚好符合视觉预期。
+
+7. **验证情况**  
+已做源码扫描：旧的 `ChartDataZoomOption/startValue/endValue/type:'inside'` 都不存在。  
+已跑 `git diff --check`，无空白/格式问题。  
+按你的要求，没有跑 hvigor 编译。
+
+8. **需要人工 review**  
+请你再跑一次原 hvigor 编译确认 ArkTS 报错是否消失；并在历史加工双击弹窗里看“时间效率图”长批次能否拖动、首屏是否是前 20 分钟左右。
+
+---
+
+
+**User**
+
+感觉数据有点问题 这个分选效率和是实时产量怎么全是100
+
+---
+
+
+**OpenAI Codex**
+
+我用 `systematic-debugging` 来处理这个，不先猜改法。先查“100”是在 DB/API 里就已经是 100，还是前端映射时被我们自己夹成 100。
+
+---
+
+
+**OpenAI Codex**
+
+证据已经偏向前端：Go 侧测试里这些字段本来就是 19、96.4、80 这种 0~100 百分比，不是 0~1 小数。我现在核对前端 `clampPercent`，看是不是把所有大于 1 的正常百分比都压成 100 了。
+
+---
+
+
+**OpenAI Codex**
+
+`clampPercent` 不是元凶，它只是把百分比限制在 0~100，没有把 2、50、96.4 误判成 100。下一步要沿着数据链看：Go 侧写入前是否已经算成 100，还是 API/前端拿错了字段。
+
+---
+
+
+**OpenAI Codex**
+
+这里有个事实：Go 写入公式本身会把超过最大产能的实时产量压到 100，分选效率也会把 `deltaExit >= deltaCup` 压到 100。所以“全 100”有两种可能：真机统计增量就是满值，或者我们用错了分母/重量单位导致公式总是满值。下一步查统计结构里的字段含义和聚合来源。
+
+---
+
+
+**OpenAI Codex**
+
+现在看到一个关键风险：历史落库和实时曲线都在用同一套 Go 公式，分选效率分母是 `TotalCupNum * 通道数`，实时产量百分比按默认最大产能 `66t/h` 封顶。若通道数配置没进来、杯数口径不对、或重量单位比预期大，结果就会持续 100。
+
+---
+
+
+**OpenAI Codex**
+
+相关代码路径确认了：历史图 DB 点来自 `buildRealtimeSaveProcess()`，实时图内存点来自 `updateHomeStatsHistoryLocked()`；两边都依赖 `NTotalCupNum`、出口累计数、重量累计数和通道数。现在要判断到底该修 Go 计算，还是只是在历史图里把真实 100 显示出来。
+
+---
+
+
+**OpenAI Codex**
+
+我还要看 48 的公式你给过的上下文是否有“用出口数/果杯数”这个口径；如果没有，就以 goTest 现有测试为准做最小修复，不凭感觉改公式。
+
+---
+
+
+**OpenAI Codex**
+
+历史记录里也能对上：你之前已经抓到过 `Δ出口个数=1200 / Δ总果杯数=1386` 应该是 `86.6%`，后来代码已经改成 `deltaExit/deltaCup`。所以这次如果还是全 100，优先看当前运行数据是否真的出现了 `deltaExit == weightedDeltaCup`，以及实时产量是否被最大产能配置封顶。
+
+---
+
+
+**OpenAI Codex**
+
+`实时产量%` 这条线也有明显风险：Go 里会先算 t/h，再除以 `MaxRealWeightCount`；如果配置表没这个 key，就 fallback 到 `66`，加工速度稍高就会一直封顶 100。这个更像配置/兼容问题，不是图表画错。
+
+---
+
+
+**OpenAI Codex**
+
+根因里已经有一个确定 bug：实时内存点用 `MaxRealWeightCount/MaxSpeed` 配置，历史落库点却还用硬编码默认值 `66/680`。也就是说历史加工弹窗的曲线，即使你设置过最大产能，也可能按默认 66t/h 算到 100。我会先补测试，再把落库计算改成复用实时那套配置函数。
+
+---
+
+
+**OpenAI Codex**
+
+我会在 Go 侧修这个历史落库口径，因为问题源头不是 ArkTS 图表。测试先覆盖“同样 36t/h，配置最大产能 120 时应该是 30%，不是按默认 66 算成 55/100”的场景。
+
+---
+
+
+**OpenAI Codex**
+
+测试这块不打算造 mock 去绕过配置读取。项目里已有 `database.InitORMWithPath()`，所以我会用临时 SQLite 初始化真实配置表，写入 `MaxRealWeightCount/MaxSpeed`，验证历史落库计算吃配置。这样能防止以后又退回硬编码默认值。
+
+---
+
+
+**OpenAI Codex**
+
+现在做最小代码修改：只把历史落库那条过程点计算，从硬编码默认值改成调用已经存在的配置读取函数。分选效率公式本身不动，因为它当前已经是 `deltaExit / deltaCup`。
+
+---
+
+
+**OpenAI Codex**
+
+实现改完了。接下来补回归测试，让这个差异有个钉子：配置最大产能/最大速度后，历史落库过程点必须按配置算，而不是默认值。
+
+---
+
+
+**OpenAI Codex**
+
+测试也补好了。现在只做格式化和静态 diff 检查，不跑 Go 测试、不跑 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+格式化完成。接下来确认没有遗留硬编码路径和空白问题。
+
+---
+
+
+**OpenAI Codex**
+
+全仓 `diff --check` 被 `.waylog/history` 里已有的尾随空格挡住了，那些不是这次改动范围，我不碰。现在只对这次改的两个 Go 文件做限定检查。
+
+---
+
+
+**OpenAI Codex**
+
+限定到本次两个 Go 文件的 `diff --check` 是干净的；没运行测试，因为 Go test 也会触发编译。现在我再做一遍最终证据梳理，尤其是哪些 100 仍然可能来自真实历史数据。
+
+---
+
+
+**OpenAI Codex**
+
+已查到一个确定问题并修了：**历史落库的过程点**还在用硬编码默认值算 `RealWeightCountPer/SpeedPercent`，没有吃配置表里的 `MaxRealWeightCount/MaxSpeed`。这会导致历史加工双击弹窗里的“实时产量%”很容易一直顶到 `100`。
+
+1. **改动文件**  
+[realtime_save_rows.go](E:/goTest/go/ohos/Tcp/realtime_save_rows.go:141)：历史落库 `SpeedPercent` 改为 `calculateHomeStatsSortSpeedPercent()`，`RealWeightCountPer` 改为 `calculateHomeStatsRealtimeOutputPercent()`。  
+[home_stats_test.go](E:/goTest/go/ohos/Tcp/home_stats_test.go:380)：新增回归测试，验证配置 `MaxRealWeightCount=120`、`MaxSpeed=1000` 时不会再按默认 `66/680` 算。
+
+2. **数据流**  
+实时统计点：统计快照差值 → Go 计算 `SeparationEfficiency / RealWeightCountPer / SpeedPercent` → 落库 `tb_fruitprocessinfo_年` → 历史双击窗口查询并画线。
+
+3. **核心函数**  
+`buildRealtimeSaveProcess()`：生成历史过程统计点。  
+这次让它复用实时页面同一套配置读取函数，避免实时显示和历史落库不一致。
+
+4. **为什么这样改**  
+前端 `clampPercent()` 没问题，它只是 0~100 限制。真正的问题是历史落库用默认最大产能 `66`，产量稍高就封顶成 `100`。
+
+5. **可能影响旧功能**  
+新加工批次的历史曲线会按配置算；已有数据库里已经保存成 `100` 的旧记录不会自动恢复，因为表里只存结果百分比，没有原始增量可反推。
+
+6. **边界情况**  
+如果配置缺失、非法、为 0，仍走原来的 fallback 默认值。  
+如果分选效率仍然是 `100`，要看当时日志里的 `Δ出口个数` 是否真的等于 `Δ总果杯数`；这个我没乱改公式，因为当前代码已经是 `deltaExit / deltaCup`。
+
+7. **验证**  
+已 `gofmt`。  
+已限定检查本次两个 Go 文件：`git diff --check -- go/ohos/Tcp/home_stats_test.go go/ohos/Tcp/realtime_save_rows.go` 通过。  
+没跑 Go test，也没跑 hvigor，按你说的不要帮你编译。
+
+8. **人工 review 点**  
+下一批新加工完成后再看历史时间效率图；旧批次全 100 属于已落库结果。全仓 `git diff --check` 目前会被 `.waylog/history` 里的既有尾随空格挡住，我没碰那些无关文件。
+
+---
+
+
+**User**
+
+48的代码是计算公式 是和我们现在一样吗？
+
+---
+
+
+**OpenAI Codex**
+
+我去对照 48 口径和我们现在 Go 的实现，不改代码。重点只看三个字段：`SeparationEfficiency`、`RealWeightCountPer`、`SpeedPercent`。
+
+---
+
+
+**OpenAI Codex**
+
+结论已经出来了：实时产量%、速度百分比这两块现在基本对齐；分选效率这块“公式分子”我们现在和 48 原始 `SortingEfficiency` 不是完全一样。下面我把差异说清楚。
+
+---
+
+
+**OpenAI Codex**
+
+不完全一样。现在最主要的差异在 **分选效率**。
+
+| 指标 | 48 `CalculateStatics()` | 我们现在 Go |
+|---|---|---|
+| 分选效率 | `新增总果数 / 新增总果杯数 * 100` | `新增出口个数 / 新增总果杯数 * 100` |
+| 总果杯数 | `nTotalCupNum * ChannelNum` 后累加 | 一样，也是乘通道数后累加 |
+| 实时产量 | `新增重量 / 1000000 * 180` | 主页实时基本一样；历史落库用实际 `elapsed` 换算 t/h，通常接近 20 秒 |
+| 实时产量% | `round(RealTimeOutput * 100 / MaxRealWeightCount)` | 现在已改成同配置公式，并 clamp 到 0~100 |
+| 速度% | `平均 nIntervalSumperminute / MaxSpeed * 100` | 一样，读 `MaxSpeed` |
+
+所以重点是：
+
+48 原始公式更像 **杯满率 / 上果率**：
+
+```text
+分选效率 = Δ总个数 / Δ总果杯数 * 100
+```
+
+我们现在这个更像 **有效出果/出口分选率**：
+
+```text
+分选效率 = Δ出口个数 / Δ总果杯数 * 100
+```
+
+这就是为什么你之前看到 `Δ总个数=1386, Δ总果杯数=1386` 会是 100；但如果用 `Δ出口个数=1200` 算，就会是 `86.6%`。
+
+如果要严格还原 48，分选效率要改回 `deltaCount / deltaCup`。如果业务上你们要看的是真正落到出口的效率，现在的 `deltaExit / deltaCup` 更合理，但它已经不是 48 原始公式了。
+
+---
+
+
+**User**
+
+我想实现一下这个 这个波形捕获
+
+---
+
+
+**OpenAI Codex**
+
+我先用 `superpowers:brainstorming` 约束一下需求边界，但不会停在方案上；先把你贴的“波形捕获”说明读出来，再沿现有 Go/Harmony 链路找对应落点。
+
+---
+
+
+**OpenAI Codex**
+
+现有工程里已经有两个关键地基：Go 侧 `ctcpclient.go` 已经定义了 `0x0117/0x0118` 波形捕捉开关命令，Harmony 重量设置页也已经有“波形捕捉”按钮占位。现在我把按钮、WebSocket 控制、波形结构体接收这几条线再读完整。
+
+---
+
+
+**OpenAI Codex**
+
+这比预期更接近半成品：结构体、命令枚举、WebSocket action、按钮 handler 都有了；缺的是“收到波形包后解析、缓存并推给前端”，以及一个真正的 WaveCaptureDialog 画布。继续把这些半成品接口读完。
+
+---
+
+
+**OpenAI Codex**
+
+Go 现在收到 `WAM_CMD_WAVEINFO/FSM_CMD_WAVEINFO` 只是打日志，没有把 `StWaveInfo` 推给前端；所以真正要做的是补这条数据通道，再把重量设置按钮从“开关文字状态”升级成弹窗。
+
+---
+
+
+**OpenAI Codex**
+
+我还没动代码。按目前证据，设计应当是“小闭环”：后端解析并广播 `waveInfo`，前端 WebSocket 分发到一个小型 WaveCaptureService，弹窗订阅服务并绘制最近 3 组波形。再看现有前端是否有事件订阅模式可以复用。
+
+---
+
+
+**OpenAI Codex**
+
+我看完了，现状是：
+
+- Go 已有波形开关命令：`0x0117 / 0x0118`
+- Harmony 重量设置页已有“波形捕捉”按钮
+- 前端已有 `StWaveInfo`
+- Go 收到 `WAM_CMD_WAVEINFO / FSM_CMD_WAVEINFO` 现在只打日志，没有解析推送
+- 前端还没有真正的波形弹窗和画布
+
+我建议第一版按 48 做这个闭环：
+
+`点波形捕捉` → 打开弹窗 → 自动发 `WAVE_FORM_ON` → Go 解析 `StWaveInfo` 并 WebSocket 推 `waveInfo` → 前端画 AD0/AD1 最近 3 组波形 → 支持开始/停止滚动、拖拽区间线 → `OK` 保存 `WaveInterval` 并下发重量参数 → 关闭时发 `WAVE_FORM_OFF`。
+
+有一个范围要你确认：**第一版要不要做“拖拽区间 + OK 保存到重量参数”这一块？**  
+我推荐做，因为不做的话只是看波形，和 48 的“波形捕获用于调整重量区间”就断了。
+
+---
+
+
+**User**
+
+可以 按照48这个做闭环 然后我需要你给我解释一下代码的含义
+
+---
+
+
+**OpenAI Codex**
+
+收到，我按 48 做闭环来落地：后端先把波形包变成 `waveInfo` 推给前端，前端做弹窗画 AD0/AD1、最近 3 组、捕捉暂停、区间线和 OK 保存。最后我会按你要求解释代码含义，不跑编译。
+
+---
+
+
+**OpenAI Codex**
+
+我会按一个小实现计划推进：1）后端解析并广播 `waveInfo`；2）前端 WebSocket 映射到服务；3）弹窗画布和控制；4）重量设置按钮接入；5）静态检查和代码解释。测试我会补能静态表达的 Go 单元测试，但不运行，因为你说过不要帮你编译。
+
+---
+
+
+**OpenAI Codex**
+
+先从后端开刀：现在波形包到了 `ctcpserver.go` 就停在日志，我会在那里补成和 `weightInfo` 一样的“解析结构体 → JSON → PublishWebSocketJSON”。
+
+---
+
+
+**OpenAI Codex**
+
+我会按 48 的链路把“波形捕获”闭环起来：后端解析并广播 `StWaveInfo`，前端缓存最近波形、打开捕获窗口、画三段波形、保存区间并下发重量参数。先做源码级闭环和静态检查，不跑编译。
+
+---
+
+
+**OpenAI Codex**
+
+我会用 `executing-plans` 的清单推进，同时把测试设计先落下来；因为你明确说不要编译，验证阶段只做源码/差异检查，不跑 hvigor 或 Go 编译测试。
+
+---
+
+
+**OpenAI Codex**
+
+现在看到后端已经有 `StWaveInfo` 结构和 WAM 波形开关命令，但收到 `cmdWAMWaveInfo` 时只记日志，没有解析广播；前端按钮也只是开关命令，没有 48 那种捕获窗口。接下来改的是这两条缺口，不碰已有历史图和实时统计逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+后端改法很小：把原来的“raw StWaveInfo saved”换成和 `StWeightResult` 一样的 `ParseData + FormatDataFullJSON + PublishWebSocketJSON`，并额外带上 src/dst/cmd，前端才能知道这帧来自哪个通道。
+
+---
+
+
+**OpenAI Codex**
+
+测试设计先定下来：后端要能从二进制 payload 解析 `StWaveInfo` 并发布 `waveInfo`；前端要能把 JSON 大小写字段都转成统一帧缓存；窗口要做到“打开即 ON、关闭即 OFF、停止后可浏览、OK 保存区间”。我会先写可静态审阅的单元测试/纯函数边界，再做最小实现。
+
+---
+
+
+**OpenAI Codex**
+
+前端这里我会尽量复用现有 `NumericInput`、`ConfigSender.sendWamWeightInfoTracked()` 和 `HarmonyWebSocketClient`，避免新造一套发送路径；这样 OK 保存区间时仍然走原来的 WAM 权重参数下发和 ack 跟踪。
+
+---
+
+
+**OpenAI Codex**
+
+先落后端测试壳：它检查两件事，一是二进制 `StWaveInfo` 能按结构体读取，二是发给前端的 frame 保留 `srcId/dstId/cmdId` 和波形数组。这个测试我不会运行，只作为这次改动的行为锚点。
+
+---
+
+
+**OpenAI Codex**
+
+后端最小修改开始：新增一个 `waveInfo` topic 和 frame 类型，然后替换 `cmdWAMWaveInfo/cmdFSMWaveInfo` 分支，不改命令发送、不改结构体布局。
+
+---
+
+
+**OpenAI Codex**
+
+继续在 TCP 处理分支接入解析和广播；失败时只记录错误并返回，避免把半截 payload 推到前端造成误判。
+
+---
+
+
+**OpenAI Codex**
+
+前端我先加一个独立的 `WaveCaptureService`，只负责“最近 100 帧缓存 + 订阅通知 + 按通道取最近三帧”。它不持有 UI 状态，也不发命令，边界干净一些。
+
+---
+
+
+**OpenAI Codex**
+
+现在接入 WebSocket 分发：后端推 `topic=waveInfo` 后，前端会兼容 Go 的大写字段和可能的旧小写字段，统一写入 `WaveCaptureService`。
+
+---
+
+
+**OpenAI Codex**
+
+窗口这块我会用两个 Canvas 习惯里已经存在的 API：`onAreaChange` 记录尺寸，`onTouch` 拖黄色区间线，绘制时不依赖第三方图表。这样和 48 的自绘窗口更接近。
+
+---
+
+
+**OpenAI Codex**
+
+区间保存的边界按 48 的 `0..1023` 做，画面上把 1024 个区间刻度映射到整张波形区域；实际波形仍按 3 组 `256` 点拼接显示。这样不会把当前样本数量硬编码成保存区间上限。
+
+---
+
+
+**OpenAI Codex**
+
+父页面接入时我不让父页面直接发 ON/OFF 了：按钮只负责打开窗口，窗口生命周期负责 ON/OFF；OK 只下发 `WaveInterval` 所在的 WAM WeightInfo，和 48 的“OK 保存区间”一致。
+
+---
+
+
+**OpenAI Codex**
+
+现在把窗口挂到重量设置页的同一个 Stack 里，避免弹窗跑到别的页面；你点的就是工程设置里的重量设置页，窗口也只覆盖这个页面区域。
+
+---
+
+
+**OpenAI Codex**
+
+主要闭环代码已经补上了。接下来我会做源码扫描找 ArkTS 高风险点，比如未声明对象字面量、数组推断、相对路径、重复生命周期 OFF 命令这些。
+
+---
+
+
+**OpenAI Codex**
+
+我补一个通道匹配边界：如果硬件回来的 `nChannelId` 是完整 WAM 通道号就精确匹配；如果它只是 0/1/2 这种通道下标，也能按下标+1 对上，不会因为编号形态不同导致窗口一直空白。
+
+---
+
+
+**OpenAI Codex**
+
+我发现测试里用 unsafe 往 byte slice 写结构体不是必要的，虽然只是测试，也容易让以后的人误读成“必须这样造包”。我会改成 `binary.Write(little endian)` 生成 payload，更贴近 TCP payload 的字节语义。
+
+---
+
+
+**OpenAI Codex**
+
+后端 Go 文件现在只需要格式化，不做测试执行；前端我继续做文本级检查。
+
+---
+
+
+**OpenAI Codex**
+
+格式化完成；没有跑 Go 测试。接下来重点看 ArkTS 的类型约束，避免之前那种对象/数组推断错误。
+
+---
+
+
+**OpenAI Codex**
+
+源码扫描没有发现明显的“未声明对象字面量”模式，新文件里的数据容器都用 class 或显式数组类型。接下来做差异级检查和几个路径/命令名核对。
+
+---
+
+
+**OpenAI Codex**
+
+我现在进入验证阶段：只跑 `diff --check` 和文本级路径/符号检查，不触发 hvigor、Go test 或任何编译。
+
+---
+
+
+**OpenAI Codex**
+
+我再修一个生命周期边界：关闭窗口时 OFF 命令可能和组件卸载同时发生。加一个 stopping 标记，避免重复发 OFF，同时失败时不把状态悄悄当成已关闭。
+
+---
+
+
+**OpenAI Codex**
+
+停止按钮也要处理失败：如果 OFF 没发出去，窗口不能显示成“已暂停”。我把 `stopWaveCapture()` 改成返回结果，失败时保持捕捉状态。
+
+---
+
+
+**OpenAI Codex**
+
+生命周期边界已经收紧。再跑一次差异检查和符号扫描。
+
+---
+
+
+**OpenAI Codex**
+
+有一个 PowerShell 检查命令自己写错了，冒号被当成变量名的一部分；这是检查脚本错误，不是源码错误。我马上用 `${f}` 重新跑。
+
+---
+
+
+**OpenAI Codex**
+
+我顺手把 WebSocket 文件里多出来的空行去掉，保持差异更窄。
+
+---
+
+
+**OpenAI Codex**
+
+最后我再抓一次状态和差异概览，确认这次改动集中在波形捕获链路，没有误改历史统计那边。
+
+---
+
+
+**OpenAI Codex**
+
+我已经完成源码改动和非编译验证。最后整理一下关键行号，方便你 review 和我解释代码含义。
+
+---
+
+
+**OpenAI Codex**
+
+已经按 48 的“波形捕获”链路做了源码闭环，没有跑编译。
+
+**1. 改动位置**
+后端：
+- [ctcpserver.go](e:/goTest/go/ohos/Tcp/ctcpserver.go:596)：解析 `cmdFSMWaveInfo/cmdWAMWaveInfo`
+- [websocket.go](e:/goTest/go/ohos/Tcp/websocket.go:34)：新增 `waveInfo` topic
+- [ctcp_wave_info_test.go](e:/goTest/go/ohos/Tcp/ctcp_wave_info_test.go:10)：补了波形解析/JSON frame 测试
+
+前端：
+- [HarmonyWebSocketClient.ets](e:/new/my_harmony/entry/src/main/ets/utils/network/HarmonyWebSocketClient.ets:1661)：接收 `waveInfo`
+- [WaveCaptureService.ets](e:/new/my_harmony/entry/src/main/ets/protocol/WaveCaptureService.ets:36)：缓存最近 100 帧
+- [WaveCaptureDialog.ets](e:/new/my_harmony/entry/src/main/ets/components/dialogs/WaveCaptureDialog.ets:17)：新增波形捕捉窗口
+- [WeightSettingsPage.ets](e:/new/my_harmony/entry/src/main/ets/components/dialogs/pages/WeightSettingsPage.ets:687)：按钮打开捕捉窗口，OK 保存区间
+
+**2. 数据流**
+下位机 `StWaveInfo` → Go `ParseData[StWaveInfo]` → WebSocket `topic=waveInfo` → 前端 `HarmonyWebSocketClient` 转成 `StWaveInfo` → `WaveCaptureService` 缓存 → `WaveCaptureDialog` 画 AD0/AD1 波形。
+
+**3. 核心逻辑**
+`WaveCaptureDialog.aboutToAppear()` 打开窗口时清空旧波形并发送 `wamWaveFormOn`。  
+`aboutToDisappear()/关闭/停止捕捉` 发送 `wamWaveFormOff`。  
+`handleConfirm()` 把黄色区间线对应的 `0..1023` interval 回传给父页面。  
+`WeightSettingsPage.handleWaveCaptureConfirm()` 写入 `waveinterval[0/1]`，再走现有 `sendWamWeightInfoTracked()` 下发。
+
+**4. 为什么这样改**
+48 里波形捕获是一个窗口生命周期：打开 ON，关闭 OFF，OK 保存 WeightInfo 的 `waveinterval`。我没有把它做成原来的按钮开关，因为那样没有画布、没有三段波形、也没有区间保存闭环。
+
+**5. 对旧功能影响**
+没有改历史加工、时间效率图、实时统计、重量追踪数据表的主逻辑。  
+如果“数据追踪”正在开着，点“波形捕捉”会先关闭追踪，避免和 48 一样的互斥场景冲突。
+
+**6. 边界处理**
+- payload 长度不够：Go 端记录 parse 失败，不推送脏数据。
+- WAM OFF 失败：窗口不会假装“已暂停”。
+- `nChannelId` 如果是完整通道号或 0-based 通道下标，前端都能匹配。
+- 缓存最多 100 帧，窗口最多显示 3 帧，停止后可以用 `< >` 浏览历史帧。
+
+**7. 验证**
+已跑：
+- `git diff --check -- go/ohos/Tcp/ctcpserver.go go/ohos/Tcp/websocket.go`
+- `git -C E:\new\my_harmony diff --check ...`
+- 新增文件尾随空白扫描
+
+没跑 hvigor / Go test / 编译，按你的要求不编译。
+
+**8. 人工 review 点**
+重点看两处：  
+`StWaveInfo.NChannelId` 实机到底是完整通道 ID 还是通道下标；我做了兼容，但实机确认一下最好。  
+波形 AD 最大值现在按数据自动选 `4096/65535`，如果 48 必须用 `StWeightGlobal.nAccuracy` 精确映射，后面可以再接上。
+
+---
+
+
+**OpenAI Codex**
+
+我先读你贴的附件内容，再按里面的要求定位对应工程和文件；这次仍然不帮你编译，只做源码级修改和检查。
+
+---
+
+
+**OpenAI Codex**
+
+日志说明 Go 端已经持续收到 `WAM_CMD_WAVEINFO(0x0122)`，payload 也是 1032 bytes，和 `StWaveInfo` 的 4 + 256*2 + 256*2 + 4 完全对上。下一步我重点查前端为什么可能还看不到波形：topic、字段大小写、通道匹配、以及你当前打开的是不是正确的 `my_harmony` 工程文件。
+
+---
+
+
+**OpenAI Codex**
+
+根因现在比较明确：后端收到的 AD 是 `17900/22100` 这种高基线、小波动值；我之前按 `0..65535` 全量程画，波动只占半区高度的千分级，看起来就会像一条平线或“不动”。修法是按当前可见三帧分别计算 AD0/AD1 的 min/max 动态缩放，同时保留恒定数据的兜底范围。
+
+---
+
+
+**OpenAI Codex**
+
+我会做最小修改，只改 `WaveCaptureDialog` 的 Y 轴映射：从“全量程 0..65535”改成“当前可见帧的 AD0/AD1 各自 min/max + padding”。这样不是针对你这组日志硬编码，后面 AD 值换区间也能正常放大显示。
+
+---
+
+
+**User**
+
+06-08 20:00:42.708   31931-31931   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending wamWaveFormOn: dest=0x1d1
+06-08 20:00:42.709   31931-31931   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendWamWaveFormOn: cmd=0x117, device=0x1d1, wam waveform on sent
+06-08 20:00:42.714   31931-31931   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] command ack: topic=wamwaveformon, ok=true, result=0, cmd=0x117, dest=0x1d1, payload=0 bytes, message=sent
+06-08 20:00:47.213   31931-31931   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending wamWaveFormOff: dest=0x1d1
+06-08 20:00:47.213   31931-31931   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendWamWaveFormOff: cmd=0x118, device=0x1d1, wam waveform off sent
+06-08 20:00:47.219   31931-31931   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] command ack: topic=wamwaveformoff, ok=true, result=0, cmd=0x118, dest=0x1d1, payload=0 bytes, message=sent
+
+---
+
+
+**OpenAI Codex**
+
+你这组前端日志证明：`wamWaveFormOn/Off` 命令发出且 ack 成功了。缺的证据是前端有没有收到后端推来的 `topic=waveInfo`。我会补上前端 `waveInfo mapped` 日志，并把窗口状态显示收到的帧号；同时刚才已经把波形 Y 轴从全量程缩放改成动态 min/max，解决 AD 基线太高导致看起来像平线的问题。
+
+---
+
+
+**OpenAI Codex**
+
+根因和影响范围先记清楚：后端数据是有的，命令链路也是通的；当前风险集中在前端“接收可见性”和“绘图缩放”，不需要改 Go 命令发送或数据库/历史统计。
+
+---
+
+
+**OpenAI Codex**
+
+现在补窗口状态，让你不用只看日志：只要收到帧，标题栏右侧会从“捕捉中 0x...”变成带 `#序号 / 帧数` 的状态。
+
+---
+
+
+**OpenAI Codex**
+
+我补了两个验证钩子：控制台会打印 `[WS_CLIENT] waveInfo mapped...`，窗口状态会显示收到的最新帧号。这样下一次你贴日志，我们能直接判断是“没收到 WebSocket 推送”还是“收到了但画布问题”。
+
+---
+
+
+**OpenAI Codex**
+
+`diff --check` 对这次改动是干净的；单独扫整文件时发现 `HarmonyWebSocketClient.ets` 里早已有几处尾随空格，不属于这次新增行。我不做全文件清理，避免制造无关 diff。
+
+---
+
+
+**OpenAI Codex**
+
+从你新日志看，前端关开的命令没有问题；如果下一次日志仍然只有 `wamWaveFormOn/Off` 而没有 `[WS_CLIENT] waveInfo mapped`，那就说明 Go 后端没有把 `waveInfo` 推到这个前端 WebSocket 连接，而不是窗口画图问题。
+
+---
+
+
+**OpenAI Codex**
+
+已处理这组日志暴露的问题。
+
+**1. 根因**
+你贴的前端日志只证明 `wamWaveFormOn/Off` 发送成功，没有证明前端收到 `waveInfo`。同时后端日志里的 AD 值是 `17900/22100` 这种高基线小波动，我之前按 `0..65535` 画，波形会被压得像一条平线。
+
+**2. 修改**
+- [WaveCaptureDialog.ets](e:/new/my_harmony/entry/src/main/ets/components/dialogs/WaveCaptureDialog.ets:239)：改成按当前可见波形分别计算 AD0/AD1 的 `min/max` 动态缩放。
+- [WaveCaptureDialog.ets](e:/new/my_harmony/entry/src/main/ets/components/dialogs/WaveCaptureDialog.ets:161)：窗口状态显示收到的帧号，比如 `#12 / 12`。
+- [HarmonyWebSocketClient.ets](e:/new/my_harmony/entry/src/main/ets/utils/network/HarmonyWebSocketClient.ets:1661)：收到 `topic=waveInfo` 后打印：
+  `[WS_CLIENT] waveInfo mapped: ...`
+
+**3. 数据流含义**
+现在链路是：  
+`wamWaveFormOn ack` 只代表开关命令成功。  
+真正有波形时，前端必须继续出现 `[WS_CLIENT] waveInfo mapped...`。  
+如果没有这条日志，就说明 WebSocket 没收到后端推送。
+
+**4. 影响范围**
+只改波形捕捉窗口和 WebSocket 的 `waveInfo` 分发日志，不碰历史统计、时间效率图、数据库、结束加工。
+
+**5. 边界**
+AD0 和 AD1 分开缩放；即使基线很高也能看到波动。恒定数据会自动给一个小 padding，不会除零。
+
+**6. 测试用例设计**
+- ON 成功后，前端应出现 `waveInfo mapped`。
+- 窗口状态应显示帧号增长。
+- AD 值在 `17890..17910` 这种小范围时，波形应明显起伏。
+- 没收到波形时仍显示“等待波形”。
+
+**7. 验证**
+已跑源码级检查：
+`git -C E:\new\my_harmony diff --check -- ...`
+
+按你的要求，没有跑 hvigor/编译。
+
+**8. 人工 review 点**
+下一次看日志：如果只有 `wamWaveFormOn/Off`，没有 `[WS_CLIENT] waveInfo mapped`，问题就在 Go 后端 WebSocket 推送到前端这段；如果有 `waveInfo mapped` 但画面还不动，再看窗口状态帧号和 AD0/AD1 范围文字。
+
+---

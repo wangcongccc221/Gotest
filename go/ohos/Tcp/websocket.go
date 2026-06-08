@@ -31,6 +31,7 @@ const (
 	webSocketTopicProjectSchemeFile  = "projectSettingsSchemeFile"
 	webSocketTopicWeightGlobal       = "weightGlobal"
 	webSocketTopicWeightInfo         = "weightInfo"
+	webSocketTopicWaveInfo           = "waveInfo"
 
 	webSocketWriteWait             = 5 * time.Second  //写入等待
 	webSocketPongWait              = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动

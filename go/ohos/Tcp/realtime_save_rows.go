@@ -1,7 +1,6 @@
 package tcp
 
 import (
-	"math"
 	"strconv"
 	"time"
 
@@ -141,7 +140,7 @@ func buildRealtimeSaveProcess(now time.Time, aggregate realtimeSaveAggregate) *d
 
 	process := &database.RealtimeFruitProcessSaveInput{
 		RunningDate:  now.Format("2006-01-02 15:04"),
-		SpeedPercent: roundHomeStats((aggregate.SortSpeed*100.0)/homeStatsDefaultMaxSpeed, 2),
+		SpeedPercent: calculateHomeStatsSortSpeedPercent(aggregate.SortSpeed),
 		AvgWeight:    avgWeight,
 	}
 	if deltaCount >= 0 {
@@ -149,7 +148,7 @@ func buildRealtimeSaveProcess(now time.Time, aggregate realtimeSaveAggregate) *d
 	}
 	if deltaWeight > 0 && elapsed > 0 {
 		process.RealWeightCount = (deltaWeight / homeStatsWeightScale) * (float64(time.Hour) / float64(elapsed))
-		process.RealWeightCountPer = clampHomeStats(math.Round((process.RealWeightCount*100.0)/homeStatsDefaultMaxRealWeightCount), 0, 100)
+		process.RealWeightCountPer = calculateHomeStatsRealtimeOutputPercent(process.RealWeightCount)
 	}
 	return process
 }
