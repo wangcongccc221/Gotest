@@ -40,6 +40,9 @@ type fruitInfoAPIRequest struct {
 	SortOrder       *string `json:"SortOrder"`
 }
 
+type FruitInfoQueryRequest = fruitInfoAPIRequest
+type FruitInfoPageResult = fruitInfoPageResponse
+
 type updateFruitCustomerInfoRequest struct {
 	CustomerID   int     `json:"CustomerID"`
 	CustomerName *string `json:"CustomerName"`
@@ -149,10 +152,18 @@ func handleFruitInfoGetPage(ctx *gin.Context) {
 		return
 	}
 
-	db, err := getInitializedFileORMDB()
+	result, err := QueryFruitInfoPage(request)
 	if err != nil {
 		fruitInfoAPIFail(ctx, err.Error())
 		return
+	}
+	fruitInfoAPIOK(ctx, result)
+}
+
+func QueryFruitInfoPage(request FruitInfoQueryRequest) (FruitInfoPageResult, error) {
+	db, err := getInitializedFileORMDB()
+	if err != nil {
+		return FruitInfoPageResult{}, err
 	}
 
 	pageIndex, pageSize := normalizeFruitInfoPage(request.PageIndex, request.PageSize)
@@ -160,8 +171,7 @@ func handleFruitInfoGetPage(ctx *gin.Context) {
 
 	var total int64
 	if err := query.Count(&total).Error; err != nil {
-		fruitInfoAPIFail(ctx, err.Error())
-		return
+		return FruitInfoPageResult{}, err
 	}
 
 	var rows []TbFruitInfo
@@ -171,8 +181,7 @@ func handleFruitInfoGetPage(ctx *gin.Context) {
 		Limit(pageSize).
 		Find(&rows).Error
 	if err != nil {
-		fruitInfoAPIFail(ctx, err.Error())
-		return
+		return FruitInfoPageResult{}, err
 	}
 
 	items := make([]fruitInfoAPIModel, 0, len(rows))
@@ -180,12 +189,12 @@ func handleFruitInfoGetPage(ctx *gin.Context) {
 		items = append(items, fruitInfoToAPIModel(row, nil, nil))
 	}
 
-	fruitInfoAPIOK(ctx, fruitInfoPageResponse{
+	return FruitInfoPageResult{
 		Items:      items,
 		TotalCount: total,
 		PageIndex:  pageIndex,
 		PageSize:   pageSize,
-	})
+	}, nil
 }
 
 func handleFruitInfoGetOne(ctx *gin.Context) {

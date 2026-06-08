@@ -186,6 +186,47 @@ func TestParseWebSocketControlMessageReadsExitDisplayData(t *testing.T) {
 	}
 }
 
+func TestParseWebSocketControlMessageReadsFruitInfoQuery(t *testing.T) {
+	message, ok := parseWebSocketControlMessage(`{
+		"type": "queryFruitInfo",
+		"requestId": "history-query-1",
+		"fruitInfoQuery": {
+			"StartTime": "2026-06-01 00:00:00",
+			"EndTime": "2026-06-08 23:59:59",
+			"CustomerName": "客户A",
+			"FarmName": "农场B",
+			"FruitName": "苹果",
+			"FVisible": 1,
+			"PageIndex": 1,
+			"PageSize": 200
+		}
+	}`)
+	if !ok {
+		t.Fatal("parseWebSocketControlMessage() rejected queryFruitInfo")
+	}
+	if message.RequestID != "history-query-1" {
+		t.Fatalf("RequestID = %q, want history-query-1", message.RequestID)
+	}
+	if message.FruitInfoQuery == nil {
+		t.Fatal("FruitInfoQuery is nil")
+	}
+	if message.FruitInfoQuery.StartTime == nil || *message.FruitInfoQuery.StartTime != "2026-06-01 00:00:00" {
+		t.Fatalf("StartTime = %#v, want 2026-06-01 00:00:00", message.FruitInfoQuery.StartTime)
+	}
+	if message.FruitInfoQuery.EndTime == nil || *message.FruitInfoQuery.EndTime != "2026-06-08 23:59:59" {
+		t.Fatalf("EndTime = %#v, want 2026-06-08 23:59:59", message.FruitInfoQuery.EndTime)
+	}
+	if message.FruitInfoQuery.CustomerName == nil || *message.FruitInfoQuery.CustomerName != "客户A" {
+		t.Fatalf("CustomerName = %#v, want 客户A", message.FruitInfoQuery.CustomerName)
+	}
+	if message.FruitInfoQuery.FVisible == nil || *message.FruitInfoQuery.FVisible != 1 {
+		t.Fatalf("FVisible = %#v, want 1", message.FruitInfoQuery.FVisible)
+	}
+	if message.FruitInfoQuery.PageSize == nil || *message.FruitInfoQuery.PageSize != 200 {
+		t.Fatalf("PageSize = %#v, want 200", message.FruitInfoQuery.PageSize)
+	}
+}
+
 func TestParseWebSocketControlMessageReadsExitAdditionalTextData(t *testing.T) {
 	message, ok := parseWebSocketControlMessage(`{
 		"type": "saveExitAdditionalText",

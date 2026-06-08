@@ -95,6 +95,7 @@ type webSocketControlMessage struct {
 	WeightInfo          *StWeightBaseInfo                   `json:"weightInfo,omitempty"`
 	GlobalWeightInfo    *StGlobalWeightBaseInfo             `json:"globalWeightInfo,omitempty"`
 	FruitCustomerInfo   *webSocketFruitCustomerInfoControl  `json:"fruitCustomerInfo,omitempty"`
+	FruitInfoQuery      *database.FruitInfoQueryRequest     `json:"fruitInfoQuery,omitempty"`
 }
 
 type webSocketFruitCustomerInfoControl struct {
@@ -390,6 +391,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleEndProcess(control)
 	case "updateFruitCustomerInfo":
 		c.handleFruitCustomerInfoUpdate(control)
+	case "queryFruitInfo":
+		c.handleFruitInfoQuery(control)
 	case "fsmTestCupOn":
 		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
 	case "fsmTestCupOff":
@@ -1093,6 +1096,51 @@ func (c *webSocketClient) handleFruitCustomerInfoUpdate(control webSocketControl
 			snapshot.FruitName,
 		)
 		c.sendCommandAckDetail("updateFruitCustomerInfo", 0, int32(info.CustomerID), 0, 0, "database updated and verified", control.RequestID)
+	}()
+}
+
+func (c *webSocketClient) handleFruitInfoQuery(control webSocketControlMessage) {
+	go func() {
+		query := control.FruitInfoQuery
+		if query == nil {
+			c.sendCommandAckDetail("queryFruitInfo", 0, 0, 0, -1, "fruitInfoQuery is required", control.RequestID)
+			return
+		}
+
+		result, err := database.QueryFruitInfoPage(*query)
+		payloadBytes := len(rawJSONFromValue(*query))
+		if err != nil {
+			setCTCPServerLastMessage("WebSocket queryFruitInfo failed: err=%v", err)
+			c.sendCommandAckDetail("queryFruitInfo", 0, 0, payloadBytes, -1, err.Error(), control.RequestID)
+			return
+		}
+
+		setCTCPServerLastMessage(
+			"WebSocket queryFruitInfo success: rows=%d, total=%d, page=%d, size=%d, database=%s",
+			len(result.Items),
+			result.TotalCount,
+			result.PageIndex,
+			result.PageSize,
+			database.RealtimeSaveDatabaseForLog(),
+		)
+		c.sendFrame(webSocketFrame{
+			Type:  "commandAck",
+			Topic: "queryFruitInfo",
+			Data: rawJSONFromValue(map[string]any{
+				"result":       0,
+				"ok":           true,
+				"command":      "queryFruitInfo",
+				"cmdId":        0,
+				"destId":       0,
+				"payloadBytes": payloadBytes,
+				"message":      "database queried",
+				"requestId":    control.RequestID,
+				"Items":        result.Items,
+				"TotalCount":   result.TotalCount,
+				"PageIndex":    result.PageIndex,
+				"PageSize":     result.PageSize,
+			}),
+		})
 	}()
 }
 
