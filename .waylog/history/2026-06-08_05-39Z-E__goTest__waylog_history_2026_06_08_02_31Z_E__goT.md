@@ -3669,3 +3669,220 @@ OK 有一个问题 就是我等级拖拽到出口的话 才会有数据在主页
 数据流仍是：点击“尺寸等级” → 设置 `gradeSettingsInnerTab='level'` → 显示原有尺寸等级设置页面。人工验证时打开“等级设置”，确认顶部显示“尺寸等级 / 品质等级”即可。
 
 ---
+
+
+**OpenAI Codex**
+
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `danger-full-access`: No filesystem sandboxing - all commands are permitted. Network access is enabled.
+Approval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.
+</permissions instructions>
+
+---
+
+
+**User**
+
+https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/huks-import-key-in-plaintext-arkts
+https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/huks-encryption-decryption-ndk
+一个是ARKTS加密 一个是C++ 加密 你看一下
+
+---
+
+
+**OpenAI Codex**
+
+我先把你贴的内容和华为官方两篇文档对齐，重点比较 ArkTS 与 C++/NDK 的 HUKS 能力、密钥格式、参数一致性，以及两端能否互相加解密。使用 `superpowers:using-superpowers` 规范这次代码资料核对；目前只分析，不修改项目。
+
+---
+
+
+**OpenAI Codex**
+
+先纠正一个关键点：第一篇标题本身是“ArkTS 明文导入密钥”，并不是完整的 ArkTS 加解密流程；第二篇才是 NDK/C++ 的加解密示例。我继续读取页面里的实际 API 和参数，判断你附件里那份 HUKS 示例是否能直接用于 `.rjs/.ejs` 互通。
+
+---
+
+
+**OpenAI Codex**
+
+我看完了，结论很明确：
+
+**这两篇不是同一层面的文档**
+
+1. [明文导入密钥（ArkTS）](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/huks-import-key-in-plaintext-arkts)  
+   只负责把已有的 AES-256 密钥导入 HUKS，调用 `huks.importKeyItem()`，不是完整加密流程。
+
+2. [加解密（C/C++）](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/huks-encryption-decryption-ndk)  
+   使用 NDK 的 `OH_Huks_InitSession()`、`OH_Huks_FinishSession()` 完成加解密。
+
+对应的 ArkTS 加解密文档其实是：[加解密（ArkTS）](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/huks-encryption-decryption-arkts)。
+
+**对我们项目最重要的结论**
+
+48 文件要求：
+
+```text
+AES-256 / ECB / PKCS7
+固定32字节密钥
+Base64输出
+```
+
+但官方 [HUKS 算法规格](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/huks-encryption-decryption-overview) 不支持 `AES/ECB/PKCS7`，只支持：
+
+```text
+AES/CBC/PKCS7
+AES/CTR/NoPadding
+AES/GCM/NoPadding
+AES/CCM/NoPadding
+```
+
+所以附件中的 `ConfigAesCryptoHuks.ets` 方案不可用于兼容48，主要问题是：
+
+- `HUKS_MODE_ECB + HUKS_PADDING_PKCS7` 不在 HUKS 的 AES 支持范围。
+- `init → update(data) → finish(update输出)` 的数据流不正确，会重复或错误处理数据。
+- 成功 `finishSession()` 后又在 `finally` 中 `abortSession()` 不合理。
+- 导入密钥时捕获并忽略所有异常，会隐藏真正错误或继续使用错误旧密钥。
+
+**正确选择**
+
+当前工程应直接使用 ArkTS 的 `Crypto Architecture Kit`：
+
+```ts
+cryptoFramework.createCipher('AES256|ECB|PKCS7')
+```
+
+华为也分别提供了对应文档：
+
+- [AES ECB ArkTS](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/crypto-aes-sym-encrypt-decrypt-ecb)
+- [AES ECB C/C++](https://developer.huawei.com/consumer/cn/doc/harmonyos-guides/crypto-aes-sym-encrypt-decrypt-ecb-ndk)
+
+对于配置 JSON 这种小文件，ArkTS 版本已经足够，不需要为了加密额外接入 C++/NAPI。C++ 和 ArkTS 最终密文可以互通，但前提是密钥字节、AES-256、ECB、PKCS7、UTF-8 和 Base64 全部一致。
+
+另外，ECB 本身不安全，这里只能作为兼容48旧格式使用，不建议用于新的敏感数据格式。本次仅完成文档核对，没有修改代码或编译。
+
+---
+
+
+**User**
+
+可以 来吧 按照你的来
+
+---
+
+
+**OpenAI Codex**
+
+我按已确认的方案实现：使用 ArkTS `Crypto Architecture Kit` 做 `AES-256/ECB/PKCS7 + Base64`，目标是先把 48 的 `.rjs/.ejs` 文件加解密互通层做扎实，不接入不兼容该格式的 HUKS。先核对现有保存/加载链路和 48 的实际密钥构造，再设计静态测试并做最小接入；按你的规则不编译。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经确认：当前“保存程序/载入程序”只是 UI 占位，真正文件列表、序列化、加密和恢复都没有接入。48 的实际实现也证实密钥不是“前15字节”这种猜测，而是：创建 128 字节空格缓冲区、写入密码字节，但 AES 只取前 32 字节，所以最终密钥是密码后补空格到 32 字节。接下来我会复用项目现有 `UserConfigInfos` 和运行时数据，避免另造一套不一致模型。
+
+---
+
+
+**OpenAI Codex**
+
+我继续按已经确认的 AES 兼容方案落地。现在先把 48 的 JSON 序列化结构和鸿蒙端实际状态更新入口对齐，避免只“能加密”却无法真正保存、载入配置。
+
+---
+
+
+**OpenAI Codex**
+
+48 的文件结构已经核对清楚：根对象字段是 `Version / StGradeInfo / StColorList / StClientInfo / StClientNewInfo / StGlobalExitInfo / StExitInfos / FruitIconPath / Price / ChainDicStr`，其中定长字节字段还要做二次 Base64。这个兼容层不能直接 `JSON.stringify` 原始结构，我会显式映射。
+
+---
+
+
+**OpenAI Codex**
+
+测试先定下来：一条固定明文必须得到与 Crypto++ 相同的 Base64 密文；同时扫描源码确认 32 字节空格补齐、AES-256/ECB/PKCS7、48 根 JSON 字段和真实 UI 接线都存在。先让它在当前占位实现上失败，再做代码修改。
+
+---
+
+
+**OpenAI Codex**
+
+接下来会新增三层：`ConfigAesCrypto` 只负责 48 兼容加解密，`UserConfigCompatMapper` 只负责二进制字段与 48 JSON 互转，`UserProgramService` 只负责沙盒目录、文件列表以及运行时快照。这样加载失败会明确停在对应层，不会把异常吞掉。
+
+---
+
+
+**OpenAI Codex**
+
+文件层已经完成，开始接入现有两个弹窗。载入时会先解析并更新本地运行态、等级卡片和出口配置，再依次向 Go 后端下发等级、全局出口参数和出口名称；任何一步失败都会明确提示“本地已载入但设备同步失败”，不会伪装成全部成功。
+
+---
+
+
+**OpenAI Codex**
+
+静态对照发现 48 在 `FLOW` 编译开关下还会附带 `nExitMode` 和 `stExitFlowInfo` 两个字段。当前设备未必启用它，但鸿蒙结构已经有对应成员；我会兼容读取和写入，非 FLOW 的 48 会自动忽略这两个额外字段。
+
+---
+
+
+**OpenAI Codex**
+
+功能链路已接完，现在做最后一轮静态验证：固定 AES 向量往返、48 的 101 个序列化/反序列化字段全量对照、占位逻辑扫描和 Git 空白错误检查。按你的规则，不运行 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+**1. 修改文件**
+- [ConfigAesCrypto.ets](E:/new/my_harmony/entry/src/main/ets/utils/crypto/ConfigAesCrypto.ets:8)：AES-256/ECB/PKCS7 加解密。
+- [UserConfigCompatMapper.ets](E:/new/my_harmony/entry/src/main/ets/protocol/UserConfigCompatMapper.ets:145)：48 JSON 双向映射。
+- [UserProgramService.ets](E:/new/my_harmony/entry/src/main/ets/pages/home/UserProgramService.ets:45)：`.rjs` 保存、列表、载入。
+- [Home.ets](E:/new/my_harmony/entry/src/main/ets/pages/Home.ets:702)：接入保存/载入及 WebSocket 下发。
+- 两个程序对话框改为使用真实数据列表。
+
+**2. 数据流**
+保存：
+
+`运行时等级/出口/客户配置 → 48 JSON → AES 加密 → filesDir/config/V4.02.01/*.rjs`
+
+载入：
+
+`.rjs → Base64 解码 → AES 解密 → JSON 映射 → 更新运行态和页面 → WebSocket 下发 Go 后端`
+
+**3. 核心函数**
+- `encryptConfigJson/decryptConfigBase64`：兼容 Crypto++ 加密格式。
+- `serializeUserConfigCompat/parseUserConfigCompat`：处理定长字节数组和二次 Base64。
+- `saveCurrentProgram/loadProgram`：文件读写及版本校验。
+- `applyToRuntime`：恢复等级、出口、客户和颜色配置。
+- `handleLoadProgramConfirm`：下发等级、全局出口和出口名称。
+
+**4. 修改原因**
+HUKS 不支持 48 使用的 AES-ECB-PKCS7，因此使用 Crypto Architecture Kit。密钥严格按照 48：密码后使用空格补齐到 32 字节。
+
+**5. 旧功能影响**
+保存/载入按钮不再是占位逻辑。载入还会更新当前批次客户信息以及主页等级、出口显示。其他打印、历史和实时统计逻辑未修改。
+
+**6. 边界情况**
+- 空名称、非法文件名、空文件、错误密文会明确报错。
+- 主次版本不一致时拒绝载入。
+- 没有等级配置时禁止保存空配置。
+- 出口数量优先使用当前机器配置，否则根据出口名和等级映射推断。
+- 同名配置目前直接覆盖。
+
+**7. 验证方式**
+已完成且通过：
+
+- AES 固定向量加密、解密往返。
+- 与 48 的 101 个 JSON 字段逐项扫描，缺失数为 `0`。
+- 占位逻辑扫描。
+- `git diff --check`。
+
+按你的规则，没有运行 hvigor 编译。
+
+**8. 人工确认**
+需要设备上实际保存一个 `.rjs`，再分别用鸿蒙端和 48 交叉载入确认。当前完成的是用户配置 `.rjs`；工程配置 `.ejs` 尚未接入。
+
+---
