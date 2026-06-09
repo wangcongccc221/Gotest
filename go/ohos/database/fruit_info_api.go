@@ -305,6 +305,14 @@ func handleFruitInfoDelete(ctx *gin.Context) {
 		return
 	}
 
+	if _, err := DeleteFruitInfoByCustomerIDs(customerIDs); err != nil {
+		fruitInfoAPIFail(ctx, err.Error())
+		return
+	}
+	fruitInfoAPIOKRaw(ctx, "")
+}
+
+func DeleteFruitInfoByCustomerIDs(customerIDs []int) (int64, error) {
 	ids := make([]int, 0, len(customerIDs))
 	for _, id := range customerIDs {
 		if id > 0 {
@@ -312,20 +320,18 @@ func handleFruitInfoDelete(ctx *gin.Context) {
 		}
 	}
 	if len(ids) == 0 {
-		fruitInfoAPIOKRaw(ctx, "")
-		return
+		return 0, nil
 	}
 
 	db, err := getInitializedFileORMDB()
 	if err != nil {
-		fruitInfoAPIFail(ctx, err.Error())
-		return
+		return 0, err
 	}
-	if err := db.Model(&TbFruitInfo{}).Where("CustomerID IN ?", ids).Update("FVisible", 0).Error; err != nil {
-		fruitInfoAPIFail(ctx, err.Error())
-		return
+	result := db.Model(&TbFruitInfo{}).Where("CustomerID IN ?", ids).Update("FVisible", 0)
+	if result.Error != nil {
+		return 0, result.Error
 	}
-	fruitInfoAPIOKRaw(ctx, "")
+	return result.RowsAffected, nil
 }
 
 func handleFruitInfoUpdateCustomer(ctx *gin.Context) {

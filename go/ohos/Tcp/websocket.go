@@ -67,36 +67,37 @@ type webSocketFrame struct { //数据帧
 }
 
 type webSocketControlMessage struct {
-	Type                string                              `json:"type"`
-	RequestID           string                              `json:"requestId,omitempty"`
-	FSMID               int32                               `json:"fsmId,omitempty"`
-	DestID              int32                               `json:"destId,omitempty"`
-	SysConfig           *StSysConfig                        `json:"sysConfig,omitempty"`
-	Grade               *StGradeInfo                        `json:"grade,omitempty"`
-	Paras               *StParas                            `json:"paras,omitempty"`
-	GlobalExitInfo      *StGlobalExitInfo                   `json:"globalExitInfo,omitempty"`
-	ExitInfo            *StExitInfo                         `json:"exitInfo,omitempty"`
-	ExitInfos           *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
-	ExitDisplay         *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
-	ExitAdditionalText  *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
-	LevelAuxConfig      *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
-	FruitTypeConfig     *webSocketFruitTypeConfigControl    `json:"fruitTypeConfig,omitempty"`
-	ProjectScheme       *webSocketProjectSchemeControl      `json:"projectScheme,omitempty"`
-	DensityInfo         *StAnalogDensity                    `json:"densityInfo,omitempty"`
-	Motor               *StMotorInfo                        `json:"motor,omitempty"`
-	GradeExits          []webSocketGradeExit                `json:"gradeExits,omitempty"`
-	Action              string                              `json:"action,omitempty"`
-	ExitNo              int                                 `json:"exitNo,omitempty"`
-	DropGrades          []webSocketDropGrade                `json:"grades,omitempty"`
-	CameraNum           *int                                `json:"cameraNum,omitempty"`
-	EvenShow            *bool                               `json:"evenShow,omitempty"`
-	WhiteBalancePayload []int                               `json:"whiteBalancePayload,omitempty"`
-	ChannelIndex        *int                                `json:"channelIndex,omitempty"`
-	ResetADValue        *int                                `json:"resetADValue,omitempty"`
-	WeightInfo          *StWeightBaseInfo                   `json:"weightInfo,omitempty"`
-	GlobalWeightInfo    *StGlobalWeightBaseInfo             `json:"globalWeightInfo,omitempty"`
-	FruitCustomerInfo   *webSocketFruitCustomerInfoControl  `json:"fruitCustomerInfo,omitempty"`
-	FruitInfoQuery      *database.FruitInfoQueryRequest     `json:"fruitInfoQuery,omitempty"`
+	Type                       string                              `json:"type"`
+	RequestID                  string                              `json:"requestId,omitempty"`
+	FSMID                      int32                               `json:"fsmId,omitempty"`
+	DestID                     int32                               `json:"destId,omitempty"`
+	SysConfig                  *StSysConfig                        `json:"sysConfig,omitempty"`
+	Grade                      *StGradeInfo                        `json:"grade,omitempty"`
+	Paras                      *StParas                            `json:"paras,omitempty"`
+	GlobalExitInfo             *StGlobalExitInfo                   `json:"globalExitInfo,omitempty"`
+	ExitInfo                   *StExitInfo                         `json:"exitInfo,omitempty"`
+	ExitInfos                  *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
+	ExitDisplay                *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
+	ExitAdditionalText         *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
+	LevelAuxConfig             *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
+	FruitTypeConfig            *webSocketFruitTypeConfigControl    `json:"fruitTypeConfig,omitempty"`
+	ProjectScheme              *webSocketProjectSchemeControl      `json:"projectScheme,omitempty"`
+	DensityInfo                *StAnalogDensity                    `json:"densityInfo,omitempty"`
+	Motor                      *StMotorInfo                        `json:"motor,omitempty"`
+	GradeExits                 []webSocketGradeExit                `json:"gradeExits,omitempty"`
+	Action                     string                              `json:"action,omitempty"`
+	ExitNo                     int                                 `json:"exitNo,omitempty"`
+	DropGrades                 []webSocketDropGrade                `json:"grades,omitempty"`
+	CameraNum                  *int                                `json:"cameraNum,omitempty"`
+	EvenShow                   *bool                               `json:"evenShow,omitempty"`
+	WhiteBalancePayload        []int                               `json:"whiteBalancePayload,omitempty"`
+	ChannelIndex               *int                                `json:"channelIndex,omitempty"`
+	ResetADValue               *int                                `json:"resetADValue,omitempty"`
+	WeightInfo                 *StWeightBaseInfo                   `json:"weightInfo,omitempty"`
+	GlobalWeightInfo           *StGlobalWeightBaseInfo             `json:"globalWeightInfo,omitempty"`
+	FruitCustomerInfo          *webSocketFruitCustomerInfoControl  `json:"fruitCustomerInfo,omitempty"`
+	FruitInfoQuery             *database.FruitInfoQueryRequest     `json:"fruitInfoQuery,omitempty"`
+	FruitInfoDeleteCustomerIDs []int                               `json:"fruitInfoDeleteCustomerIds,omitempty"`
 }
 
 type webSocketFruitCustomerInfoControl struct {
@@ -394,6 +395,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleFruitCustomerInfoUpdate(control)
 	case "queryFruitInfo":
 		c.handleFruitInfoQuery(control)
+	case "deleteFruitInfo":
+		c.handleFruitInfoDelete(control)
 	case "fsmTestCupOn":
 		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
 	case "fsmTestCupOff":
@@ -1140,6 +1143,42 @@ func (c *webSocketClient) handleFruitInfoQuery(control webSocketControlMessage) 
 				"TotalCount":   result.TotalCount,
 				"PageIndex":    result.PageIndex,
 				"PageSize":     result.PageSize,
+			}),
+		})
+	}()
+}
+
+func (c *webSocketClient) handleFruitInfoDelete(control webSocketControlMessage) {
+	go func() {
+		customerIDs := control.FruitInfoDeleteCustomerIDs
+		payloadBytes := len(rawJSONFromValue(customerIDs))
+		deletedRows, err := database.DeleteFruitInfoByCustomerIDs(customerIDs)
+		if err != nil {
+			setCTCPServerLastMessage("WebSocket deleteFruitInfo failed: customerIds=%v, err=%v", customerIDs, err)
+			c.sendCommandAckDetail("deleteFruitInfo", 0, 0, payloadBytes, -1, err.Error(), control.RequestID)
+			return
+		}
+
+		setCTCPServerLastMessage(
+			"WebSocket deleteFruitInfo success: customerIds=%v, deletedRows=%d, database=%s",
+			customerIDs,
+			deletedRows,
+			database.RealtimeSaveDatabaseForLog(),
+		)
+		c.sendFrame(webSocketFrame{
+			Type:  "commandAck",
+			Topic: "deleteFruitInfo",
+			Data: rawJSONFromValue(map[string]any{
+				"result":       0,
+				"ok":           true,
+				"command":      "deleteFruitInfo",
+				"cmdId":        0,
+				"destId":       0,
+				"payloadBytes": payloadBytes,
+				"message":      "database soft deleted",
+				"requestId":    control.RequestID,
+				"customerIds":  customerIDs,
+				"deletedRows":  deletedRows,
 			}),
 		})
 	}()

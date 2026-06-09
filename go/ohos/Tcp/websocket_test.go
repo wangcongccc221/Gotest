@@ -227,6 +227,26 @@ func TestParseWebSocketControlMessageReadsFruitInfoQuery(t *testing.T) {
 	}
 }
 
+func TestParseWebSocketControlMessageReadsFruitInfoDeleteCustomerIDs(t *testing.T) {
+	message, ok := parseWebSocketControlMessage(`{
+		"type": "deleteFruitInfo",
+		"requestId": "history-delete-1",
+		"fruitInfoDeleteCustomerIds": [12, 0, -4, 13]
+	}`)
+	if !ok {
+		t.Fatal("parseWebSocketControlMessage() rejected deleteFruitInfo")
+	}
+	if message.RequestID != "history-delete-1" {
+		t.Fatalf("RequestID = %q, want history-delete-1", message.RequestID)
+	}
+	if len(message.FruitInfoDeleteCustomerIDs) != 4 {
+		t.Fatalf("FruitInfoDeleteCustomerIDs length = %d, want 4", len(message.FruitInfoDeleteCustomerIDs))
+	}
+	if message.FruitInfoDeleteCustomerIDs[0] != 12 || message.FruitInfoDeleteCustomerIDs[3] != 13 {
+		t.Fatalf("FruitInfoDeleteCustomerIDs = %#v, want [12 0 -4 13]", message.FruitInfoDeleteCustomerIDs)
+	}
+}
+
 func TestParseWebSocketControlMessageReadsExitAdditionalTextData(t *testing.T) {
 	message, ok := parseWebSocketControlMessage(`{
 		"type": "saveExitAdditionalText",
