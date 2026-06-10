@@ -389,6 +389,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 
 	case "clearData": //数据清零
 		c.handleSimpleFSMCommand("clearData", cTCPHCClearData, control)
+	case "saveParasToFlash":
+		c.handleSimpleFSMCommand("saveParasToFlash", cTCPHCSaveParas, control)
 	case "endProcess":
 		c.handleEndProcess(control)
 	case "updateFruitCustomerInfo":
@@ -1187,7 +1189,15 @@ func (c *webSocketClient) handleFruitInfoDelete(control webSocketControlMessage)
 func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendSimpleFSMCommand(topic, commandID, control)
-		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+		c.sendCommandAckDetail(
+			topic,
+			commandID,
+			destID,
+			payloadBytes,
+			result,
+			commandAckMessage(result),
+			control.RequestID,
+		)
 	}()
 }
 

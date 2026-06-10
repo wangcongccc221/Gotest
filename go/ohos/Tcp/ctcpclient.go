@@ -43,6 +43,7 @@ const (
 	cTCPHCTestCupOff      = int32(0x0007) // 果杯测试关，HC-->FSM
 	cTCPHCFruitGradeOn    = int32(0x000F) // 水果实时分级信息开，HC-->FSM
 	cTCPHCFruitGradeOff   = int32(0x0010) // 水果实时分级信息关，HC-->FSM
+	cTCPHCSaveParas       = int32(0x0018) // 保存工程参数到 Flash
 	cTCPHCDisplayOn       = int32(0x0019) // 打开显示
 	cTCPHCSysConfig       = int32(0x0050) // 系统配置
 	cTCPHCGradeInfo       = int32(0x0051) // 等级设置 StGradeInfo
@@ -342,7 +343,6 @@ func getIPMID(id int32) int {
 func getWAMIP(id int32) int {
 	return int((id | 0x00D0) >> 4)
 }
-
 
 func encodeChannel(x int, y int, z int) int32 {
 	return int32((x+1)<<8 | (y+1)<<4 | (z + 1))
