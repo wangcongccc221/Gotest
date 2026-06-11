@@ -533,7 +533,8 @@ func (c *webSocketClient) handleClearGradeExitData(control webSocketControlMessa
 func (c *webSocketClient) handleGradeInfoData(topic string, commandID int32, control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendGradeInfoData(topic, commandID, control)
-		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+		// 透传 requestId：前端依赖它匹配 ack，确认等级配置是否真正转发到下位机
+		c.sendCommandAckDetail(topic, commandID, destID, payloadBytes, result, commandAckMessage(result), control.RequestID)
 	}()
 }
 
