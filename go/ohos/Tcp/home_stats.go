@@ -370,16 +370,16 @@ func homeStatsTotalCount(stats StStatistics) uint64 {
 }
 
 func logHomeStatsEfficiencyWindow(now time.Time, prevAt time.Time, deltaCount int64, deltaCup int64, deltaExit int64, deltaGrade int64, efficiency float64) {
-	setCTCPServerLastMessage(
-		"homeStats 20秒效率计算: prevAt=%s, currAt=%s, Δ总个数=%d, Δ总果杯数=%d, Δ出口个数=%d, Δ等级个数=%d, 效率=%.1f%%",
-		prevAt.Format("15:04:05.000"),
-		now.Format("15:04:05.000"),
-		deltaCount,
-		deltaCup,
-		deltaExit,
-		deltaGrade,
-		roundHomeStats(efficiency, 1),
-	)
+	// setCTCPServerLastMessage(
+	// 	"homeStats 20秒效率计算: prevAt=%s, currAt=%s, Δ总个数=%d, Δ总果杯数=%d, Δ出口个数=%d, Δ等级个数=%d, 效率=%.1f%%",
+	// 	prevAt.Format("15:04:05.000"),
+	// 	now.Format("15:04:05.000"),
+	// 	deltaCount,
+	// 	deltaCup,
+	// 	deltaExit,
+	// 	deltaGrade,
+	// 	roundHomeStats(efficiency, 1),
+	// )
 }
 
 func homeStatsTotalWeight(stats StStatistics) float64 {

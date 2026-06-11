@@ -3287,3 +3287,586 @@ https://gitee.com/wang-cong00111/my_-harmony_file.git
 另外我提交前顺手把 `ThreeLayerCard.ets` 的行尾空格清了，不然 `git diff --check` 过不了。
 
 ---
+
+
+**User**
+
+这个客户信息 呃 有点歪了 你看
+
+---
+
+
+**OpenAI Codex**
+
+我先定位“客户信息”这个 UI 在哪一块，是历史查询卡片、首页弹窗，还是工程设置里的表单。先找代码路径和当前布局，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+“客户信息”有两处：历史页面查询卡片和顶部状态栏右侧客户信息。我先看顶部状态栏这块，因为你说“歪了”通常是 logo + 名称这组视觉没对齐。
+
+---
+
+
+**OpenAI Codex**
+
+顶部状态栏的 `buildCustomerInfo()` 里，客户 logo 和文字 Column 的 Row 没有显式垂直居中，容易看起来上下歪。我先加一个静态校验，再把这组内容固定为垂直居中。
+
+---
+
+
+**User**
+
+你看
+
+---
+
+
+**OpenAI Codex**
+
+看到了，这个不是顶部栏，是历史页面左侧的 `CustomerQueryCard`：第三行“水果品种”已经贴到底边，像被卡片高度裁掉了。我刚才先猜到顶部栏了，那个方向不对；现在改这个卡片本体。
+
+---
+
+
+**OpenAI Codex**
+
+根因很清楚：卡片内容高度算起来超过可用高度。3 个输入框各 42，高度 126；标题加上下 padding 和间距大约又 54，总高度接近 180，但截图里这块卡片高度明显不足，所以第三行被底部裁切。修法是缩紧这个卡片的垂直尺寸：输入框高度降一点、padding 和行距收一点，不改查询逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+我会先把刚才误加的顶部栏验证脚本删掉，换成历史客户信息卡片的布局验证；测试先失败，再改 `CustomerQueryCard.ets`。
+
+---
+
+
+**OpenAI Codex**
+
+布局验证脚本已经换成客户信息卡片。现在跑一次，应该会失败，证明它确实卡住当前过高的输入框。
+
+---
+
+
+**OpenAI Codex**
+
+失败点对了。现在做最小 UI 修改：把客户信息卡片的输入框高度从 42 收到 36，标题/上下 padding 收紧，让三行完整落在 180 高度里。
+
+---
+
+
+**OpenAI Codex**
+
+客户信息卡片已经压缩到可用高度内。现在跑这个验证脚本和 diff 检查，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+看到了，修了。问题在历史页面的 [CustomerQueryCard.ets](<E:/new/my_harmony/entry/src/main/ets/pages/history/CustomerQueryCard.ets:30>)：客户信息卡片里 3 个输入框都是 `42` 高，再加标题、上下 padding，整体高度超过了查询区域固定高度，所以第三行“水果品种”被底部裁掉，看起来就歪了。
+
+我做了最小 UI 修改：
+- 输入框高度从 `42` 收到 `36`
+- 输入框上下 padding 从 `8` 收到 `6`
+- 卡片上下 padding 从 `14` 收到 `10`
+- 标题底部间距从 `10` 收到 `8`
+- 加了常量，避免以后又散落硬编码
+
+验证：
+- `node E:\new\my_harmony\tools\verify_history_customer_query_card_layout.mjs` 通过
+- `git -C E:/new/my_harmony diff --check -- entry/src/main/ets/pages/history/CustomerQueryCard.ets tools/verify_history_customer_query_card_layout.mjs` 通过
+
+没编译。现在这个卡片三行应该能完整显示在框里，不会再贴到底边。
+
+---
+
+
+**OpenAI Codex**
+
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `danger-full-access`: No filesystem sandboxing - all commands are permitted. Network access is enabled.
+Approval policy is currently never. Do not provide the `sandbox_permissions` for any reason, commands will be rejected.
+</permissions instructions>
+
+---
+
+
+**User**
+
+
+
+---
+
+
+**OpenAI Codex**
+
+我先按 bug 路径查等级表整行拖拽的数据构造和拖拽过滤条件，重点看有没有把“品质等级 0”当成空值/无效值过滤掉。先定位根因，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我已经看到几个可疑点在 `DataTablesTabBar.ets`：整行拖拽会从等级表行生成 `selectedCompositeGrades/effectiveLevelNames`。我继续精读这几个函数，确认是“0 被当 false”还是“空品质名过滤”。
+
+---
+
+
+**OpenAI Codex**
+
+We are in `E:\goTest` cwd, but actual Harmony project is `E:\new\my_harmony`. Sandbox is now `danger-full-access`, network enabled, approval never. User says “不要帮我编译”; do not run hvigor/build. Chinese responses.
+
+Repo state before current task:
+- `E:\new\my_harmony` was pushed to Gitee master with commits:
+  - `394399c 修复鸿蒙实时信息和配置页面问题`
+  - `3d0d3ac 提交鸿蒙剩余改动`
+- After that, current uncommitted work:
+  - Modified `entry/src/main/ets/pages/history/CustomerQueryCard.ets`
+  - Untracked `tools/verify_history_customer_query_card_layout.mjs`
+- This was for previous screenshot: history “客户信息” card clipped at bottom. Fixed by adding constants and reducing input height/padding:
+  - `CUSTOMER_QUERY_INPUT_HEIGHT = 36`
+  - `CUSTOMER_QUERY_VERTICAL_PADDING = 10`
+  - `CUSTOMER_QUERY_TITLE_BOTTOM = 8`
+  - Replaced three `.height(42)` with `.height(CUSTOMER_QUERY_INPUT_HEIGHT)`
+  - Input top/bottom padding from 8 to 6
+  - Card top/bottom padding from 14 to 10
+- Verification already run:
+  - `node E:\new\my_harmony\tools\verify_history_customer_query_card_layout.mjs` passed
+  - `git -C E:/new/my_harmony diff --check -- entry/src/main/ets/pages/history/CustomerQueryCard.ets tools/verify_history_customer_query_card_layout.mjs tools/verify_top_status_customer_info_layout.mjs` passed
+- A mistakenly created `tools/verify_top_status_customer_info_layout.mjs` was deleted via apply_patch before it was tracked.
+
+Current active user task:
+User asks: “帮我看一下我的等级表 不是可以整行拖拽吗？ 为什么品质等级为0的时候 为什么不可以拖拽”
+We started investigating, no fix yet. Need continue from root cause.
+
+Skills already opened this turn:
+- `superpowers:systematic-debugging`
+- `superpowers:test-driven-development`
+Need maintain bug-fix process from AGENTS.md:
+1. analyze root cause/impact
+2. find paths/boundaries
+3. give fix plan/new risks
+4. design tests first
+5. minimal changes
+6. check old feature impact/manual review points
+Final explanation must include files/functions/key lines, data flow, core functions, why, old feature impact, boundaries, verification, uncertainties.
+
+Files/function context found:
+- Drag/drop mostly in:
+  - `entry/src/main/ets/pages/home/DataTablesTabBar.ets`
+  - `entry/src/main/ets/components/cards/ThreeLayerCard.ets`
+  - `entry/src/main/ets/components/ThreeLayerCard/hooks/useDragDrop.ets`
+  - `entry/src/main/ets/components/ThreeLayerCard/hooks/useDragHandlers.ets`
+  - likely `entry/src/main/ets/components/tables/CompositeGradeTable.ets` or similar (not yet inspected)
+- Search showed `DataTablesTabBar.ets` relevant:
+  - It imports `DraggableGridTable`, `SimpleDraggableCell`
+  - `buildMatrixGridPanel()` uses `GridTable` for simple tables with `enableDrag`
+  - `buildCompositeGradePanel()` uses `CompositeGradeTable` with:
+    - `levelRows: this.getCompositeLevelRows()`
+    - `qualityRows: this.getCompositeQualityRows()`
+    - `fallbackLevelCount`
+    - `fallbackQualityCount`
+    - `enableDrag: true`
+- `DataTablesTabBar.ets` workbench row drag:
+  - `buildLevelWorkbenchPreviewRows()` filters rows via `this.hasAssignedLevelSummary(row)` then:
+    - `const qualityName = String(levelRow[0] ?? '').trim()`
+    - `const levelNames = levelRow.slice(1).map(...).filter(length > 0)`
+  - `buildWorkbenchProductDragInfo(row,rowIndex)`:
+    - `selectedCompositeGrades = this.getSelectedCompositeGrades(row)`
+    - `effectiveLevelNames = selectedCompositeGrades.length > 0 ? selectedCompositeGrades : row.levelNames`
+    - Creates `WorkbenchProductDragData` with `levelNames: effectiveLevelNames`, `singleProductName: true`
+    - Stores `CELL_DRAG_STORAGE_KEY`, `CELL_DRAG_ACTIVE_KEY`, `GLOBAL_DROP_THIRD_INFO`
+  - `buildWorkbenchProductDataCell()` makes product cell draggable and calls `buildWorkbenchProductDragInfo`
+- Need inspect `CompositeGradeTable` and row/cell drag generation for quality grade 0. Likely bug: checks treat `qualityIndex`/row index/value `0` as falsy or invalid. Search specifically for code filtering `> 0`, `quality > 0`, `qualityIndex ||`, `rowIndex || 0`, `Number(...) ||`, empty strings around composite drag.
+- Search command already run with broad rg; output truncated. Need targeted:
+  - `rg -n "CompositeGradeTable|qualityIndex|qualityGrade|rowIndex|colIndex|selectedCompositeGrades|enableDrag|onDragStart|draggable|quality.*0|> 0|<= 0" E:\new\my_harmony\entry\src\main\ets -g "*.ets"`
+  - `rg --files E:\new\my_harmony\entry\src\main\ets | rg "Composite|Draggable|SimpleDraggable|GridTable"`
+- Suspected root cause examples:
+  - First quality row labeled `0` may become `String(row[0] ?? '').trim()` = `0` okay, but later `Number(value) > 0` check rejects it.
+  - Or `CompositeGradeTable` may only build row drag for `qualityIndex > 0`.
+  - Or drag payload may set `levelName`/`value` to quality name `"0"` then drop side treats value `0` as invalid/empty.
+  - Need verify before patch.
+
+Potential TDD approach:
+- Add a static Node verification script similar existing tools, e.g. `tools/verify_composite_grade_zero_drag.mjs`.
+- It should assert the relevant fixed patterns after root cause is known. Examples:
+  - If fixing `CompositeGradeTable`: assert it does not require `qualityIndex > 0` for drag, and that it uses explicit `qualityIndex >= 0`.
+  - If fixing drop parsing: assert it does not filter `Number(...) > 0` for grade name `"0"`.
+- Run before fix to fail, then patch, rerun.
+- Do not compile.
+
+Need note about previous accidental top-status investigation:
+- I initially guessed wrong (“客户信息” top status), but corrected. Do not continue that direction.
+
+Other recent code facts:
+- `CustomerQueryCard.ets` currently has mixed CR count but `diff --check` passed. No need to normalize unless editing.
+- If committing later, user previously wanted `git add .` and push, but current task did not ask commit. Do not commit unless asked.
+
+Final response style:
+- Chinese concise but include AGENTS bug report sections.
+- Mention not compiled.
+- Mention static scripts run.
+
+---
+
+
+**OpenAI Codex**
+
+我先按 bug 流程把拖拽链路查清楚：重点看“等级表行拖拽”的拖拽数据是怎么生成、品质等级 `0` 在哪里被当成无效值过滤掉。不会帮你编译，只做代码/静态验证。
+
+---
+
+
+**OpenAI Codex**
+
+我已经定位到等级表不是普通表格路径，它走的是 `CompositeGradeTable`，然后把整行数据组装成拖拽 payload 再丢到工作台。现在继续顺着 payload 查，看 `0` 是在源头被过滤，还是拖到工作台时被丢掉。
+
+---
+
+
+**OpenAI Codex**
+
+目前看到 `CompositeGradeTable` 本身对 `0` 表头也挂了 `.draggable(true)`，所以问题更像是“品质等级名生成/归一化”或“落点解析”把 `0` 当成空。我要看一下等级名工具函数和工作台 drop 处理，那里最容易出现 `Number(x) > 0` 这种误杀。
+
+---
+
+
+**OpenAI Codex**
+
+现在有一个很可疑的点：以前多选/统计那边确实出现过 `colIndex > 0`，如果综合表的“品质 0”被映射成第 0 列，这一类条件会直接丢掉它。不过整行拖拽还要看 `handleThirdLayerDrop` 的解析逻辑，我继续查这个函数。
+
+---
+
+
+**OpenAI Codex**
+
+核心链路基本清楚了：整行拖拽会先生成 `rowData`，投到出口后由 `UseDragDrop.updateLevelMapping()` 写映射和统计。如果 `gradeCells` 没带上，就会退回老逻辑，而老逻辑明确过滤 `colIndex > 0`，这对“第 0 品质列/行”很危险。再确认一下统计侧怎么消费这些坐标，避免只修一半。
+
+---
+
+
+**OpenAI Codex**
+
+还有一种可能：你说的“品质等级为 0”不是等级名叫 `0`，而是配置里的品质等级数量为 `0`。这个时候综合表会进入“无品质列”的单轴模式，必须保证行拖拽仍然能带 `gradeCells`。我现在把这两个情况都纳入测试：名字叫 `0`、品质列数量为 `0`。
+
+---
+
+
+**OpenAI Codex**
+
+老的 `LevelTable` 行拖拽会把第一列“品质等级名”排除掉，只拖这一行后面的等级格子；新的综合表则会重新组合成 `尺寸.品质`。所以修复点不能简单写死 `0`，要保证两个表格体系里“第 0 列/第 0 行是有效坐标”这一点一致。
+
+---
+
+
+**OpenAI Codex**
+
+找到一个比较直接的差异：老 `LevelTable` 是整行 `Row().draggable(...)`，你拖这一行任意位置都能触发整行；新的 `CompositeGradeTable` 只给左侧行头单元格挂了整行拖拽，整行本身没有挂。所以在“品质等级为 0”这种第一行/第一列很容易拖到内容格子或表头，以为整行不行。我要做最小改动：把综合表的整行 `Row` 也接上整行拖拽，并保留单元格/整列拖拽。
+
+---
+
+
+**OpenAI Codex**
+
+顺便我也查了工作台预览行：如果 `productName` 是字符串 `"0"`，JS/ArkTS 里它不是空值，拖拽 payload 能生成；真正不一致的是综合等级表少了 Row 级别的整行拖拽。接下来我先加一个静态验证脚本，让它在当前代码上先失败，再补最小改动。
+
+---
+
+
+**OpenAI Codex**
+
+先加测试脚本，它会检查综合等级表的数据行本身必须支持整行拖拽，而不是只靠左侧行头。这个脚本当前应该失败，失败点就是我要修的点。
+
+---
+
+
+**OpenAI Codex**
+
+测试脚本已经放好。现在跑一下它，看它先红掉，确认不是写了个“永远通过”的检查。
+
+---
+
+
+**OpenAI Codex**
+
+红灯确认了：综合等级表的数据行没有 Row 级整行拖拽。现在做最小改动，只给数据行补上和左侧行头一致的整行拖拽入口，不动其它拖拽解析逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+改动已经补上。接下来只跑静态验证和空白/尾随空格检查，不跑编译。
+
+---
+
+
+**OpenAI Codex**
+
+静态验证过了，格式检查也干净。最后我看一下 diff，确认只改了这条拖拽链路和对应验证脚本，没有碰到别的功能。
+
+---
+
+
+**OpenAI Codex**
+
+我会再按收尾验证规则过一遍：这里不跑编译，只用刚加的针对性脚本和 `diff --check` 作为证据，避免说“修好了”但没有检查。
+
+---
+
+
+**OpenAI Codex**
+
+修了。根因是新的综合等级表 `CompositeGradeTable` 里，“整行拖拽”只挂在左侧行头 `Text(row.label)` 上，整条 `Row()` 本身没挂拖拽；所以你拖行里的其它位置时，不会走整行拖拽。品质等级是 `0` 时更容易暴露，因为它通常在第一列/第一项，看起来像整行但实际只拖到了格子/表头区域。
+
+**改动**
+- [CompositeGradeTable.ets](E:/new/my_harmony/entry/src/main/ets/components/tables/CompositeGradeTable.ets:373)
+  - 给数据行 `Row()` 增加 `.draggable(this.enableDrag)`
+  - `onDragStart` 复用原来的 `buildCompositeRowDragInfo(row.label, rowIndex)`
+- [verify_composite_grade_row_drag.mjs](E:/new/my_harmony/tools/verify_composite_grade_row_drag.mjs:1)
+  - 新增静态验证，确认综合等级表整行 `Row` 支持拖拽
+  - 同时确认 `qualityIndex = 0` 不会被排除
+
+**数据流**
+等级配置/表格数据 → `DataTablesTabBar` 传给 `CompositeGradeTable` → 拖整行时 `buildCompositeRowDragInfo()` 生成 `rowData + gradeCells` → 写入 `GLOBAL_DROP_THIRD_INFO` → 出口卡片 `UseDragDrop.handleThirdLayerDrop()` 解析 → `updateLevelMapping()` 更新映射和等级统计 → `HomeContent.onLevelStatBatch()` 更新统计表/等级出口配置。
+
+**验证**
+- 已跑：`node E:\new\my_harmony\tools\verify_composite_grade_row_drag.mjs`
+  - 结果：`Composite grade row-drag checks passed.`
+- 已跑：`git diff --check`
+  - 结果：无空白/格式错误
+- 没有跑编译，按你要求“不帮我编译”。
+
+**影响和需要你看一眼**
+这个改动只影响综合等级表的整行拖拽入口，不改拖拽 payload、不改统计/下发逻辑。需要你在 UI 上确认两点：拖品质等级包含 `0` 的那一行能不能整行拖；单独拖某个格子时是不是仍然按单格拖拽，而不是被整行拖拽抢走。
+
+---
+
+
+**User**
+
+撤销这次的修改可以吗？
+
+---
+
+
+**OpenAI Codex**
+
+可以，我只撤销刚才那次“综合等级表整行 Row 拖拽”和对应验证脚本，不动你其它文件。
+
+---
+
+
+**OpenAI Codex**
+
+确认当前未提交改动就这两个：一个代码文件、一个我刚加的验证脚本。现在撤掉。
+
+---
+
+
+**OpenAI Codex**
+
+代码里的那几行已经撤掉了，接着删除我刚才新增的验证脚本。
+
+---
+
+
+**OpenAI Codex**
+
+撤销动作完成，我再看一下工作区，确认没有留下这次改动的痕迹。
+
+---
+
+
+**OpenAI Codex**
+
+已撤销这次修改了。
+
+现在 `E:\new\my_harmony` 工作区是干净的：刚才改的 `CompositeGradeTable.ets` 已恢复，新增的 `verify_composite_grade_row_drag.mjs` 也删掉了。没有编译。
+
+---
+
+
+**User**
+
+我服了 今天还有token 没用完
+
+---
+
+
+**OpenAI Codex**
+
+哈哈，那今天不亏，还能继续薅一会儿。
+
+刚才那次我已经帮你撤干净了，工作区没残留。等级表那个问题我们可以换个方向继续查：不急着改 UI，先把“品质等级为 0”时拖拽 payload 到底有没有生成、生成后有没有被 drop 解析丢掉查清楚。这个更稳。
+
+---
+
+
+**OpenAI Codex**
+
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `workspace-write`: The sandbox permits reading files, and editing files in `cwd` and `writable_roots`. Editing files in other directories requires approval. Network access is restricted.
+# Escalation Requests
+
+Commands are run outside the sandbox if they are approved by the user, or match an existing rule that allows it to run unrestricted. The command string is split into independent command segments at shell control operators, including but not limited to:
+
+- Pipes: |
+- Logical operators: &&, ||
+- Command separators: ;
+- Subshell boundaries: (...), $(...)
+
+Each resulting segment is evaluated independently for sandbox restrictions and approval requirements.
+
+Example:
+
+git pull | tee output.txt
+
+This is treated as two command segments:
+
+["git", "pull"]
+
+["tee", "output.txt"]
+
+Commands that use more advanced shell features like redirection (>, >>, <), substitutions ($(...), ...), environment variables (FOO=bar), or wildcard patterns (*, ?) will not be evaluated against rules, to limit the scope of what an approved rule allows.
+
+## How to request escalation
+
+IMPORTANT: To request approval to execute a command that will require escalated privileges:
+
+- Provide the `sandbox_permissions` parameter with the value `"require_escalated"`
+- Include a short question asking the user if they want to allow the action in `justification` parameter. e.g. "Do you want to download and install dependencies for this project?"
+- Optionally suggest a `prefix_rule` - this will be shown to the user with an option to persist the rule approval for future sessions.
+
+If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with "require_escalated". ALWAYS proceed to use the `justification` parameter - do not message the user before requesting approval for the command.
+
+## When to request escalation
+
+While commands are running inside the sandbox, here are some scenarios that will require escalation outside the sandbox:
+
+- You need to run a command that writes to a directory that requires it (e.g. running tests that write to /var)
+- You need to run a GUI app (e.g., open/xdg-open/osascript) to open browsers or files.
+- If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with `require_escalated`. ALWAYS proceed to use the `sandbox_permissions` and `justification` parameters. do not message the user before requesting approval for the command.
+- You are about to take a potentially destructive action such as an `rm` or `git reset` that the user did not explicitly ask for.
+- Be judicious with escalating, but if completing the user's request requires it, you should do so - don't try and circumvent approvals by using other tools.
+
+## prefix_rule guidance
+
+When choosing a `prefix_rule`, request one that will allow you to fulfill similar requests from the user in the future without re-requesting escalation. It should be categorical and reasonably scoped to similar capabilities. You should rarely pass the entire command into `prefix_rule`.
+
+### Banned prefix_rules 
+Avoid requesting overly broad prefixes that the user would be ill-advised to approve. For example, do not request ["python3"], ["python", "-"], or other similar prefixes that would allow arbitrary scripting.
+NEVER provide a prefix_rule argument for destructive commands like rm.
+NEVER provide a prefix_rule if your command uses a heredoc or herestring. 
+
+### Examples
+Good examples of prefixes:
+- ["npm", "run", "dev"]
+- ["gh", "pr", "check"]
+- ["cargo", "test"]
+
+
+## Approved command prefixes
+The following prefix rules have already been approved: - ["E:\\NEW\\MY_HARMONY\\hvigorw.bat"]
+- ["go", "test"]
+- ["git", "-C", "E:/new/my_harmony"]
+- ["C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-Command", "Remove-Item -Recurse -Force C:\\Users\\AI008\\.hvigor\\project_caches\\821173b1a6052304d2facf3673d35df3\\workspace; D:\\harmSdk\\command-line-tools\\bin\\hvigorw.bat assembleApp"]
+- ["Remove-Item", "-LiteralPath", "entry/src/main/ets/pages/level/LevelDataTable.ets.codex_delete", "-Force"]
+ The writable root is `E:\goTest`.
+</permissions instructions>
+
+---
+
+
+**User**
+
+只有尺寸等级 的时候 无法拖拽这个等级 这个列，我想拖拽这个等级 然后全部的都被拖了
+
+---
+
+
+**OpenAI Codex**
+
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `workspace-write`: The sandbox permits reading files, and editing files in `cwd` and `writable_roots`. Editing files in other directories requires approval. Network access is restricted.
+# Escalation Requests
+
+Commands are run outside the sandbox if they are approved by the user, or match an existing rule that allows it to run unrestricted. The command string is split into independent command segments at shell control operators, including but not limited to:
+
+- Pipes: |
+- Logical operators: &&, ||
+- Command separators: ;
+- Subshell boundaries: (...), $(...)
+
+Each resulting segment is evaluated independently for sandbox restrictions and approval requirements.
+
+Example:
+
+git pull | tee output.txt
+
+This is treated as two command segments:
+
+["git", "pull"]
+
+["tee", "output.txt"]
+
+Commands that use more advanced shell features like redirection (>, >>, <), substitutions ($(...), ...), environment variables (FOO=bar), or wildcard patterns (*, ?) will not be evaluated against rules, to limit the scope of what an approved rule allows.
+
+## How to request escalation
+
+IMPORTANT: To request approval to execute a command that will require escalated privileges:
+
+- Provide the `sandbox_permissions` parameter with the value `"require_escalated"`
+- Include a short question asking the user if they want to allow the action in `justification` parameter. e.g. "Do you want to download and install dependencies for this project?"
+- Optionally suggest a `prefix_rule` - this will be shown to the user with an option to persist the rule approval for future sessions.
+
+If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with "require_escalated". ALWAYS proceed to use the `justification` parameter - do not message the user before requesting approval for the command.
+
+## When to request escalation
+
+While commands are running inside the sandbox, here are some scenarios that will require escalation outside the sandbox:
+
+- You need to run a command that writes to a directory that requires it (e.g. running tests that write to /var)
+- You need to run a GUI app (e.g., open/xdg-open/osascript) to open browsers or files.
+- If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with `require_escalated`. ALWAYS proceed to use the `sandbox_permissions` and `justification` parameters. do not message the user before requesting approval for the command.
+- You are about to take a potentially destructive action such as an `rm` or `git reset` that the user did not explicitly ask for.
+- Be judicious with escalating, but if completing the user's request requires it, you should do so - don't try and circumvent approvals by using other tools.
+
+## prefix_rule guidance
+
+When choosing a `prefix_rule`, request one that will allow you to fulfill similar requests from the user in the future without re-requesting escalation. It should be categorical and reasonably scoped to similar capabilities. You should rarely pass the entire command into `prefix_rule`.
+
+### Banned prefix_rules 
+Avoid requesting overly broad prefixes that the user would be ill-advised to approve. For example, do not request ["python3"], ["python", "-"], or other similar prefixes that would allow arbitrary scripting.
+NEVER provide a prefix_rule argument for destructive commands like rm.
+NEVER provide a prefix_rule if your command uses a heredoc or herestring. 
+
+### Examples
+Good examples of prefixes:
+- ["npm", "run", "dev"]
+- ["gh", "pr", "check"]
+- ["cargo", "test"]
+
+
+## Approved command prefixes
+The following prefix rules have already been approved: - ["E:\\NEW\\MY_HARMONY\\hvigorw.bat"]
+- ["go", "test"]
+- ["git", "-C", "E:/new/my_harmony"]
+- ["C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-Command", "Remove-Item -Recurse -Force C:\\Users\\AI008\\.hvigor\\project_caches\\821173b1a6052304d2facf3673d35df3\\workspace; D:\\harmSdk\\command-line-tools\\bin\\hvigorw.bat assembleApp"]
+- ["Remove-Item", "-LiteralPath", "entry/src/main/ets/pages/level/LevelDataTable.ets.codex_delete", "-Force"]
+ The writable root is `E:\goTest`.
+</permissions instructions>
+
+---
+
+
+**User**
+
+只有尺寸等级 的时候 无法拖拽这个等级 这个列，我想拖拽这个等级 然后全部的都被拖了
+
+---

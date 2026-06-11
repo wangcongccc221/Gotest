@@ -167,7 +167,7 @@ func finishRealtimeSave(customerID int, input database.RealtimeFruitSaveInput, e
 		} else {
 			setCTCPServerLastMessage("CTCP realtime save ok: CustomerID=%d, database=%s, readback failed: %v", customerID, database.RealtimeSaveDatabaseForLog(), readErr)
 		}
-		appendCTCPLogChunks("CTCP realtime save rows", formatRealtimeSaveInputForLog(customerID, input))
+		// appendCTCPLogChunks("CTCP realtime save rows", formatRealtimeSaveInputForLog(customerID, input))
 	}
 }
 

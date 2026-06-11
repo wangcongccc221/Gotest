@@ -103,6 +103,16 @@ func SaveRealtimeFruitInfo(input RealtimeFruitSaveInput) (int, error) {
 				return err
 			}
 			if decreased {
+				// 计数器递减，说明设备清零或重启，需要结束旧批次并开始新批次
+				endTime := savedAt.Format("2006-01-02 15:04:05")
+				if err := tx.Model(&TbFruitInfo{}).
+					Where("CustomerID = ?", fruit.CustomerID).
+					Updates(map[string]any{
+						"EndTime":        endTime,
+						"CompletedState": "1", // 标记旧批次为已完成
+					}).Error; err != nil {
+					return err
+				}
 				fruit = TbFruitInfo{}
 				hasFruit = false
 			}
