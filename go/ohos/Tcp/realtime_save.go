@@ -47,7 +47,6 @@ var (
 	realtimeSaveInFlight       bool
 	realtimeSaveLastErr        string
 	realtimeSaveLastErrAt      time.Time
-	realtimeSaveLastOKAt       time.Time
 	realtimeSaveLastSkip       string
 	realtimeSaveLastSkipAt     time.Time
 	realtimeSaveProcessHistory realtimeSaveProcessSnapshot
@@ -71,7 +70,6 @@ func resetRealtimeSaveState() {
 	realtimeSaveInFlight = false
 	realtimeSaveLastErr = ""
 	realtimeSaveLastErrAt = time.Time{}
-	realtimeSaveLastOKAt = time.Time{}
 	realtimeSaveLastSkip = ""
 	realtimeSaveLastSkipAt = time.Time{}
 	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{}
@@ -117,8 +115,8 @@ func maybeSaveRealtimeStatistics(now time.Time) {
 	}
 
 	go func() {
-		customerID, err := database.SaveRealtimeFruitInfo(input)
-		finishRealtimeSave(customerID, input, err)
+		_, err := database.SaveRealtimeFruitInfo(input)
+		finishRealtimeSave(err)
 	}()
 }
 
@@ -129,7 +127,7 @@ func finishRealtimeSaveSkip(reason string) {
 	logRealtimeSaveSkip(reason)
 }
 
-func finishRealtimeSave(customerID int, input database.RealtimeFruitSaveInput, err error) {
+func finishRealtimeSave(err error) {
 	realtimeSaveMu.Lock()
 	realtimeSaveInFlight = false
 	if err != nil {
@@ -147,28 +145,7 @@ func finishRealtimeSave(customerID int, input database.RealtimeFruitSaveInput, e
 	}
 	realtimeSaveLastErr = ""
 	realtimeSaveLastErrAt = time.Time{}
-	shouldLog := realtimeSaveLastOKAt.IsZero() || time.Since(realtimeSaveLastOKAt) >= cTCPRealtimeSaveErrorLogPeriod
-	if shouldLog {
-		realtimeSaveLastOKAt = time.Now()
-	}
 	realtimeSaveMu.Unlock()
-
-	if shouldLog {
-		snapshot, readErr := database.GetFruitCustomerInfoSnapshot(customerID)
-		if readErr == nil {
-			setCTCPServerLastMessage(
-				"CTCP realtime save ok: CustomerID=%d, database=%s, db CustomerName=%s, FarmName=%s, FruitName=%s",
-				customerID,
-				database.RealtimeSaveDatabaseForLog(),
-				snapshot.CustomerName,
-				snapshot.FarmName,
-				snapshot.FruitName,
-			)
-		} else {
-			setCTCPServerLastMessage("CTCP realtime save ok: CustomerID=%d, database=%s, readback failed: %v", customerID, database.RealtimeSaveDatabaseForLog(), readErr)
-		}
-		// appendCTCPLogChunks("CTCP realtime save rows", formatRealtimeSaveInputForLog(customerID, input))
-	}
 }
 
 func markRealtimeSaveProcessEnded() {

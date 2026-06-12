@@ -3886,3 +3886,508 @@ HUKS 不支持 48 使用的 AES-ECB-PKCS7，因此使用 Crypto Architecture Kit
 需要设备上实际保存一个 `.rjs`，再分别用鸿蒙端和 48 交叉载入确认。当前完成的是用户配置 `.rjs`；工程配置 `.ejs` 尚未接入。
 
 ---
+
+
+**OpenAI Codex**
+
+<permissions instructions>
+Filesystem sandboxing defines which files can be read or written. `sandbox_mode` is `workspace-write`: The sandbox permits reading files, and editing files in `cwd` and `writable_roots`. Editing files in other directories requires approval. Network access is restricted.
+# Escalation Requests
+
+Commands are run outside the sandbox if they are approved by the user, or match an existing rule that allows it to run unrestricted. The command string is split into independent command segments at shell control operators, including but not limited to:
+
+- Pipes: |
+- Logical operators: &&, ||
+- Command separators: ;
+- Subshell boundaries: (...), $(...)
+
+Each resulting segment is evaluated independently for sandbox restrictions and approval requirements.
+
+Example:
+
+git pull | tee output.txt
+
+This is treated as two command segments:
+
+["git", "pull"]
+
+["tee", "output.txt"]
+
+Commands that use more advanced shell features like redirection (>, >>, <), substitutions ($(...), ...), environment variables (FOO=bar), or wildcard patterns (*, ?) will not be evaluated against rules, to limit the scope of what an approved rule allows.
+
+## How to request escalation
+
+IMPORTANT: To request approval to execute a command that will require escalated privileges:
+
+- Provide the `sandbox_permissions` parameter with the value `"require_escalated"`
+- Include a short question asking the user if they want to allow the action in `justification` parameter. e.g. "Do you want to download and install dependencies for this project?"
+- Optionally suggest a `prefix_rule` - this will be shown to the user with an option to persist the rule approval for future sessions.
+
+If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with "require_escalated". ALWAYS proceed to use the `justification` parameter - do not message the user before requesting approval for the command.
+
+## When to request escalation
+
+While commands are running inside the sandbox, here are some scenarios that will require escalation outside the sandbox:
+
+- You need to run a command that writes to a directory that requires it (e.g. running tests that write to /var)
+- You need to run a GUI app (e.g., open/xdg-open/osascript) to open browsers or files.
+- If you run a command that is important to solving the user's query, but it fails because of sandboxing or with a likely sandbox-related network error (for example DNS/host resolution, registry/index access, or dependency download failure), rerun the command with `require_escalated`. ALWAYS proceed to use the `sandbox_permissions` and `justification` parameters. do not message the user before requesting approval for the command.
+- You are about to take a potentially destructive action such as an `rm` or `git reset` that the user did not explicitly ask for.
+- Be judicious with escalating, but if completing the user's request requires it, you should do so - don't try and circumvent approvals by using other tools.
+
+## prefix_rule guidance
+
+When choosing a `prefix_rule`, request one that will allow you to fulfill similar requests from the user in the future without re-requesting escalation. It should be categorical and reasonably scoped to similar capabilities. You should rarely pass the entire command into `prefix_rule`.
+
+### Banned prefix_rules 
+Avoid requesting overly broad prefixes that the user would be ill-advised to approve. For example, do not request ["python3"], ["python", "-"], or other similar prefixes that would allow arbitrary scripting.
+NEVER provide a prefix_rule argument for destructive commands like rm.
+NEVER provide a prefix_rule if your command uses a heredoc or herestring. 
+
+### Examples
+Good examples of prefixes:
+- ["npm", "run", "dev"]
+- ["gh", "pr", "check"]
+- ["cargo", "test"]
+
+
+## Approved command prefixes
+The following prefix rules have already been approved: - ["E:\\NEW\\MY_HARMONY\\hvigorw.bat"]
+- ["go", "test"]
+- ["git", "-C", "E:/new/my_harmony"]
+- ["C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-Command", "Remove-Item -Recurse -Force C:\\Users\\AI008\\.hvigor\\project_caches\\821173b1a6052304d2facf3673d35df3\\workspace; D:\\harmSdk\\command-line-tools\\bin\\hvigorw.bat assembleApp"]
+- ["Remove-Item", "-LiteralPath", "entry/src/main/ets/pages/level/LevelDataTable.ets.codex_delete", "-Force"]
+ The writable root is `E:\goTest`.
+</permissions instructions>
+
+---
+
+
+**User**
+
+OK 修改一下其他地方的内容吧
+
+---
+
+
+**OpenAI Codex**
+
+可以。具体要改哪个页面、文件或功能？把需求或截图发我，我直接处理。
+
+---
+
+
+**User**
+
+48 里实际怎么拿到 state（3 步）
+第 1 步：先让 WAM 开始推重量数据
+打开工程设置窗体时（不是点重量 Tab），会对每个子系统发：
+
+HC → WAM: HC_WAM_CMD_WEIGHT_ON = 0x0110（无参数）
+目标 ID: GetWAMID(子系统索引)
+
+projectsetform.cpp
+Lines 438-441
+    for (int i = 0; i < tempSysConfig.nSubsysNum; i++)
+    {
+        GlobalDataInterface::TransmitParam(CommonFunction::GetWAMID(i), HC_WAM_CMD_WEIGHT_ON, QVariant(QVariant::Int));
+    }
+鸿蒙侧：进工程设置 / 连上 WAM 后先发 0x0110，否则可能收不到 0x0121。
+
+第 2 步：监听上报包，解析 StWeightResult
+WAM 会持续推：
+
+WAM → HC: WAM_CMD_WEIGHTINFO = 0x0121
+载荷长度: sizeof(StWeightResult)
+收包后写入全局变量：
+
+
+globaldatainterface.cpp
+Lines 1811-1813
+        case WAM_HC_COMMAND_TYPE::WAM_CMD_WEIGHTINFO:
+        {
+            globalIn_weightresult = *((StWeightResult*)data.data());
+再发事件到 UI：
+
+
+dataprocessthread.cpp
+Lines 235-241
+                case WAM_HC_COMMAND_TYPE::WAM_CMD_WEIGHTINFO:
+                {
+                    ...
+                            emit GlobalDataInterface::Instance()->UpWeightInfoEvent(GlobalDataInterface::globalIn_weightresult);
+你要做的：TCP 收包 → nCmdId == 0x0121 → 按 StWeightResult 反序列化 → 取 .State（或 state）。
+
+第 3 步：按通道过滤，再映射 UI
+48 只处理当前选中通道的包：
+
+
+projectsetform.cpp
+Lines 9598-9631
+            if (weightResult.nChannelId == m_ChanelIDWeightList[m_WeightChannelSelectIndex])
+            {
+                if (weightResult.state == 0)       // 绿色「果杯正常」
+                else if (weightResult.state == 1)  // 红色「果杯故障」
+                else                               // 黄色「基准整定中...」
+state	含义	UI
+0
+正常
+绿色
+1
+故障
+红色
+其它
+基准整定中
+黄色
+鸿蒙侧你要写的逻辑（可直接照抄思路）
+1. 连接 WAM 后
+   → 发 0x0110 到各 WAM 子系统（若已发过可跳过）
+2. 进重量设置页时
+   → 注册/保持对 0x0121 的监听（不必等点 Tab 才监听）
+   → 可选：自己补发 0x0110，确保推流已开
+3. 每收到一包 0x0121
+   → 解析 StWeightResult
+   → if result.NChannelId == 当前选中通道ID
+        → 用 result.State 刷新「工作状态」控件
+4. 切换通道时
+   → 用新通道 ID 过滤，等该通道下一包 0x0121 再更新
+Go 结构体示例（与 48 一致）：
+
+
+type StWeightResult struct {
+    Data             StTrackingData
+    Paras            StWeightStat
+    NChannelId       int32
+    FVehicleWeight0  float32
+    FVehicleWeight1  float32
+    State            uint8   // ← 就是这个字段
+}
+我想要实现这个工作状态 就是工程设置里面的工作状态 懂我意思吗？ 你看一下48和鸿蒙的 然后帮我实现
+
+---
+
+
+**OpenAI Codex**
+
+我明白：要把工程设置里的“工作状态”接到 WAM `0x0121 StWeightResult.State`，并按当前选中通道过滤显示。先对照 48 的结构偏移、Go 收包链路和鸿蒙工程设置页面现状，再按测试先行做最小闭环；不会运行 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+我查清楚了：Go 已经能解析并推送 `0x0121.State`，鸿蒙也已经收到 `StWeightInfo.state`。缺口主要是两处：
+
+1. 工程设置打开时没有主动给各 WAM 发送 `0x0110`。
+2. `WeightSettingsPage.workStatus` 没有根据 `state` 映射，而且现在还被“复位成功、参数已发送”等操作提示共用。
+
+需要确认一点：是否严格按 48，让“工作状态”只显示这三种设备状态，不再被按钮操作结果覆盖？
+
+- `0`：果杯正常，绿色
+- `1`：果杯故障，红色
+- 其他：基准整定中，黄色
+
+我建议严格按 48 实现。
+
+---
+
+
+**User**
+
+那你帮我实现吧
+
+---
+
+
+**OpenAI Codex**
+
+方案按 48 固定下来：工程设置出现时为已配置的每个子系统发送一次 `0x0110`；重量页始终监听 `0x0121`，仅消费当前 WAM、当前通道的数据；“工作状态”只保留设备三态，操作结果继续写日志，不再覆盖状态栏。先补状态映射与通道过滤测试，再做最小接入。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把链路核对完了：Go 侧 `0x0121 → StWeightResult.State → weightInfo WebSocket` 已经存在，缺口主要在工程设置打开时启动 `0x0110` 推流，以及重量页按当前通道把 `State` 固定映射成三态。接下来先放一个不编译工程的源码回归检查，再做最小修改。
+
+---
+
+
+**OpenAI Codex**
+
+测试边界已经定下来：先锁住四件事，工程设置打开即发送 `0x0110`、只接收当前通道、`State` 三态颜色/文字一致、操作结果不再覆盖“工作状态”。我现在先把这些约束写进现有静态回归脚本，并确认它在实现前按预期失败。
+
+---
+
+
+**OpenAI Codex**
+
+开始改生产代码。工程设置只新增“打开时启动重量上报”这一条生命周期逻辑；不会动已有参数加载、保存或其他设备命令，发送失败只记日志，不伪装成设备工作状态。
+
+---
+
+
+**OpenAI Codex**
+
+核心修改已经落下：状态栏现在只由 `0x0121` 的 `State` 驱动，切换通道会先回到“等待重量参数”，直到该通道下一包到达；复位、标定、波形等操作结果继续走操作日志，不再把设备状态顶掉。现在做最后一轮数据链和边界静态检查，不运行 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+**1. 修改文件**
+- [EngineeringSettingsDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/EngineeringSettingsDialog.ets:47)：打开工程设置时启动所有已配置 WAM 的重量上报。
+- [WeightSettingsPage.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/pages/WeightSettingsPage.ets:303)：当前通道过滤、三态映射和状态样式。
+- [verify_weight_work_status_text.mjs](E:/new/my_harmony/tools/verify_weight_work_status_text.mjs:36)：增加源码回归检查。
+
+**2. 数据流**
+`工程设置打开 → sendWamGetInfo → WebSocket wamGetInfo → Go发送0x0110 → WAM持续上报0x0121 → Go解析StWeightResult → weightInfo WebSocket → ArkTS映射State/channelIndex → 当前通道过滤 → 工作状态显示`
+
+**3. 核心函数**
+- `startWamWeightStreams()`：根据 `nSubsysNum` 向每个 WAM 发送 `0x0110`。
+- `shouldConsumeWeightInfo()`：只接受当前 WAM、当前零基通道的数据。
+- `applyWeightWorkState()`：
+  - `0`：果杯正常，绿色。
+  - `1`：果杯故障，红色。
+  - 其他：基准整定中，黄色。
+- `resetWeightWorkStatus()`：切换通道或子系统后显示“等待重量参数”。
+- `consumeWeightInfo()`：收到有效 `0x0121` 后更新工作状态及实时重量数据。
+
+**4. 修改原因**
+原来 `State` 已经传到鸿蒙，但页面没有使用，而且工作状态被复位、标定、波形捕捉等操作文案覆盖。现在严格按照 48：工作状态只表达设备状态，操作结果继续写操作日志。
+
+**5. 旧功能影响**
+复位、标定、归零、数据追踪、波形捕捉等命令没有改动。它们的成功和失败仍然记录日志，只是不再覆盖“工作状态”。
+
+**6. 边界情况**
+- 没收到数据：显示“等待重量参数”。
+- `State=0`：不会被当作空值。
+- 未知 `State`：显示“基准整定中...”。
+- 切换通道：不会沿用旧通道状态。
+- 通道编号异常：直接忽略，避免串到相邻通道。
+- 跨天、跨月、跨年：该功能是实时设备状态，不涉及日期。
+
+**7. 验证方式**
+正常场景：打开工程设置，确认日志出现 `wamGetInfo/0x0110`；进入重量设置后检查三种状态和颜色。
+
+异常场景：断开 WAM、切换通道、发送未知 `State`，确认分别保持等待、等待新通道数据、显示黄色整定状态。
+
+静态检查已通过：
+
+```text
+Weight settings UI text checks passed.
+git diff --check passed
+```
+
+按你的规则，没有运行 hvigor，也没有执行 Go 编译测试。
+
+**8. 人工确认点**
+需要真机确认 WAM 上报的 `NChannelId` 低四位确实从 `1` 开始。当前 WebSocket 映射已按现有协议转换为零基通道。
+
+---
+
+
+**User**
+
+未知state？ 你把这个state 解析之后打印出来 我看一下 记得前后端都要打印
+
+---
+
+
+**OpenAI Codex**
+
+我会用 `superpowers:brainstorming` 和 `superpowers:test-driven-development` 把这次日志补成可核对的闭环：Go 在 `0x0121` 反序列化后打印原始 `State/NChannelId`，ArkTS 在 JSON 映射后及页面消费前打印归一化通道和状态。先确认现有日志出口，避免重复刷屏或只写进看不到的队列。
+
+---
+
+
+**OpenAI Codex**
+
+目前 Go 已在内部队列记录 `State`，但可能不会直接出现在终端；ArkTS 尚未打印。
+
+我建议前后端对每个 `0x0121` 都打印一行，包含原始通道、归一化通道、`State` 和状态文案。这样日志会比较密集。确认按“每包都打印”做吗？
+
+---
+
+
+**User**
+
+15:01:24.994 CTCP StWeightGlobal 回读: remote=192.168.0.29:59753, src=0x01D0, dst=0x1000, nWAMId=0x01D0, gWeight{FFilterParam=0.040000, AD_Filter_ALG=0, NEffectCupThreshold=80, NMinGradeThreshold=20, NCupDeviationThreshold=5, NCupBreakageThreshold=60, NBaseCupNum=100, NTotalCupNums=[1000 500 500 500], RefWeight=200, WeightTh=10}, weight0{FGADParam=[0.034500 0.034500], FTemperatureParams=1.000000, WaveInterval=[120 220]}
+06-12 15:01:30.164   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:01:29.921 WebSocket wamGetInfo: sending WAM cmd=0x0110, dest=0x01D0, target=192.168.0.29:1299, payload=0 bytes
+06-12 15:01:30.164   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:01:29.924 WebSocket wamGetInfo success: WAM cmd=0x0110 sent, dest=0x01D0
+06-12 15:01:30.164   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:01:29.925 CTCP stat server received from 192.168.0.29:59754 on port 1128: src=0x01D0, dst=0x1000, cmd=WAM__CMD_WEIGHT_INFO(0x0120), data=264 bytes, totalAfterHead=264 bytes, mode=read-until-idle
+06-12 15:01:30.164   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:01:29.925 CTCP StWeightGlobal 回读: remote=192.168.0.29:59754, src=0x01D0, dst=0x1000, nWAMId=0x01D0, gWeight{FFilterParam=0.040000, AD_Filter_ALG=0, NEffectCupThreshold=80, NMinGradeThreshold=20, NCupDeviationThreshold=5, NCupBreakageThreshold=60, NBaseCupNum=100, NTotalCupNums=[1000 500 500 500], RefWeight=200, WeightTh=10}, weight0{FGADParam=[0.034500 0.034500], FTemperatureParams=1.000000, WaveInterval=[120 220]}
+这个是吗？
+
+---
+
+
+**OpenAI Codex**
+
+不是。
+
+这段是：
+
+- `0x0110` 请求发送成功
+- WAM 返回 `0x0120 StWeightGlobal`
+- 内容是重量配置参数，没有 `State`
+
+真正的工作状态包应该看到：
+
+```text
+cmd=WAM_CMD_WEIGHTINFO(0x0121)
+CTCP StWeightResult ... channel=... State=0/1/其他
+```
+
+你当前日志里没有 `0x0121`，所以暂时拿不到工作状态。说明设备目前只回复了配置参数 `0x0120`，还没有推送实时重量结果 `0x0121`。
+
+---
+
+
+**User**
+
+把其他没用的日志给删了 就是输出的 前后端 不然找起来好麻烦 
+15:02:01.220 CTCP StWeightResult 回推: remote=192.168.0.29:59762, src=0x01D1, dst=0x1000, cmd=WAM_CMD_WEIGHTINFO(0x0121), payload=44 bytes, channel=0x01D1, data{CupId=4, FruitWeight=400.000, CupWeight=-3.073, DataADFruit=0, DataADVehicle=0}, paras{CupAverageWeight=0.000, AD0=17879, AD1=22054, StandardAD0=17868, StandardAD1=22179}, FVehicleWeight0=0.397, FVehicleWeight1=-4.322, State=2
+06-12 15:02:01.257   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:02:01.220 CTCP StWeightResult 回推 原始字节HEX part 1/1 chars [0:131)
+                                                                                               04 00 00 00 00 00 C8 43 06 AD 44 C0 00 00 00 00 00 00 00 00 D7 45 26 56 CC 45 A3 56 D1 01 00 00
+                                                                                               22 7B CB 3E EF 4E 8A C0 02 00 00 00
+06-12 15:02:01.507   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:02:01.313 CTCP stat server received from 192.168.0.29:59764 on port 1128: src=0x01D1, dst=0x1000, cmd=WAM_CMD_WEIGHTINFO(0x0121), data=44 bytes, totalAfterHead=44 bytes, mode=read-until-idle
+06-12 15:02:01.508   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:02:01.313 CTCP StWeightResult 回推: remote=192.168.0.29:59764, src=0x01D1, dst=0x1000, cmd=WAM_CMD_WEIGHTINFO(0x0121), payload=44 bytes, channel=0x01D1, data{CupId=5, FruitWeight=384.000, CupWeight=-3.073, DataADFruit=0, DataADVehicle=0}, paras{CupAverageWeight=0.000, AD0=17882, AD1=22070, StandardAD0=17868, StandardAD1=22179}, FVehicleWeight0=0.502, FVehicleWeight1=-3.775, State=2
+06-12 15:02:01.508   13900-13900   A00000/com.nut...otest/testTag  com.nutpi.gotest      I     15:02:01.313 CTCP StWeightResult 回推 原始字节HEX part 1/1 chars [0:131)
+com.nut...otest/testTag  com.nutpi.gotest      I     15:01:42.733 CTCP realtime save ok: CustomerID=1, database=/data/storage/el2/database/entry/harmony_go_orm.db, db CustomerName=, FarmName=, FruitName=新鲜脐橙
+这些
+
+---
+
+
+**OpenAI Codex**
+
+明白，你要的是“只留下能看 `State` 的短日志”，不是每包把 44 字节和全部重量字段倾倒出来。按你贴出的范围处理：后端删掉 `0x0121` 的通用收包、全字段、HEX，以及成功型 realtime-save 刷屏；前端只保留一条解析后的 `rawChannel/channelIndex/state`，页面不再重复打一遍。
+
+---
+
+
+**User**
+
+前端的这个： 重量信息更新: 重量=585g, 等级=0, 出口=0
+06-12 14:55:10.300   54409-54409   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     重量信息更新: 重量=509g, 等级=0, 出口=0
+06-12 14:55:10.391   54409-54409   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     重量信息更新: 重量=543g, 等级=0, 出口=0
+06-12 14:55:10.481   54409-54409   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     重量信息更新: 重量=467g, 等级=0, 出口=0
+06-12 14:55:10.575   54409-54409   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     重量信息更新: 重量=502g, 等级=0, 出口=0
+06-12 14:55:10.675   54409-54409   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     重量信息更新: 重量=426g, 等级=0, 出口=0
+06-12 14:55:10.756   54409-54409   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     重量信息更新: 重量=460g, 等级=0, 出口=0
+06-12 14:55:10.848   54409-54409   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     重量信息更新: 重量=384g, 等级=0, 出口=0
+
+---
+
+
+**OpenAI Codex**
+
+收到，前端这条 `重量信息更新: 重量=...` 也是主要刷屏源，会一起删除。最终前端每个 `0x0121` 只输出一条 `[WAM_WEIGHT_STATE] rawChannel=... channelIndex=... state=...`，方便直接按标签过滤。
+
+---
+
+
+**OpenAI Codex**
+
+范围已经明确：`0x0121` 的状态日志保留一条，通用收包、全字段和 HEX 不再输出；`realtime save ok` 成功日志删除，但真正的保存失败/回读失败不能隐藏。先把这些要求写成静态测试，确认当前代码会失败。
+
+---
+
+
+**OpenAI Codex**
+
+我现在先补两条回归约束：禁止前端 `重量信息更新`，禁止后端三种 `0x0121` 大日志和 realtime-save 成功日志，同时要求前后端都存在统一的 `[WAM_WEIGHT_STATE]` 短日志。测试只做源码扫描，不会编译。
+
+---
+
+
+**OpenAI Codex**
+
+测试已按预期失败，说明确实锁住了当前这些刷屏点。现在做最小修改：不碰解析、缓存、WebSocket 推送或数据库保存，只替换日志出口。
+
+---
+
+
+**OpenAI Codex**
+
+日志出口已经收敛成功，静态测试通过。后端现在每个重量结果只打一行 `src/channel/state`；前端只打一行 `rawChannel/channelIndex/state`，你贴出的四类噪声都已从对应路径移除。接着只做格式化和最终源码检查。
+
+---
+
+
+**OpenAI Codex**
+
+最后检查发现一个需要顺手收紧的编译边界：删掉成功日志后，异步保存返回的 `customerID` 已不再使用，必须改成 `_`，否则 Go 会报未使用局部变量。这个只影响日志后的返回值接收，不改保存行为。
+
+---
+
+
+**OpenAI Codex**
+
+已收敛日志。
+
+**1. 修改文件**
+- [ctcpserver.go](E:/goTest/go/ohos/Tcp/ctcpserver.go:565)：`0x0121` 只输出 State。
+- [realtime_save.go](E:/goTest/go/ohos/Tcp/realtime_save.go:127)：删除保存成功日志。
+- [HarmonyWebSocketClient.ets](E:/new/my_harmony/entry/src/main/ets/utils/network/HarmonyWebSocketClient.ets:1743)：打印前端解析结果。
+- [GlobalDataInterface.ets](E:/new/my_harmony/entry/src/main/ets/protocol/GlobalDataInterface.ets:1322)：删除重量详情刷屏日志。
+- 新增后端静态检查脚本。
+
+**2. 数据流**
+`0x0121 → Go解析StWeightResult → 打印State → WebSocket → ArkTS解析 → 打印State → 更新页面状态`
+
+**3. 保留日志**
+后端：
+
+```text
+[WAM_WEIGHT_STATE] src=0x01D1 channel=0x01D1 state=2
+```
+
+前端：
+
+```text
+[WAM_WEIGHT_STATE] rawChannel=0x1d1, channelIndex=0, state=2
+```
+
+直接搜索 `WAM_WEIGHT_STATE` 即可。
+
+**4. 删除原因**
+删除了不便于定位工作状态的大段字段、HEX 和重复重量日志，仅保留排查 `State` 必需的信息。
+
+**5. 删除的日志**
+- `CTCP stat server received...0x0121`
+- `CTCP StWeightResult 回推: remote=...`
+- `StWeightResult 原始字节HEX`
+- `CTCP realtime save ok`
+- `重量信息更新: 重量=...`
+
+解析失败、WebSocket 推送失败、数据库保存失败仍然保留，不隐藏异常。
+
+**6. 边界情况**
+- `State=0/1/2/其他值`都会原样打印。
+- 通道经过前端归一化，因此同时打印原始通道和 `channelIndex`。
+- 数据库保存失败仍会输出 `CTCP realtime save failed`。
+
+**7. 验证**
+源码测试和 `diff --check` 均通过。未运行 Go 编译和 hvigor。
+
+**8. 人工确认**
+当前设备实际返回的 `State=2`，页面会显示黄色“基准整定中...”。需要真机继续观察它是否会变成 `0` 或 `1`。
+
+---
+
+
+**User**
+
+OK 好了
+
+---
+
+
+**OpenAI Codex**
+
+好的，日志现在搜 `WAM_WEIGHT_STATE` 就能直接看前后端的 `State`。
+
+---

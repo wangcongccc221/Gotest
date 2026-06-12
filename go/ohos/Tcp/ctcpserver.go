@@ -465,7 +465,9 @@ func (s *cTCPServer) handleConnection(conn net.Conn) {
 		return
 	}
 
-	if head.NCmdId != cmdFSMStatistics {
+	if head.NCmdId != cmdFSMStatistics &&
+		head.NCmdId != cmdFSMWeightInfo &&
+		head.NCmdId != cmdWAMWeightInfo {
 		setCTCPServerLastMessage("CTCP %s server received from %s on port %d: src=0x%04X, dst=0x%04X, cmd=%s, data=%d bytes, totalAfterHead=%d bytes, mode=%s",
 			s.name,
 			remoteAddr,
@@ -563,28 +565,11 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			return
 		}
 		setCTCPServerLastMessage(
-			"CTCP StWeightResult 回推: remote=%s, src=0x%04X, dst=0x%04X, cmd=%s, payload=%d bytes, channel=0x%04X, data{CupId=%d, FruitWeight=%.3f, CupWeight=%.3f, DataADFruit=%d, DataADVehicle=%d}, paras{CupAverageWeight=%.3f, AD0=%d, AD1=%d, StandardAD0=%d, StandardAD1=%d}, FVehicleWeight0=%.3f, FVehicleWeight1=%.3f, State=%d",
-			remoteAddr,
+			"[WAM_WEIGHT_STATE] src=0x%04X channel=0x%04X state=%d",
 			uint32(head.NSrcId),
-			uint32(head.NDstId),
-			cTCPCommandName(head.NCmdId),
-			len(payload),
 			uint32(weight.NChannelId),
-			weight.Data.NVehicleId,
-			weight.Data.FFruitWeight,
-			weight.Data.FVehicleWeight,
-			weight.Data.NADFruit,
-			weight.Data.NADVehicle,
-			weight.Paras.FCupAverageWeight,
-			weight.Paras.NAD0,
-			weight.Paras.NAD1,
-			weight.Paras.NStandardAD0,
-			weight.Paras.NStandardAD1,
-			weight.FVehicleWeight0,
-			weight.FVehicleWeight1,
 			weight.State,
 		)
-		appendPayloadHexChunks("CTCP StWeightResult 回推", payload)
 		weightJSON, jsonErr := FormatDataFullJSON(weight)
 		if weightJSON != "" && jsonErr == nil {
 			if err := PublishWebSocketJSON(webSocketTopicWeightInfo, weightJSON); err != nil {
