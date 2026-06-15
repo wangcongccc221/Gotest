@@ -3,6 +3,7 @@ package tcp
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 )
@@ -91,6 +92,76 @@ func DumpStGradeInfo(grade StGradeInfo) string {
 // LogStGradeInfo 输出一次 StGradeInfo 全量字段到 CTCP 日志（HiLog 搜「StGradeInfo 全量」）。
 func LogStGradeInfo(grade StGradeInfo) {
 	appendCTCPLogChunks("StGradeInfo 全量", DumpStGradeInfo(grade))
+}
+
+// LogQualityGradeDiagnostics 输出每个品质等级在各尺寸档位下的分级条件。
+func LogQualityGradeDiagnostics(source string, grade StGradeInfo) {
+	var b strings.Builder
+	qualityCount := min(int(grade.NQualityGradeNum), cTCPServerMaxSizeGradeNum)
+	sizeCount := min(int(grade.NSizeGradeNum), cTCPServerMaxSizeGradeNum)
+	if sizeCount <= 0 {
+		sizeCount = 1
+	}
+	fmt.Fprintf(
+		&b,
+		"source=%s NSizeGradeNum=%d NQualityGradeNum=%d\n",
+		source,
+		grade.NSizeGradeNum,
+		grade.NQualityGradeNum,
+	)
+
+	for qualityIndex := 0; qualityIndex < qualityCount; qualityIndex++ {
+		qualityName := realtimeSaveFixedName(grade.StrQualityGradeName[:], qualityIndex)
+		fmt.Fprintf(&b, "\n品质[%d] name=%q\n", qualityIndex+1, qualityName)
+		for sizeIndex := 0; sizeIndex < sizeCount; sizeIndex++ {
+			gradeIndex := qualityIndex*cTCPServerMaxSizeGradeNum + sizeIndex
+			item := grade.Grades[gradeIndex]
+			sizeName := realtimeSaveFixedName(grade.StrSizeGradeName[:], sizeIndex)
+			fmt.Fprintf(
+				&b,
+				"  尺寸[%d] name=%q Grades[%d] sizeRange=[%g,%g] fruitNum=%d exit=%d "+
+					"颜色=%s 形状=%s 固形物=%s 瑕疵=%s 碰伤=%s 腐烂=%s 糖度=%s 酸度=%s "+
+					"空心=%s 浮皮=%s 褐变=%s 糖心=%s 硬度=%s 水心=%s 标签=%d\n",
+				sizeIndex+1,
+				sizeName,
+				gradeIndex,
+				item.NMinSize,
+				item.NMaxSize,
+				item.NFruitNum,
+				item.Exit(),
+				formatQualitySelector(grade.StrColorGradeName[:], item.NColorGrade),
+				formatQualitySelector(grade.StrShapeGradeName[:], item.SbShapeSize),
+				formatQualitySelector(grade.StDensityGradeName[:], item.SbDensity),
+				formatQualitySelector(grade.StFlawareaGradeName[:], item.SbFlawArea),
+				formatQualitySelector(grade.StBruiseGradeName[:], item.SbBruise),
+				formatQualitySelector(grade.StRotGradeName[:], item.SbRot),
+				formatQualitySelector(grade.StSugarGradeName[:], item.SbSugar),
+				formatQualitySelector(grade.StAcidityGradeName[:], item.SbAcidity),
+				formatQualitySelector(grade.StHollowGradeName[:], item.SbHollow),
+				formatQualitySelector(grade.StSkinGradeName[:], item.SbSkin),
+				formatQualitySelector(grade.StBrownGradeName[:], item.SbBrown),
+				formatQualitySelector(grade.StTangxinGradeName[:], item.SbTangxin),
+				formatQualitySelector(grade.StRigidityGradeName[:], item.SbRigidity),
+				formatQualitySelector(grade.StWaterGradeName[:], item.SbWater),
+				item.SbLabelbyGrade,
+			)
+		}
+	}
+	appendCTCPLogChunks("[DEBUG-QUALITY-GRADES-0615] Go接收", strings.TrimSpace(b.String()))
+}
+
+func formatQualitySelector(names []uint8, value int8) string {
+	if value == 0x7F {
+		return "全部(127)"
+	}
+	if value < 0 {
+		return fmt.Sprintf("无效(%d)", value)
+	}
+	name := realtimeSaveFixedName(names, int(value))
+	if name == "" {
+		return fmt.Sprintf("索引%d", value)
+	}
+	return fmt.Sprintf("%q(索引%d)", name, value)
 }
 
 // DumpStMotorInfo 格式化 StMotorInfo 全部字段。

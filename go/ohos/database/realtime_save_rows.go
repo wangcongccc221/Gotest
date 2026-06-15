@@ -57,15 +57,7 @@ func realtimeSaveProgramName(tx *gorm.DB, fallback string) (string, error) {
 }
 
 func realtimeSaveConfigValue(tx *gorm.DB, configType string) (string, error) {
-	var item TbSysConfigs
-	err := tx.Where("FModuleName = ? AND FType = ?", "RSS", configType).Order("FID desc").First(&item).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", nil
-	}
-	if err != nil {
-		return "", err
-	}
-	return item.FValue, nil
+	return getConfigValueWithDB(tx, configType)
 }
 
 func realtimeSaveReplaceGradeInfos(tx *gorm.DB, customerID int, grades []RealtimeGradeSaveInput) error {

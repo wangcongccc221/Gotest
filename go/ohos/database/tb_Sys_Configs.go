@@ -30,16 +30,35 @@ func GetConfigValue(configType string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	return getConfigValueWithDB(db, configType)
+}
 
-	var item TbSysConfigs
-	err = db.Where("FModuleName = ? AND FType = ?", "RSS", configType).Order("FID desc").First(&item).Error
+func getConfigValueWithDB(db *gorm.DB, configType string) (string, error) {
+	value, _, err := getConfigValueRow(db, configType, false)
+	return value, err
+}
+
+func getConfigValueRow(db *gorm.DB, configType string, preferNonEmpty bool) (string, int, error) {
+	var row struct {
+		FID    int    `gorm:"column:FID"`
+		FValue string `gorm:"column:FValue"`
+	}
+
+	query := db.Table((&TbSysConfigs{}).TableName()).
+		Select("FID, FValue").
+		Where("FModuleName = ? AND FType = ?", "RSS", configType)
+	if preferNonEmpty {
+		query = query.Where("TRIM(COALESCE(FValue, '')) <> ?", "")
+	}
+
+	err := query.Order("FID desc").First(&row).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return "", nil
+		return "", 0, nil
 	}
 	if err != nil {
-		return "", err
+		return "", 0, err
 	}
-	return item.FValue, nil
+	return row.FValue, row.FID, nil
 }
 
 func GetConfigValuePreferNonEmpty(configType string) (string, error) {
@@ -48,15 +67,14 @@ func GetConfigValuePreferNonEmpty(configType string) (string, error) {
 		return "", err
 	}
 
-	var item TbSysConfigs
-	err = db.Where("FModuleName = ? AND FType = ? AND TRIM(COALESCE(FValue, '')) <> ?", "RSS", configType, "").Order("FID desc").First(&item).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return GetConfigValue(configType)
-	}
+	value, fid, err := getConfigValueRow(db, configType, true)
 	if err != nil {
 		return "", err
 	}
-	return item.FValue, nil
+	if fid == 0 {
+		return getConfigValueWithDB(db, configType)
+	}
+	return value, nil
 }
 
 func SaveConfigValue(configType string, value string) error {
@@ -64,12 +82,32 @@ func SaveConfigValue(configType string, value string) error {
 	if err != nil {
 		return err
 	}
+	return saveConfigValue(db, configType, value)
+}
 
+func SaveConfigValues(values map[string]string) error {
+	db, err := getORMDB()
+	if err != nil {
+		return err
+	}
+	return db.Transaction(func(tx *gorm.DB) error {
+		for configType, value := range values {
+			if err := saveConfigValue(tx, configType, value); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+func saveConfigValue(db *gorm.DB, configType string, value string) error {
 	now := time.Now()
-	var item TbSysConfigs
-	err = db.Where("FModuleName = ? AND FType = ?", "RSS", configType).Order("FID desc").First(&item).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		item = TbSysConfigs{
+	_, fid, err := getConfigValueRow(db, configType, false)
+	if err != nil {
+		return err
+	}
+	if fid == 0 {
+		item := TbSysConfigs{
 			FModuleName: "RSS",
 			FType:       configType,
 			FValue:      value,
@@ -78,10 +116,9 @@ func SaveConfigValue(configType string, value string) error {
 		}
 		return db.Create(&item).Error
 	}
-	if err != nil {
-		return err
-	}
 
-	item.FValue = value
-	return db.Save(&item).Error
+	return db.Table((&TbSysConfigs{}).TableName()).
+		Where("FID = ?", fid).
+		Update("FValue", value).
+		Error
 }

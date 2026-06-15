@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"fmt"
+	"reflect"
 	"sort"
 	"strings"
 	"sync"
@@ -86,19 +87,11 @@ func ReadFruitTypeConfigInfoFromLocalConfig() (FruitTypeConfigInfo, error) {
 func SaveFruitTypeConfigInfoToLocalConfig(fsmID int32, info FruitTypeConfigInfo) error {
 	info = normalizeFruitTypeConfigInfo(info)
 
-	if err := database.SaveConfigValue(cTCPFruitMajorConfigName, info.MajorTypes); err != nil {
-		setCTCPServerLastMessage("水果种类大类保存失败: %v", err)
-		return err
+	values := map[string]string{
+		cTCPFruitMajorConfigName:         info.MajorTypes,
+		cTCPFruitMajorEnConfigName:       info.MajorTypesEn,
+		cTCPSelectedFruitTypesConfigName: info.SelectedFruitTypes,
 	}
-	if err := database.SaveConfigValue(cTCPFruitMajorEnConfigName, info.MajorTypesEn); err != nil {
-		setCTCPServerLastMessage("水果种类大类en保存失败: %v", err)
-		return err
-	}
-	if err := database.SaveConfigValue(cTCPSelectedFruitTypesConfigName, info.SelectedFruitTypes); err != nil {
-		setCTCPServerLastMessage("已选水果种类保存失败: %v", err)
-		return err
-	}
-
 	keys := make([]string, 0, len(info.SubTypeConfigs))
 	for key := range info.SubTypeConfigs {
 		keys = append(keys, key)
@@ -108,14 +101,26 @@ func SaveFruitTypeConfigInfoToLocalConfig(fsmID int32, info FruitTypeConfigInfo)
 		if strings.TrimSpace(key) == "" {
 			continue
 		}
-		if err := database.SaveConfigValue(key, info.SubTypeConfigs[key]); err != nil {
-			setCTCPServerLastMessage("水果小类保存失败: key=%s, err=%v", key, err)
-			return err
-		}
+		values[key] = info.SubTypeConfigs[key]
+	}
+
+	if err := database.SaveConfigValues(values); err != nil {
+		setCTCPServerLastMessage("水果配置事务保存失败: %v", err)
+		return err
+	}
+	saved, err := ReadFruitTypeConfigInfoFromLocalConfig()
+	if err != nil {
+		setCTCPServerLastMessage("水果配置写后读取失败: %v", err)
+		return err
+	}
+	if !reflect.DeepEqual(normalizeFruitTypeConfigInfo(saved), info) {
+		err := fmt.Errorf("fruit type config readback mismatch")
+		setCTCPServerLastMessage("水果配置写后校验失败: %v", err)
+		return err
 	}
 
 	setCTCPServerLastMessage(
-		"水果配置已保存: fsmId=0x%04X, majorTypes=%d, selectedFruitTypesLen=%d, subTypeKeys=%d",
+		"水果配置已保存并校验: fsmId=0x%04X, majorTypes=%d, selectedFruitTypesLen=%d, subTypeKeys=%d",
 		uint32(fsmID),
 		len(splitSemicolonConfig(info.MajorTypes)),
 		len(info.SelectedFruitTypes),

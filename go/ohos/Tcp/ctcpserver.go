@@ -492,6 +492,10 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		if err != nil {
 			return
 		}
+		LogQualityGradeDiagnostics(
+			fmt.Sprintf("FSM_CMD_CONFIG src=0x%04X remote=%s", uint32(head.NSrcId), remoteAddr),
+			stg.Grade,
+		)
 		cacheStParasImageFields(remoteAddr, head, stg)
 		cacheStGlobalExitInfo(remoteAddr, head, stg)
 		cacheHomeStatsGlobalConfig(stg)

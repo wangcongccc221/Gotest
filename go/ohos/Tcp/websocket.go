@@ -723,11 +723,14 @@ func (c *webSocketClient) handleLevelAuxConfigInfo(control webSocketControlMessa
 func (c *webSocketClient) handleFruitTypeConfigInfo(control webSocketControlMessage) {
 	if control.FruitTypeConfig == nil {
 		setCTCPServerLastMessage("WebSocket saveFruitTypeConfig failed: empty fruitTypeConfig, fsmId=0x%04X", uint32(control.FSMID))
+		c.sendCommandAckDetail("saveFruitTypeConfig", 0, control.FSMID, 0, -1, "fruitTypeConfig is required", control.RequestID)
 		return
 	}
 	if err := saveFruitTypeConfigFromControl(control.FSMID, *control.FruitTypeConfig); err != nil {
+		c.sendCommandAckDetail("saveFruitTypeConfig", 0, control.FSMID, 0, -1, err.Error(), control.RequestID)
 		return
 	}
+	c.sendCommandAckDetail("saveFruitTypeConfig", 0, control.FSMID, 0, 0, "database saved and verified", control.RequestID)
 }
 
 func (c *webSocketClient) handleSaveProjectSettingsScheme(control webSocketControlMessage) {
