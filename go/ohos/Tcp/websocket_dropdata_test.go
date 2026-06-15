@@ -78,25 +78,54 @@ func TestShouldPreserveCachedGradeExitsRequiresSameGradeShape(t *testing.T) {
 	}
 	incoming := cached
 
-	if !shouldPreserveCachedGradeExits(incoming, cached) {
+	if !shouldPreserveCachedGradeExits(incoming, cached, nil) {
 		t.Fatalf("same grade shape should preserve cached exit bits")
 	}
 
 	incoming.NSizeGradeNum = 2
-	if shouldPreserveCachedGradeExits(incoming, cached) {
+	if shouldPreserveCachedGradeExits(incoming, cached, nil) {
 		t.Fatalf("changed size grade count should not preserve cached exit bits")
 	}
 
 	incoming = cached
 	incoming.NQualityGradeNum = 1
-	if shouldPreserveCachedGradeExits(incoming, cached) {
+	if shouldPreserveCachedGradeExits(incoming, cached, nil) {
 		t.Fatalf("changed quality grade count should not preserve cached exit bits")
 	}
 
 	incoming = cached
 	incoming.NClassifyType = 0
-	if shouldPreserveCachedGradeExits(incoming, cached) {
+	if shouldPreserveCachedGradeExits(incoming, cached, nil) {
 		t.Fatalf("changed classify type should not preserve cached exit bits")
+	}
+}
+
+func TestShouldPreserveCachedGradeExitsHonorsExplicitFalse(t *testing.T) {
+	cached := StGradeInfo{
+		NClassifyType:    1,
+		NSizeGradeNum:    10,
+		NQualityGradeNum: 2,
+	}
+	incoming := cached
+	preserve := false
+
+	if shouldPreserveCachedGradeExits(incoming, cached, &preserve) {
+		t.Fatalf("explicit preserveCachedGradeExits=false should not preserve cached exit bits")
+	}
+}
+
+func TestShouldPreserveCachedGradeExitsHonorsExplicitTrue(t *testing.T) {
+	cached := StGradeInfo{
+		NClassifyType:    1,
+		NSizeGradeNum:    10,
+		NQualityGradeNum: 2,
+	}
+	incoming := cached
+	incoming.NSizeGradeNum = 3
+	preserve := true
+
+	if !shouldPreserveCachedGradeExits(incoming, cached, &preserve) {
+		t.Fatalf("explicit preserveCachedGradeExits=true should preserve cached exit bits")
 	}
 }
 

@@ -4391,3 +4391,917 @@ OK 好了
 好的，日志现在搜 `WAM_WEIGHT_STATE` 就能直接看前后端的 `State`。
 
 ---
+
+
+**User**
+
+AI008@DESKTOP-PE9BVIS MINGW64 /e/new/my_harmony (master)
+$ git push
+To https://gitee.com/wang-cong00111/my_-harmony_file.git
+ ! [rejected]        master -> master (non-fast-forward)
+error: failed to push some refs to 'https://gitee.com/wang-cong00111/my_-harmony
+_file.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. If you want to integrate the remote changes,
+hint: use 'git pull' before pushing again.
+hint: See the 'Note about fast-forwards' in 'git push --help' for details.
+
+AI00
+帮我git push 一下 直接强推
+
+---
+
+
+**OpenAI Codex**
+
+我先核对当前分支、未提交修改以及本地/远端提交差异，然后按你的要求用 `--force-with-lease` 强推。它同样会覆盖远端分叉，但能防止在检查之后又出现的新远端提交被误覆盖。
+
+---
+
+
+**OpenAI Codex**
+
+当前 `master` 工作区干净，本地和远端各有 1 个对方没有的提交；本地待推送提交是 `97c2ae3 重量设置工作状态`。我现在刷新远端引用并执行带租约强推。
+
+---
+
+
+**OpenAI Codex**
+
+远端多出的提交是 `c10798d Revert "修改重量追钟果杯号重置显示问题"`；强推会把它从远端 `master` 历史中替换掉，保留你本地的 `97c2ae3`。按你的明确要求继续执行。
+
+---
+
+
+**OpenAI Codex**
+
+强推成功。
+
+远端 `master` 已从 `c10798d` 强制更新为：
+
+```text
+97c2ae3 重量设置工作状态
+```
+
+本地与 `origin/master` 现已同步。
+
+---
+
+
+**User**
+
+然后就是这个主页的这个等级统计表 这个重量  不是根据尺寸等级的最小重量来设置的吗？ 最大的那个 不要写成x<1000000 直接就是x就行  你懂吗？
+
+---
+
+
+**OpenAI Codex**
+
+我先沿着主页“等级统计表”的表头/区间文案生成链路查清楚：重点确认重量边界到底来自尺寸等级的最小重量，还是另有重量等级配置，以及最后一档为什么被格式化成 `x<1000000`。我会只改区间显示，不碰统计归档逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经找到：尺寸等级保存时确实用每行“最小重量”生成区间，最高档的 `nMaxSize=1000000` 只是协议里的无穷上界哨兵；主页却把这个内部哨兵当成真实重量显示了。设计上只修展示：普通档继续显示“本档最小重量 ≤ X < 上一档最小重量”，最高档显示“本档最小重量 ≤ X”，绝不修改设备下发的 `1000000`，否则会改变实际分级边界。
+
+---
+
+
+**OpenAI Codex**
+
+边界也核对清楚了：等级表按最小重量从大到小排列，第一行是最高重量档，`1000000` 只存在于 `nMaxSize`。测试会锁定三个显示结果：最高档 `500.00≤X`、中间档 `400.00≤X<500.00`、最低阈值为 0 时 `X<400.00`。
+
+---
+
+
+**OpenAI Codex**
+
+测试已红，失败点正是当前没有把 `1000000` 识别为开放上界。现在只改 `GlobalDataInterface.formatGradeRange()`，让主页和复用同一 `RuntimeGradeDescriptor` 的实时统计统一得到正确文案；设备配置里的上下界数值保持原样。
+
+---
+
+
+**OpenAI Codex**
+
+修复已经通过静态回归。显示层现在严格使用尺寸等级的最小重量：`1000000` 仍作为下位机分级的开放上界保留，但不会再出现在主页表格。最后检查改动范围和工作区状态。
+
+---
+
+
+**OpenAI Codex**
+
+已修改。
+
+**1. 修改文件**
+- [GlobalDataInterface.ets](E:/new/my_harmony/entry/src/main/ets/protocol/GlobalDataInterface.ets:3628)：修改重量范围格式。
+- 新增 `verify_home_grade_weight_range.mjs` 回归检查。
+
+**2. 数据流**
+尺寸等级最小重量 → `nMinSize/nMaxSize` → `RuntimeGradeDescriptor.rangeText` → 主页等级统计表。
+
+**3. 显示规则**
+```text
+最高档：500.00≤X
+中间档：400.00≤X<500.00
+最低档：X<400.00
+```
+
+**4. 原因**
+`1000000` 是开放上界哨兵，不是真实重量，不应显示给用户。
+
+**5. 旧功能影响**
+只改显示文字。设备分级边界、统计数据、数据库和下发参数均未修改。
+
+**6. 边界**
+空范围显示 `--`；异常倒置范围按开放上界显示；零下界显示 `X<上限`。
+
+**7. 验证**
+静态测试和 `diff --check` 均通过。按要求未运行 hvigor。
+
+**8. 人工确认**
+进入主页等级统计表，确认最高重量等级不再出现 `1000000`。
+
+---
+
+
+**User**
+
+呃 能不能反过来写 现在用的是小于号对吧  能不能统一用大写 比较好看一点 就是这个表格里面
+
+---
+
+
+**OpenAI Codex**
+
+懂，你说的是统一改成“大于号”方向，把 `X` 放到右侧/区间右边看起来更整齐。显示会改为：最高档 `X≥500.00`，中间档 `500.00>X≥400.00`，最低档 `400.00>X`；边界包含关系不变。
+
+---
+
+
+**OpenAI Codex**
+
+测试按预期失败，说明旧的小于号方向还在。现在替换三处展示文案，数值边界和包含关系完全不动。
+
+---
+
+
+**OpenAI Codex**
+
+已统一改成大于号方向：
+
+```text
+最高档：X≥500.00
+中间档：500.00>X≥400.00
+最低档：400.00>X
+```
+
+只修改表格显示，分级边界和统计逻辑未变。静态检查通过，未运行 hvigor。
+
+---
+
+
+**User**
+
+你去看一下48里面的重量设置的这个波形捕获可以吗？ 我想知道他是怎么实现的。
+
+---
+
+
+**OpenAI Codex**
+
+我会用 `understand-anything:understand-explain` 沿着 48 的“按钮入口 → 下发命令 → 数据回推 → 波形绘制 → 关闭清理”完整追一遍，重点看它和我们当前鸿蒙实现的差异。先定位 48 源码及相关命令号，不改代码。
+
+---
+
+
+**OpenAI Codex**
+
+48 工程很可能在 `E:\H_FruSort` 或 `E:\FruitSortService`。鸿蒙侧命令链已经能确认是 `0x0117/0x0118/0x0122`，我现在去读 48 的窗体与绘图实现本体，避免只根据我们现有代码反推。
+
+---
+
+
+**OpenAI Codex**
+
+可以，我已经把 48 的完整链路看完了。它不是一次性读取波形，而是让 WAM 持续推送数据，再由界面实时绘制。
+
+**完整数据流**
+
+```text
+重量设置选择通道
+→ 点击“波形捕获”
+→ 向当前 WAM 通道发送 0x0117
+→ WAM 持续上报 0x0122
+→ 每包解析为 StWaveInfo
+→ 缓存最近 100 包
+→ 界面取连续 3 包，共 768 点绘制
+→ 拖动两条黄色线选择计算区间
+→ 点击确定，发送 0x011D 保存区间
+→ 发送 0x0118 停止捕获
+```
+
+**1. 打开波形窗口**
+
+入口在 [projectsetform.cpp](E:/new/48/RSS/Forms/projectsetform.cpp:10035)。
+
+当前重量通道原有区间先读取到：
+
+```cpp
+m_WaveInterval[0] = weight.waveinterval[0];
+m_WaveInterval[1] = weight.waveinterval[1];
+```
+
+然后把当前物理通道 ID 和区间传给窗口：
+
+```cpp
+WaveCaptureForm *waveForm = new WaveCaptureForm(
+    m_ChanelIDWeightList[m_WeightChannelSelectIndex],
+    m_WaveInterval
+);
+waveForm->exec();
+```
+
+因此，波形捕获针对的是当前选中的 WAM 重量通道。
+
+**2. 开启 WAM 波形推送**
+
+窗口初始化位于 [wavecaptureform.cpp](E:/new/48/RSS/Forms/wavecaptureform.cpp:48)。
+
+打开时先清空旧缓存，然后发送：
+
+```text
+HC_WAM_CMD_WAVE_FORM_ON = 0x0117
+```
+
+关闭窗口或停止捕获时发送：
+
+```text
+HC_WAM_CMD_WAVE_FORM_OFF = 0x0118
+```
+
+“开始捕获/停止捕获”按钮本质上就是切换这两个命令。
+
+**3. WAM 上报的数据**
+
+结构体位于 [interface.h](E:/new/48/RSS/Base/interface.h:10527)：
+
+```cpp
+struct StWaveInfo {
+    int nChannelId;
+    ushort waveform0[256];
+    ushort waveform1[256];
+    float fruitweight;
+};
+```
+
+每包包含：
+
+- 当前通道 ID
+- AD0 波形：256 点
+- AD1 波形：256 点
+- 当前水果重量
+
+WAM 的上报命令是：
+
+```text
+WAM_CMD_WAVEINFO = 0x0122
+```
+
+**4. 后端缓存与通知**
+
+接收位置在 [globaldatainterface.cpp](E:/new/48/RSS/Base/globaldatainterface.cpp:2464)。
+
+收到 `0x0122` 后：
+
+1. 强转成 `StWaveInfo`
+2. 放入 `globalIn_wavelist`
+3. 最多保留最近 100 包
+4. 超过后删除最旧的一包
+
+随后 [dataprocessthread.cpp](E:/new/48/RSS/Base/dataprocessthread.cpp:239) 发出：
+
+```cpp
+UpWaveInfoEvent()
+```
+
+界面收到事件后执行 `OnUpWaveInfo()` 刷新图形。
+
+**5. 波形怎么画**
+
+48 取最近三包，每包 256 点，拼成：
+
+```text
+256 + 256 + 256 = 768 点
+```
+
+图形分为上下两部分：
+
+```text
+上半部分：waveform0 / AD0
+下半部分：waveform1 / AD1
+```
+
+两个蓝色虚线把三包数据分开：
+
+```text
+| 前一包 256点 | 当前包 256点 | 后一包 256点 |
+```
+
+黄色区间线只落在中间这包数据上。12 位 AD 按 `0～4096` 缩放，16 位按 `0～65535` 缩放。
+
+**6. 黄色线是什么意思**
+
+两条黄色线对应：
+
+```cpp
+waveinterval[0]  // 起始采样点
+waveinterval[1]  // 结束采样点
+```
+
+范围是 `0～255`。它们不是重量上下限，也不是 AD 数值，而是当前一包波形里的采样位置。
+
+拖动结束时，48 根据鼠标横坐标反算采样点：
+
+```cpp
+interval = mouseX * 768 / canvasWidth - 256;
+```
+
+减去 `256` 是因为黄色线位于第二段波形。
+
+**7. 保存区间**
+
+点击确定后执行 [wavecaptureform.cpp](E:/new/48/RSS/Forms/wavecaptureform.cpp:532)：
+
+```cpp
+weightInfo.waveinterval[0] = 起始点;
+weightInfo.waveinterval[1] = 结束点;
+```
+
+然后发送：
+
+```text
+HC_WAM_CMD_WEIGHT_INFO = 0x011D
+```
+
+也就是说，区间最终作为重量通道配置的一部分写回 WAM，而不是只保存在界面里。
+
+**48 里的几个遗留问题**
+
+- `m_EndInterval` 和 `m_waveInterval` 实际指向同一块内存，取消窗口可能也已经修改外部区间。
+- `OnUpWaveInfo()` 没有再次按 `nChannelId` 过滤，默认只有当前通道在推波形。
+- 绘图时会直接修改缓存中的越界采样值。
+- 信号本身不携带波形数据，界面读取的是共享全局列表。
+
+核心设计可以保留，但这几个问题不应该原样照搬。你现在鸿蒙实现所需的协议闭环就是：`0x0117 → 0x0122 → 3×256点绘图 → 选择区间 → 0x011D保存 → 0x0118停止`。
+
+---
+
+
+**User**
+
+我比较在意的是  他的图是怎么画出来的：
+src=0x01D1, dst=0x1000, cmd=WAM_CMD_WAVEINFO(0x0122), payload=1032 bytes, channel=0x0001, fruitWeight=579.000, ad0[first=17873,last=17874], ad1[first=22114,last=22095]
+
+---
+
+
+**OpenAI Codex**
+
+我继续按 48 的实际绘图公式拆开，重点说明这包 `1032 bytes` 如何变成屏幕上的 X/Y 坐标。不会改代码，也不会编译。
+
+---
+
+
+**OpenAI Codex**
+
+这条日志只打印了每组数组的首尾值，图并不是拿这四个数画的。48 会使用 `ad0[0..255]` 和 `ad1[0..255]` 的全部 512 个采样值；我再核对一下你当前鸿蒙链路有没有把完整数组传到前端。
+
+---
+
+
+**OpenAI Codex**
+
+对这条包来说，真正画图用的是两个完整数组，不是日志里的首尾值。
+
+**数据结构**
+
+```text
+payload 1032 bytes =
+channelId        4 bytes
+waveform0[256] 512 bytes
+waveform1[256] 512 bytes
+fruitWeight      4 bytes
+```
+
+对应 [interface.h](E:/new/48/RSS/Base/interface.h:10527)。
+
+日志中的：
+
+```text
+ad0[first=17873,last=17874]
+ad1[first=22114,last=22095]
+```
+
+只是为了缩短日志。中间剩余的 `254 + 254` 个采样点仍然会完整传给界面并参与绘制。
+
+**48 的绘图结构**
+
+连续取最近三包：
+
+```text
+第1包 waveform[0..255]  第2包 waveform[0..255]  第3包 waveform[0..255]
+|------256点---------|------256点---------|------256点---------|
+0                   256                  512                  768
+```
+
+最新一包放最右边，之前两包依次放中间和左边。代码在 [wavecaptureform.cpp](E:/new/48/RSS/Forms/wavecaptureform.cpp:338)。
+
+假设画布宽度为 `W`，某包位置为 `group=0/1/2`，采样点为 `i`：
+
+```cpp
+x = (group * 256 + i) * W / 768;
+```
+
+所以一包里的第一个采样点在该区域左边，最后一个采样点在区域右边。
+
+**Y 坐标公式**
+
+画布高度为 `H`，16 位 AD 最大值为 `65535`：
+
+```cpp
+ratio = H / (65535 * 2);
+```
+
+AD0 画在上半部分：
+
+```cpp
+y0 = (65535 - waveform0[i]) * ratio;
+```
+
+AD1 画在下半部分：
+
+```cpp
+y1 = (65535 - waveform1[i]) * ratio + H / 2;
+```
+
+代码位置：
+
+- AD0：[wavecaptureform.cpp](E:/new/48/RSS/Forms/wavecaptureform.cpp:401)
+- AD1：[wavecaptureform.cpp](E:/new/48/RSS/Forms/wavecaptureform.cpp:428)
+
+因为屏幕 Y 坐标向下增大，所以公式用了：
+
+```text
+最大值 - AD值
+```
+
+效果是：
+
+```text
+AD 值越大 → 点越靠上
+AD 值越小 → 点越靠下
+```
+
+**用你的数据举例**
+
+假设画布高度 `H=600`：
+
+```text
+ratio = 600 / (65535 × 2)
+      ≈ 0.004578
+```
+
+AD0 第一个点 `17873`：
+
+```text
+y0 = (65535 - 17873) × 0.004578
+   ≈ 218px
+```
+
+它会出现在上半区约 `218px` 的位置。
+
+AD1 第一个点 `22114`：
+
+```text
+y1 = (65535 - 22114) × 0.004578 + 300
+   ≈ 499px
+```
+
+它会出现在下半区约 `499px` 的位置。
+
+然后程序把相邻点连接起来：
+
+```cpp
+painter.drawPolyline(m_wave1Point);
+painter.drawPolyline(m_wave2Point);
+```
+
+因此真正形成波形的是：
+
+```text
+17873 → 17880 → 17920 → 18100 → ... → 17874
+```
+
+不是只连接日志中的 `17873 → 17874`。
+
+`fruitWeight=579` 不参与波形高度计算，它只显示为对应那一段波形的“当前水果重量”。
+
+**12 位与 16 位**
+
+48 根据 `nAccuracy` 决定量程：
+
+```text
+12 位：0～4096
+16 位：0～65535
+```
+
+你的 AD 数据约为 `17800～22100`，明显应按 16 位绘制。如果误判成 12 位，数据会全部被截成 `4096`，图就可能变成贴在顶部的直线。
+
+**你当前鸿蒙实现的区别**
+
+当前 [WaveCaptureDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/WaveCaptureDialog.ets:239) 已经收到了完整的两个 256 点数组，但绘图并非完全照搬 48：
+
+- 48 使用固定 `0～4096/65535` 量程。
+- 鸿蒙根据当前波形的最小值、最大值动态缩放。
+- 48 的 AD0、AD1 都是绿色。
+- 鸿蒙 AD0 是绿色、AD1 是蓝色。
+- 48 黄色区间线只落在中间那一包的 `0～255`。
+- 鸿蒙目前把黄色区间映射到了整张图宽度。
+
+所以数据链没有问题，但当前鸿蒙绘图算法和 48 不是一比一。
+
+---
+
+
+**User**
+
+我现在鸿蒙里面的图是不是有点问题
+
+---
+
+
+**OpenAI Codex**
+
+我按故障诊断流程核对，不凭感觉下结论：先检查完整数据链、坐标换算和 48 的行为差异，再判断哪些属于真实错误、哪些只是显示策略不同。不会改代码，也不会编译。
+
+---
+
+
+**OpenAI Codex**
+
+是的。数据链基本正确，问题主要在鸿蒙的绘图坐标计算。
+
+**明确的三个问题**
+
+1. **区间范围写错了**
+
+鸿蒙使用 `0～1023`：
+
+[WaveCaptureDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/WaveCaptureDialog.ets:43)
+
+```ts
+maxIntervalIndex = 1023
+```
+
+但每包只有 `256` 个采样点，48 实际区间是 `0～255`。
+
+这会导致：
+
+- 默认结束值 `255` 只落在整张图约 1/4 位置。
+- 可能把 `256～1023` 的无效采样位置保存给 WAM。
+
+2. **黄色区间线位置错误**
+
+当前代码把区间线映射到整张画布：
+
+```ts
+x = rect.left + interval / 1023 * rect.width
+```
+
+48 的区间线应当只在中间第二包：
+
+```text
+第1包         第2包          第3包
+|-----------|-----------|-----------|
+             ↑ 0～255 ↑
+```
+
+正确关系应为：
+
+```ts
+x = rect.left + rect.width / 3
+  + interval / 255 * (rect.width / 3)
+```
+
+这是目前最明显的功能错误。
+
+3. **Y 轴动态缩放造成波形严重放大**
+
+当前鸿蒙每收到新数据，都重新计算 AD 最小值和最大值：
+
+[WaveCaptureDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/WaveCaptureDialog.ets:239)
+
+比如真实数据只有：
+
+```text
+17873～17890
+```
+
+鸿蒙会把这十几个 AD 的波动放大到整个上半区域，看起来像剧烈波形；每包的范围变化还会让图上下跳动。
+
+48 使用固定量程：
+
+```text
+12 位：0～4096
+16 位：0～65535
+```
+
+你的数据约为 `17800～22100`，应该按 16 位固定量程绘制。
+
+**其他差异**
+
+- 刚收到 1～2 包时，鸿蒙会把它们拉满整张图，第三包到达后图形会突然缩成三段。
+- 48 两条波形都是绿色；鸿蒙 AD0 绿色、AD1 蓝色。这只是样式差异。
+- `src=0x01D1`、`channel=0x0001` 当前通过低位通道匹配，数据仍能进入图表，不是本次问题。
+
+**结论**
+
+你的 `1032 bytes` 数据解析和完整数组传输没有明显问题。真正需要修正的是：
+
+```text
+区间限制改为 0～255
+黄色线放到中间 256 点区域
+Y 轴按设备 nAccuracy 使用固定 4096/65535
+始终按三个固定区域绘制
+```
+
+所以你的感觉没错，现在鸿蒙显示出来的图并没有严格复现 48。
+
+---
+
+
+**User**
+
+那你帮我修改一下吧 不然好丑
+
+---
+
+
+**OpenAI Codex**
+
+我来修，目标是把鸿蒙图的几何规则对齐 48：固定三段、最新波形在右侧、区间只作用于中间段、范围限制为 `0～255`，并按设备精度固定 Y 轴。先把精度数据来源和现有测试入口找全，再做最小修改。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经确定，修复设计沿用刚才你确认的方案。我会先加一个源码级回归检查，覆盖四个关键约束：`0～255`、固定 768 点、最新帧靠右、黄色线位于中间三分之一；确认它在旧代码上失败后，再改实现。
+
+---
+
+
+**OpenAI Codex**
+
+测试会锁住行为而不是颜色：设备只来一包时必须出现在右侧第三段；三包始终使用 768 点坐标；区间只能是 `0～255` 并映射到中间段；Y 轴只能由 `nAccuracy` 决定。现在先加入这个回归检查，旧实现应当明确失败。
+
+---
+
+
+**OpenAI Codex**
+
+开始改两个文件：`WaveCaptureDialog.ets` 只调整坐标映射与固定量程；`WeightSettingsPage.ets` 只负责传入精度并把区间收紧到 `0～255`。不会碰 WebSocket、Go 解析或其他重量设置逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+第一轮实现后，回归脚本卡在了它自己的正则写法，实际 `xToInterval()` 公式已经是中间段反算。先把检查改成更稳定的源码断言，再继续验证；生产代码暂不追加改动。
+
+---
+
+
+**OpenAI Codex**
+
+核心回归检查已经通过。现在做影响面复核：确认 `nAccuracy` 确实从 WAM 回读进入前端、原有重量状态检查仍通过，并检查差异中没有空白或无关改动。依照你的规则不运行 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+已修改，鸿蒙波形图现在按 48 的规则绘制。
+
+**1. 修改文件**
+
+- [WaveCaptureDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/WaveCaptureDialog.ets:20)
+  - 区间改为 `0～255`
+  - 固定三段、共 768 点
+  - 最新波形始终放右侧
+  - 黄色区间线限制在中间段
+  - Y 轴按 12/16 位固定量程
+- [WeightSettingsPage.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/pages/WeightSettingsPage.ets:784)
+  - 传入 WAM 的 `nAccuracy`
+  - 保存区间前限制为 `0～255`
+- [verify_wave_capture_plot.mjs](E:/new/my_harmony/tools/verify_wave_capture_plot.mjs:1)
+  - 新增源码回归检查
+
+**2. 数据流**
+
+```text
+WAM 0x0122
+→ waveform0[256] / waveform1[256]
+→ WaveCaptureService 缓存最近100包
+→ WaveCaptureDialog 读取最近3包
+→ 固定映射到左、中、右三个256点区域
+→ Canvas绘制AD0/AD1
+```
+
+**3. 核心函数**
+
+- `getAdMaximum()`：12位返回4096，其他返回65535。
+- `mapSampleX()`：把采样点映射到固定768点画布。
+- `mapAdY()`：按固定AD量程计算高度。
+- `intervalToX()`：把`0～255`映射到中间波形区域。
+- `xToInterval()`：拖动黄色线时反算采样点。
+- `drawWaveSeries()`：绘制最近三包完整波形。
+
+**4. 修改原因**
+
+原实现动态放大每包的最小、最大值，导致波形跳动和失真；区间还是`0～1023`，黄色线也横跨整张图。现在与48的设备数据语义一致。
+
+**5. 旧功能影响**
+
+WebSocket、Go解析、开始/停止捕获和`0x011D`保存流程均未修改。只影响波形显示和波形区间取值。
+
+**6. 边界情况**
+
+- 0包：显示等待数据。
+- 1包：放在右侧。
+- 2包：放在中、右两侧。
+- 3包：完整占满三段。
+- 超出范围的区间自动限制到`0～255`。
+- `nAccuracy`缺失时默认按16位处理。
+- 跨天、跨月、跨年与实时波形无关。
+
+**7. 验证**
+
+已通过：
+
+```text
+Wave capture plot checks passed.
+Weight settings UI text checks passed.
+git diff --check 无错误
+```
+
+按照你的要求，没有运行 hvigor 编译。
+
+**8. 人工确认**
+
+真机上重点确认：AD数据约`17800～22100`时，波形会比之前平缓，这是固定16位量程后的正常表现；黄色线应只在中间那一段移动。
+
+---
+
+
+**User**
+
+帮我对比一下鸿蒙和48主页和等级这两个界面 有哪些差距 主管叫我先弄好这两个界面
+
+---
+
+
+**OpenAI Codex**
+
+我会把这两个界面分开审：主页一条线、等级界面一条线，分别追踪功能、数据源、交互和视觉结构，最后按“必须先补 / 可以后补”给你一份差距清单。只做对比，不改代码，也不编译。
+
+---
+
+
+**OpenAI Codex**
+
+两个模块已经定位：48 对应 `mainform` 和 `levelform`，鸿蒙对应 `Home.ets + pages/home/*`、`pages/level/*`。接下来我会先列控件和入口，再追关键操作是否真的闭环，避免只看“长得像不像”。
+
+---
+
+
+**OpenAI Codex**
+
+现在能看出一个大方向：鸿蒙的“等级界面”控件数量已经接近48，真正的风险不是少几个按钮，而是保存语义、表格行生成、出口绑定和切换模式后的数据保留是否一致。主页则相反，功能入口更多，但部分入口和48的操作状态约束还需要逐项核对。
+
+---
+
+
+**OpenAI Codex**
+
+我纠正一下对比基准：48 的“主页主体”不是 `mainform.ui`，而是 `homeform`；`mainform`只是顶栏、导航和状态壳。现在把 `homeform` 的出口卡片、等级表、统计表、容器/成品表逐项和鸿蒙主页对齐。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把对比对象校正为 48 的 `mainform + homeform + levelform`，而不是只看主窗体外壳。现在重点核实两个容易误判的地方：鸿蒙“取消”是否真能撤销全部等级设置，以及修改等级数量时会不会把已有出口映射清空。
+
+---
+
+
+**OpenAI Codex**
+
+我按源码把 48 的 `mainform + homeform + levelform` 和鸿蒙对应页面对了一遍。
+
+**总体结论**
+
+鸿蒙的页面框架和主要控件已经有了，差距主要不是“少画了几个控件”，而是部分操作闭环和数据保护还没有完全对齐。主管要求先做好这两个页面的话，等级设置应优先修。
+
+**主页差距**
+
+已经对齐：
+
+- 9 项实时数据都有：分选速度、本批重量、本批个数、开始时间、分选程序、分选效率、平均重量、实时产量、间隔速度。
+- `homeStats` 会更新这些数据：[HarmonyWebSocketClient.ets](E:/new/my_harmony/entry/src/main/ets/utils/network/HarmonyWebSocketClient.ets:1679)
+- 出口数量动态生成、等级拖拽、出口启停、打开、清空已经实现。
+- SCM、果杯、IQS、IPM 状态显示基本对齐 48。
+
+主要差距：
+
+1. **仍然保留 FSM1/FSM2**
+   
+   主页还显示并使用 FSM 切换：[Home.ets](E:/new/my_harmony/entry/src/main/ets/pages/Home.ets:4218)。等级、出口、实时数据也都按 FSM 分开。按照主管当前要求，这是最高优先级差距。
+
+2. **出口右键菜单少了复制、剪切、粘贴**
+   
+   48 有启动、暂停、打开、清空、复制、剪切、粘贴：[homeform.cpp](E:/new/48/RSS/Forms/homeform.cpp:182)。
+   
+   鸿蒙目前只有启用、禁用、打开、清空：[ThreeLayerCard.ets](E:/new/my_harmony/entry/src/main/ets/components/cards/ThreeLayerCard.ets:1236)。
+
+3. **底部状态按钮部分只是打印日志**
+   
+   出口、果杯、SCM 点击后没有打开对应状态/设置窗口：[Home.ets](E:/new/my_harmony/entry/src/main/ets/pages/Home.ets:4900)。48 的状态块可以进入系统状态界面。
+
+4. **出口卡片单击就打开设置**
+   
+   48 主要是双击出口进入设置；鸿蒙单击卡片就会打开，容易和拖拽、选中产生冲突。
+
+5. **视觉密度不同**
+   
+   48 是紧凑工业界面；鸿蒙出口卡片高 `180vp`、大量阴影和 `18vp` 圆角，同屏出口更少、滚动更多：[LiquidCardsArea.ets](E:/new/my_harmony/entry/src/main/ets/pages/home/LiquidCardsArea.ets:53)。
+
+**等级界面差距**
+
+已有功能比较完整：水果、出口报警、尺寸/重量、直径/面积/体积、克/个、贴标方式、等级数量、精度、目标重量、自动生成以及重量标准表都存在。
+
+关键问题：
+
+1. **“取消”不是真正取消**
+   
+   当前只恢复等级行和等级数量：[LevelContent.ets](E:/new/my_harmony/entry/src/main/ets/pages/level/LevelContent.ets:813)。
+   
+   水果、报警阈值、分选标准、单位、包装重量、贴标机名称在编辑时已经写入 `AppStorage`，点取消仍可能保留修改。48 使用临时 `tempGradeInfo`，取消不会污染正式配置。
+
+2. **任意等级内容变化都会清空出口卡片**
+   
+   名称、最小重量或装箱量只要变化，就执行 `clearAllCardData()`：[LevelContent.ets](E:/new/my_harmony/entry/src/main/ets/pages/level/LevelContent.ets:853)。
+   
+   48 只在“等级数量改变”时清空出口映射。这就是之前出现“改完等级，出口里的等级全没了”的直接风险。
+
+3. **保存前缺少完整校验**
+   
+   48 会检查：
+   - 等级名称不能为空
+   - 等级名称不能重复
+   - 最小重量必须严格递减
+   - 数值不能小于 0
+   
+   代码在 [levelform.cpp](E:/new/48/RSS/Forms/levelform.cpp:1262)。鸿蒙现在提交输入后直接保存：[LevelDataTable.ets](E:/new/my_harmony/entry/src/main/ets/pages/level/LevelDataTable.ets:255)。
+
+4. **下发失败时本地配置已经改变**
+   
+   鸿蒙先更新运行时数据、主页等级和出口卡片，然后才等待设备发送结果：[LevelContent.ets](E:/new/my_harmony/entry/src/main/ets/pages/level/LevelContent.ets:843)。发送失败没有回滚，设备和页面可能不一致。
+
+5. **没有按硬件能力限制分选方式**
+   
+   48 根据 `CIRAvailable/WeightAvailable` 禁用不可用选项：[levelform.cpp](E:/new/48/RSS/Forms/levelform.cpp:109)。鸿蒙目前用户可以切换到设备并不支持的尺寸或重量模式。
+
+6. **减少等级数量没有加工中确认**
+   
+   48 在已有加工数据时会提示确认；鸿蒙加减按钮直接修改：[LevelDataTable.ets](E:/new/my_harmony/entry/src/main/ets/pages/level/LevelDataTable.ets:1555)。
+
+7. **缺少按行插入/删除**
+   
+   48 支持“删除当前行、前面增加、后面增加”：[levelform.cpp](E:/new/48/RSS/Forms/levelform.cpp:1663)。鸿蒙目前只能调整总等级数量。
+
+**建议处理顺序**
+
+1. 移除主页和等级页面可见的 FSM1/FSM2。
+2. 修复等级页面取消、保存失败回滚和保存校验。
+3. 仅在等级数量变化时清空出口映射。
+4. 接入硬件能力限制和加工中修改确认。
+5. 补齐主页出口菜单与底部状态按钮。
+6. 最后再统一主页视觉密度。
+
+本次只进行了源码对比，没有修改文件，也没有编译。
+
+---

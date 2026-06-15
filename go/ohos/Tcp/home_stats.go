@@ -283,7 +283,7 @@ func updateHomeStatsHistoryLocked(now time.Time, aggregate homeStatsAggregate, s
 }
 
 func upsertHomeStatsProcessInfoPointLocked(now time.Time, realtimeOutput float64, realtimeOutputPercent float64, efficiency float64, sortSpeedPercent float64, averageWeightG float64) {
-	runningDate := now.Format("2006-01-02 15:04")
+	runningDate := cTCPLocalTime(now).Format("2006-01-02 15:04")
 	if runningDate == homeStatsHistory.LastProcessInfoRunningDate {
 		return
 	}

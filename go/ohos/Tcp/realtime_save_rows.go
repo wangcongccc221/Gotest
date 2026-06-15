@@ -139,7 +139,7 @@ func buildRealtimeSaveProcess(now time.Time, aggregate realtimeSaveAggregate) *d
 	}
 
 	process := &database.RealtimeFruitProcessSaveInput{
-		RunningDate:  now.Format("2006-01-02 15:04"),
+		RunningDate:  cTCPLocalTime(now).Format("2006-01-02 15:04"),
 		SpeedPercent: calculateHomeStatsSortSpeedPercent(aggregate.SortSpeed),
 		AvgWeight:    avgWeight,
 	}

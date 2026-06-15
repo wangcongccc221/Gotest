@@ -80,6 +80,7 @@ type webSocketControlMessage struct {
 	ExitDisplay                *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
 	ExitAdditionalText         *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
 	LevelAuxConfig             *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
+	PreserveCachedGradeExits   *bool                               `json:"preserveCachedGradeExits,omitempty"`
 	FruitTypeConfig            *webSocketFruitTypeConfigControl    `json:"fruitTypeConfig,omitempty"`
 	ProjectScheme              *webSocketProjectSchemeControl      `json:"projectScheme,omitempty"`
 	DensityInfo                *StAnalogDensity                    `json:"densityInfo,omitempty"`
@@ -1525,7 +1526,7 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	)
 	if commandID == cTCPHCGradeInfo {
 		if cached, ok := latestGradeInfo(destID); ok {
-			if shouldPreserveCachedGradeExits(grade, cached) {
+			if shouldPreserveCachedGradeExits(grade, cached, control.PreserveCachedGradeExits) {
 				mergeGradeExitState(&grade, cached)
 				setCTCPServerLastMessage(
 					"WebSocket %s merged cached exit state: dest=0x%04X, activeExits=%s, byExit=%s",
@@ -2332,7 +2333,10 @@ func mergeGradeExitState(target *StGradeInfo, cached StGradeInfo) {
 	}
 }
 
-func shouldPreserveCachedGradeExits(target StGradeInfo, cached StGradeInfo) bool {
+func shouldPreserveCachedGradeExits(target StGradeInfo, cached StGradeInfo, explicitPreserve *bool) bool {
+	if explicitPreserve != nil {
+		return *explicitPreserve
+	}
 	return target.NSizeGradeNum == cached.NSizeGradeNum &&
 		target.NQualityGradeNum == cached.NQualityGradeNum &&
 		target.NClassifyType == cached.NClassifyType
