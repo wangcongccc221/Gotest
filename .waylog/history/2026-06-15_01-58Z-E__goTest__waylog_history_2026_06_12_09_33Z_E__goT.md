@@ -665,3 +665,505 @@ Go 后端统计文件没有改动。按你的要求没有编译。
 人工验证：重新启动后端并开始加工，生成新分钟点后，底部应从 `01:12` 变成北京时间 `09:12`。
 
 ---
+
+
+**User**
+
+有一个问题 就是我出口清空的时候 为什么回触发这个闪屏 操作 不就是清空掉出口吗？ 然后有时候清空数据还是清空出口的时候 会有BUG 这个出口的名称 会变成原先表格里面等级的名称 比如说 出口3 变成了23,27,32,40.48 这样
+
+---
+
+
+**OpenAI Codex**
+
+我先按系统化调试把两个现象分开追：清空出口时为何触发整屏刷新，以及出口名称为何被等级名称覆盖。会从前端清空命令、WebSocket 回包、出口缓存合并、表格重建四个边界查证；先不改代码，也不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把两个症状收敛到“清空命令后的全量配置刷新”和“出口显示名的回退来源”这两条链路。现在继续读具体合并逻辑和现有未提交改动，确认是不是同一个刷新过程同时造成闪屏与名称串位。
+
+---
+
+
+**OpenAI Codex**
+
+关键现象已经对上了：全局“出口清空”当前会同时做本地整批卡片重建，并且后端连续请求 3 次 `StGlobal`，因此不是单纯清掉映射，确实会造成整块界面反复刷新。名称串位还要继续追 `ExitName` 的写入端，因为 `23,27,32,40,48` 很像等级/规格列表被错误保存进了出口名称字段。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经确认，不是后端把等级字节误当成名称：出口设置弹窗会把已选等级强制写进 `productName`，而卡片标题又优先显示 `productName`。所以 `23,27,32,40,48` 正好来自默认重量等级；清空后的卡片重建只是把这个已污染值暴露出来。接下来会先加静态回归测试，再做三处最小修改：停止等级覆盖产品名、减少清空时的重复 UI 信号、后端清空出口后不再连续拉取全量配置。
+
+---
+
+
+**OpenAI Codex**
+
+先写回归检查，覆盖两个具体约束：等级选择不能改写产品/出口显示名；清空出口只能触发一次必要的卡片同步，后端不能再安排 3 次全量 `StGlobal` 刷新。测试会先在当前代码上失败，随后再改实现。
+
+---
+
+
+**OpenAI Codex**
+
+现在做最小实现修改：出口弹窗保留人工填写的产品名，等级选择只负责映射；卡片标题对历史上“等级列表被当成名称”的污染值做运行时隔离；清空出口只进行一次非强制列表同步；Go 后端保留清空后的等级缓存，但不再请求全量配置。可能的取舍是：如果有人曾故意把产品名设置成与等级列表完全一致，卡片会回退到自定义名或“出口N”，这点会列为人工 review 项。
+
+---
+
+
+**OpenAI Codex**
+
+静态回归已转绿，且没有执行编译。当前清空路径从“本地强制刷新 + 额外信号 + 后端三次全量刷新”收敛为“一次本地内容同步 + 管理器自身的一次通知”；接下来补查用户配置兼容性和旧污染名称的回退边界。
+
+---
+
+
+**OpenAI Codex**
+
+边界检查发现一个重要点：清空映射后，“当前已选等级”会变成空数组，单靠当前映射无法识别历史污染值。我要把识别条件补成“名称由当前等级配置中的合法等级组合拼成”，这样即使映射已经清空，旧的 `23,27,32...` 仍会被隔离，同时不依赖硬编码数字。
+
+---
+
+
+**OpenAI Codex**
+
+最后做一次新鲜验证：重新跑本次红绿回归、相关出口/等级兼容检查和差异格式检查。按你的要求仍然不编译，也不运行 DevEco 构建。
+
+---
+
+
+**OpenAI Codex**
+
+已修复。只改后端不够，名称串位根因在鸿蒙端；闪屏则前后端都有重复刷新。
+
+**1. 修改文件**
+- [OutletDialog.ets](E:/new/my_harmony/entry/src/main/ets/pages/home/OutletDialog.ets:64)：等级选择不再覆盖 `productName`。
+- [LiquidCardsArea.ets](E:/new/my_harmony/entry/src/main/ets/pages/home/LiquidCardsArea.ets:273)：取消强制整卡重建和重复更新信号。
+- [GlobalCardDataManager.ets](E:/new/my_harmony/entry/src/main/ets/utils/managers/GlobalCardDataManager.ets:627)：识别并屏蔽历史等级名称污染。
+- [websocket.go](E:/goTest/go/ohos/Tcp/websocket.go:1445)：清空出口后不再连续请求三次完整 `StGlobal`。
+- 新增两个非编译回归检查脚本。
+
+**2. 数据流**
+出口清空 → WebSocket `clearExitGrades` → Go 清除等级出口位并更新缓存 → 前端清空卡片等级 → 单次 UI 更新。
+
+出口名称 → 出口配置 → 过滤历史等级拼接污染 → 显示名称/自定义名称 → 最终回退为“出口N”。
+
+**3. 核心函数**
+- `syncFromConfig`：读取出口配置，不再把等级写入产品名。
+- `toggleSelectedGrade`：只修改等级映射。
+- `clearAllCardData`：清空数据但不强制销毁重建卡片。
+- `isGradeDerivedOutletName`：识别 `23,27,32...` 这类等级拼接名称。
+- `ClearGradeExitData`：下发清空结果并缓存，不触发全量配置刷新。
+
+**4. 修改原因**
+原代码会把选择的等级自动保存为产品名，而卡片又优先显示产品名。清空后重新创建卡片时，就会显示旧等级列表。同时清空操作存在本地重复刷新以及后端三轮配置刷新，造成闪屏。
+
+**5. 旧功能影响**
+正常自定义名称、显示名称、手工产品名称仍保留。等级拖拽、出口映射和统计表清空逻辑未改。
+
+**6. 边界情况**
+- 空名称：显示“出口N”。
+- 0 值和空数据：不影响出口名称。
+- 跨天、跨月、跨年：本功能不涉及时间。
+- 异常名称：由当前等级配置动态识别，没有硬编码 `23/27/32`。
+- 若用户故意把产品名设置成完整等级列表，会被视为历史污染，需要人工确认该使用方式是否存在。
+
+**7. 验证**
+非编译检查全部通过：
+
+```text
+Outlet clear integrity checks passed.
+Card level delete persistence checks passed.
+user program compatibility source checks passed
+home grade weight range checks passed
+Backend clear-exit refresh checks passed.
+```
+
+按要求没有编译 Harmony 或 Go。
+
+**8. 人工 Review**
+需要在设备上实际执行一次“出口清空”和“数据清零”，确认卡片不再闪屏、出口3保持“出口3”或其自定义名称，并确认下位机确实清除了出口映射。
+
+---
+
+
+**User**
+
+06-15 10:41:17.565   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     悬浮窗按钮被点击: 出口清空 类型: string
+06-15 10:41:17.565   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     执行出口清空操作...
+06-15 10:41:17.565   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [MORE_ACTION] 开始执行出口清空
+06-15 10:41:17.565   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending clearExitGrades: fsmId=256
+06-15 10:41:17.566   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendGradeExitClear: cmd=0x51, device=0x100, clearExitGrades sent to Go backend
+06-15 10:41:17.566   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [MORE_ACTION] EXIT_CLEAR sent=true
+06-15 10:41:17.566   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     LiquidCardsArea: 开始清空所有卡片数据...
+06-15 10:41:17.566   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     开始清空所有卡片的第三层数据...
+06-15 10:41:17.572   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=0 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-15 10:41:17.606   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=empty
+06-15 10:41:17.606   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-15 10:41:17.609   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-15 10:41:17.612   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=none
+06-15 10:41:17.614   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-15 10:41:17.614   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=1
+06-15 10:41:17.615   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=empty
+06-15 10:41:17.620   36528-36528   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     分级信息更新: ID=0, 重量=0g, 等级=0
+06-15 10:41:17.624   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=2 quality=0 size=0 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-15 10:41:17.625   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-15 10:41:17.628   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-15 10:41:17.631   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=none
+06-15 10:41:17.634   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-15 10:41:17.634   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=2
+06-15 10:41:17.635   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=empty
+06-15 10:41:17.641   36528-36528   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     分级信息更新: ID=0, 重量=0g, 等级=0
+06-15 10:41:17.641   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     所有FSM状态的卡片第三层数据已清空
+06-15 10:41:17.641   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=3
+06-15 10:41:17.641   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SET] fsm=FSM1, cards=3, summary=empty
+06-15 10:41:17.642   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=empty
+06-15 10:41:17.642   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     等级统计表出口信息已清空（FSM1和FSM2）
+06-15 10:41:17.642   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     LiquidCardsArea: 等级统计表出口信息已清空，已请求UI刷新
+06-15 10:41:17.642   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     LiquidCardsArea: 所有卡片数据和等级统计表出口信息已清空
+06-15 10:41:17.643   36528-36528   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] command ack: topic=clearexitgrades, ok=true, result=0, cmd=0x51, dest=0x100, payload=11596 bytes, message=sent
+点了出口清空 直接把出口删了都 我要清空的是里面的等级啊 你在干什么 我服了
+
+---
+
+
+**OpenAI Codex**
+
+这份日志已经把问题指清了：清空过程中同时重写 FSM1/FSM2 的运行配置，`exit=0` 导致出口布局被当成零出口重建。我要先按日志逐行对照 `clearAllCardData` 和出口布局数量来源，补一个“只清等级映射、绝不改变出口数量/名称/顺序”的回归用例，然后做最小修复；不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我会用 `systematic-debugging` 和 `test-driven-development` 两套流程处理：先证明是哪一段把 `exportSum` 写成 0，再用失败测试锁住“出口结构必须保持不变”。
+
+---
+
+
+**OpenAI Codex**
+
+这份日志已经把边界问题暴露出来了：当前“出口清空”不仅清等级映射，还改写了运行时分级配置，并重置卡片第三层的布局配置。我会把语义收紧为“只清出口内的等级数据”，出口数量、名称、顺序和布局全部保留；按测试先行做最小修复，不编译工程。
+
+---
+
+
+**OpenAI Codex**
+
+根因路径现在基本确认：按钮调用 `LiquidCardsArea.clearAllCardData()`，随后 `GlobalCardDataManager.clearAllCardData()` 对 FSM1/FSM2 执行 `updateGradeInfo()`，日志中的两次 `SYNCONFIG_RUNTIME ... exit=0` 就来自这里；同时第三层清空把 `chartConfig` 也置空，出口布局元数据被一起丢掉。下一步先把“配置不可改、卡片结构不可改、只清等级数组”写成回归检查并确认它会失败。
+
+---
+
+
+**OpenAI Codex**
+
+修复方案采用最小范围：保留 `GradeInfoConfigManager` 中“把每个等级的出口位清零”的本地同步，但禁止清空动作调用 `GlobalDataInterface.updateGradeInfo()`，避免改写运行时配置并触发两轮全局重建；卡片只把 `chartData/chartDataStrings` 清空，原 `chartType/chartConfig`、出口标题、序号和统计层保持不动。代价是本地运行时快照不再被这次 UI 操作覆盖，但设备命令才是权威来源，这比用不完整本地结构污染整个配置安全。
+
+---
+
+
+**OpenAI Codex**
+
+红灯已命中预期位置：检查明确因 `clearAllCardData()` 中存在 `updateGradeInfo()` 而失败，说明测试确实覆盖了这次误删链路。现在只改这一处配置写入和第三层清空字段，不碰出口数量计算、工程布局、名称存储或后端命令。
+
+---
+
+
+**User**
+
+卡了 继续
+
+---
+
+
+**OpenAI Codex**
+
+继续。刚才停在红灯验证完成的位置，我现在落最小修复：取消清空动作对运行时配置的写入，并保留每张出口卡的布局配置。
+
+---
+
+
+**OpenAI Codex**
+
+第一轮检查已通过：清空路径不再写 `SYNCONFIG_RUNTIME`，卡片布局字段也不会被置空。还有一个持久性边界要核对：后续收到其他配置刷新时，旧运行时快照不能把已清空的等级重新填回来；我正在检查卡片重建的数据优先级，再决定是否需要一处很小的防回填处理。
+
+---
+
+
+**OpenAI Codex**
+
+核对后决定不再扩大改动：本地等级映射已清零，设备端也已收到 `clearExitGrades`；为了避免再次触发全局配置监听和整区重建，这里不做“静默运行时缓存 API”之类的新抽象。后续真正的设备配置回包仍会成为权威数据，当前修复严格限定在清空动作本身。
+
+---
+
+
+**OpenAI Codex**
+
+最终静态验证已完成：前端出口清空完整性检查、后端禁止清空后全量刷新检查均通过，两个仓库的 `git diff --check` 也通过。按你的要求没有编译 Harmony 工程；我再做一次改动清单和人工验证点核对后交付。
+
+---
+
+
+**OpenAI Codex**
+
+这次确实改错了边界，现已纠正为“只清出口内等级”。
+
+1. **修改文件**
+- [GlobalCardDataManager.ets](E:/new/my_harmony/entry/src/main/ets/utils/managers/GlobalCardDataManager.ets:290)：禁止清空时改写运行时配置；保留出口布局。
+- [LiquidCardsArea.ets](E:/new/my_harmony/entry/src/main/ets/pages/home/LiquidCardsArea.ets:273)：取消强制重建，减少闪屏。
+- [OutletDialog.ets](E:/new/my_harmony/entry/src/main/ets/pages/home/OutletDialog.ets:64)：等级选择不再覆盖出口名称。
+- [websocket.go](E:/goTest/go/ohos/Tcp/websocket.go:1445)：清空后不触发全量 `StGlobal` 刷新。
+- 新增两份静态回归检查脚本。
+
+2. **数据流**
+按钮 → `sendGradeExitClear()` → Go 后端仅清 `grade.exit` → 下发设备。  
+同时本地 → 清等级映射、卡片等级数组、统计表出口列 → UI局部刷新。  
+出口数量、名称、序号、启停状态、布局位置均保留。
+
+3. **核心函数**
+- `clearAllCardData()`：清本地等级映射。
+- `clearCardThirdLayerForFsm()`：只清 `chartData` 和 `chartDataStrings`。
+- `clearExitMappingsFromGradeInfo()`：仅把每个等级的 `exit` 位设为 `0`。
+- `resolveExitName()`：过滤之前被等级名称污染的出口名称。
+
+4. **修复原因**
+原逻辑调用 `updateGradeInfo()`，把不完整配置写入运行时，触发全局监听和出口重建；同时还把 `chartConfig` 清空，导致出口布局丢失。
+
+5. **旧功能影响**
+等级清空、统计表出口清空仍保留。出口拖拽布局、名称、启停和重量统计不再受影响。
+
+6. **边界情况**
+空卡片、空等级、0值均可安全处理；不会清除统计值。该功能不涉及日期，跨天、跨月、跨年无影响。
+
+7. **验证方法**
+正常场景：设置多个出口及等级，点击清空，确认出口仍在原位置，仅等级消失。  
+异常场景：无等级、禁用出口、FSM2、修改过出口名称时重复清空，确认名称和布局不变。
+
+8. **验证结果**
+前后端回归脚本及 `git diff --check` 均通过。按要求没有编译工程。需要设备上重点确认：当前操作仍按原设计同时清理 FSM1/FSM2 的本地映射。
+
+---
+
+
+**User**
+
+为什么有时候清空成功 有时候失败呢？ 有时候清空之后拖拽新的数据上去 之前清空的又显示了？你看：
+
+---
+
+
+**OpenAI Codex**
+
+我先按日志把“清空命令、设备 ACK、本地缓存、后续拖拽重建”四条链逐时序对齐，重点找旧等级从哪个缓存重新进入卡片。继续用系统化调试和测试先行；不会编译工程。
+
+---
+
+
+**OpenAI Codex**
+
+日志已经给出明确复现：`10:51:59.871` 卡片确实清空；到 `10:52:03.080` 新增出口2的“23”时，参与合并的本地配置里出口3旧位已经恢复，`exit3=[0|1|2|3|4]`。这不是清空命令随机失败，而是清空后某条同步路径把旧运行时快照重新覆盖进本地等级配置；我现在沿 `OUTLET_GRADE_CONFIRM` 反向追到具体覆盖函数。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经锁定为两个竞争条件叠加：
+
+1. 打开出口弹窗时，`createOutletCartonSwitchSnapshot()` 会调用 `syncFromRuntime()`，它本来只想读取装箱字段，却顺手用旧运行时等级覆盖了刚清空的本地映射。
+2. 清空后本地没有建立“近期权威覆盖”，若旧 `StGlobal` 稍晚到达，也能把旧出口位写回来。
+
+所以表现取决于操作速度和回包时序，才会“有时成功、有时复活”。修复会让清空后的完整等级快照进入运行时缓存但不触发全局重绘，同时把弹窗快照改成只读，不能再覆盖等级映射。
+
+---
+
+
+**OpenAI Codex**
+
+另外还有第三个确定的问题：`sendGradeExitClear()` 当前返回的只是“WebSocket 文本发送成功”，不是后端 `command ack` 成功。日志里 UI 在 `10:51:59.866` 就开始本地清空，而真正 ACK 到 `10:51:59.872` 才回来；若后端缓存缺失或设备下发失败，界面仍会先显示“清空成功”。我会把 ACK 成功作为本地清空和成功提示的前置条件，并处理清空后立即拖拽的顺序。
+
+---
+
+
+**OpenAI Codex**
+
+测试方案先固定三个回归条件：打开弹窗不得从旧 runtime 覆盖本地等级；清空必须写入一个“不通知 UI 重建”的分系统缓存覆盖；前端必须等待带 `requestId` 的后端 ACK 后才执行本地清空。现在先把这些断言加进现有检查脚本，确认当前代码会按预期失败。
+
+---
+
+
+**OpenAI Codex**
+
+我继续按日志里的真实时序修。现在已经确认不是“清空函数偶发没执行”，而是清空后打开出口弹窗时，旧的运行时等级映射又覆盖回本地；另外前端把“WebSocket 已发送”误当成“后端已清空成功”。我先把这两个回归场景写进验证脚本，再做最小修改，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+测试脚本的位置和部分源码目录名与当前工程不一致，我先校正实际路径。日志里的关键证据已经足够明确：新拖拽保存时，本地映射中已经重新出现了旧的 `exit3=[0|1|2|3|4]`，所以问题发生在保存之前，不是下位机回包之后。
+
+---
+
+
+**OpenAI Codex**
+
+我正在补四个回归约束：打开出口弹窗不能改写本地等级映射；清空后的映射要进入分系统防回流缓存但不能触发整页监听；清空请求必须等待对应 ACK；后端 ACK 必须带回 `requestId`。这些约束先让当前代码明确失败，再改实现。
+
+---
+
+
+**OpenAI Codex**
+
+回归脚本已按预期失败，失败点正是两个缺口：清空结果没有进入防旧数据回流的缓存，后端清空 ACK 丢了 `requestId`。现在做最小修改，不碰表格、拖拽和出口布局的其他逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+鸿蒙侧回归检查已经通过。Go 侧当前失败不是实现失败，而是测试正则被 `commandAckMessage(result)` 里的括号截断；我把断言改成分别验证 ACK helper 和 `requestId`，避免测试自身误报。另一个 `diff --check` 报告来自已有的 `.waylog` 尾随空格，不是本次代码。
+
+---
+
+
+**OpenAI Codex**
+
+两个回归脚本现在都通过。继续做影响检查时，我在确认调用链不会把 ACK 等待变成新的 UI 卡死，也会检查清空后立即拖拽时，旧运行时数据是否还有其他入口能覆盖本地。不会执行编译。
+
+---
+
+
+**OpenAI Codex**
+
+最后一轮只做验证和代码审阅：确认清空失败时本地不会假成功、成功后旧 `StGlobal` 不能回填、出口名称与布局仍被保留。按你的要求不编译，只运行这两个针对性验证脚本和差异检查。
+
+---
+
+
+**OpenAI Codex**
+
+代码层修复完成，核心根因是旧运行时映射在清空后重新覆盖本地，并非清空动作随机失效。
+
+1. **修改文件**
+- [GradeInfoConfigManager.ets](/E:/new/my_harmony/entry/src/main/ets/pages/home/core/GradeInfoConfigManager.ets:1073)：打开出口弹窗只读取快照，不再回写本地等级。
+- [GlobalCardDataManager.ets](/E:/new/my_harmony/entry/src/main/ets/utils/managers/GlobalCardDataManager.ets:290)：清空出口映射并建立防旧数据回流缓存。
+- [GlobalDataInterface.ets](/E:/new/my_harmony/entry/src/main/ets/protocol/GlobalDataInterface.ets:1389)：增加静默的分系统等级覆盖缓存。
+- [HarmonyWebSocketClient.ets](/E:/new/my_harmony/entry/src/main/ets/utils/network/HarmonyWebSocketClient.ets:796)：等待后端 ACK 后才返回成功。
+- [websocket.go](/E:/goTest/go/ohos/Tcp/websocket.go:527)：清空 ACK 返回对应 `requestId`。
+- [OutletDialog.ets](/E:/new/my_harmony/entry/src/main/ets/pages/home/OutletDialog.ets:260)：等级选择不再覆盖出口名称。
+- [LiquidCardsArea.ets](/E:/new/my_harmony/entry/src/main/ets/pages/home/LiquidCardsArea.ets:273)：清空时不再强制重建全部卡片。
+- 增加两个静态回归脚本。
+
+2. **数据流**
+`点击出口清空` → WebSocket 携带 `requestId` → Go 清空 `grade.exit` 并下发 → ACK 返回 → 鸿蒙确认成功 → 清空本地映射和卡片等级 → 保存静默覆盖缓存 → 延迟到达的旧 `StGlobal` 被替换为已清空数据。
+
+3. **核心函数**
+- `sendClearExitGrades()`：等待真实 ACK，不再把 WebSocket 发送成功当作清空成功。
+- `clearAllCardData()`：保留出口、名称、布局，仅清等级映射。
+- `cacheGradeInfoOverride()`：阻止旧 `StGlobal` 恢复已清空等级。
+- `createOutletCartonSwitchSnapshot()`：只读运行时数据，不修改本地配置。
+- `handleClearGradeExitData()`：向正确请求返回清空结果。
+
+4. **修改原因**
+日志显示新拖拽前，本地已经重新出现旧的 `exit3=[0|1|2|3|4]`。来源是打开出口弹窗时调用 `syncFromRuntime()`，把旧运行时等级重新写回本地。
+
+5. **旧功能影响**
+等级正常保存仍使用原通知流程。出口数量、名称、布局、图表类型和纸箱配置不会被清除。清空现在可能等待最多约 8 秒 ACK，而不是立即显示成功。
+
+6. **边界情况**
+- 空等级配置：不写入空覆盖缓存。
+- `exit=0`：保持清空状态。
+- 异常 ACK、TCP 失败、超时：不清本地，不显示假成功。
+- 跨天、跨月、跨年：本功能没有日期计算，不受影响。
+- 多 FSM 部分成功：设备之间无法形成事务，仍需重点人工测试。
+
+7. **验证方法**
+正常场景：出口3配置多个等级 → 清空 → 打开出口弹窗 → 给出口2拖入等级23；确认出口3旧等级不再出现。
+
+异常场景：断开后端或下位机再清空；界面应提示失败，本地等级不应消失。
+
+8. **验证结果与待确认**
+- `node tools/verify_outlet_clear_integrity.mjs`：通过。
+- `node tools/verify_clear_exit_no_full_refresh.mjs`：通过。
+- 两个工程相关文件 `diff --check`：通过。
+- 按要求没有编译。
+- 尚未在真实鸿蒙设备和双 FSM 环境实测；Go ACK 当前代表发送链路成功，是否等同下位机持久化成功需要设备协议确认。
+
+---
+
+
+**OpenAI Codex**
+
+<collaboration_mode># Collaboration Mode: Default
+
+You are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.
+
+Your active mode changes only when new developer instructions with a different `<collaboration_mode>...</collaboration_mode>` change it; user requests or tool descriptions do not change mode by themselves. Known mode names are Default and Plan.
+
+## request_user_input availability
+
+Use the `request_user_input` tool only when it is listed in the available tools for this turn.
+
+In Default mode, strongly prefer making reasonable assumptions and executing the user's request rather than stopping to ask questions. If you absolutely must ask a question because the answer cannot be discovered from local context and a reasonable assumption would be risky, ask the user directly with a concise plain-text question. Never write a multiple choice question as a textual assistant message.
+</collaboration_mode>
+
+---
+
+
+**User**
+
+1+1
+
+---
+
+
+**OpenAI Codex**
+
+2
+
+---
+
+
+**OpenAI Codex**
+
+<collaboration_mode># Collaboration Mode: Default
+
+You are now in Default mode. Any previous instructions for other modes (e.g. Plan mode) are no longer active.
+
+Your active mode changes only when new developer instructions with a different `<collaboration_mode>...</collaboration_mode>` change it; user requests or tool descriptions do not change mode by themselves. Known mode names are Default and Plan.
+
+## request_user_input availability
+
+Use the `request_user_input` tool only when it is listed in the available tools for this turn.
+
+In Default mode, strongly prefer making reasonable assumptions and executing the user's request rather than stopping to ask questions. If you absolutely must ask a question because the answer cannot be discovered from local context and a reasonable assumption would be risky, ask the user directly with a concise plain-text question. Never write a multiple choice question as a textual assistant message.
+</collaboration_mode>
+
+---
+
+
+**User**
+
+呃 你还有额度吗？
+
+---
+
+
+**OpenAI Codex**
+
+有，还能继续。你直接把下一个问题丢过来就行。
+
+---
+
+
+**User**
+
+呃 你还有额度吗？
+
+---
