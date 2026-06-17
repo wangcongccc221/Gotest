@@ -5,7 +5,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
+	"os/exec"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -92,6 +96,8 @@ type webSocketControlMessage struct {
 	CameraNum                  *int                                `json:"cameraNum,omitempty"`
 	EvenShow                   *bool                               `json:"evenShow,omitempty"`
 	WhiteBalancePayload        []int                               `json:"whiteBalancePayload,omitempty"`
+	IP                         string                              `json:"ip,omitempty"`
+	MAC                        string                              `json:"mac,omitempty"`
 	ChannelIndex               *int                                `json:"channelIndex,omitempty"`
 	ExitIndex                  *int                                `json:"exitIndex,omitempty"`
 	ResetADValue               *int                                `json:"resetADValue,omitempty"`
@@ -477,10 +483,16 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleIpmCameraCommand("ipmAutoBalanceOn", cTCPHCAutoBalanceOn, control)
 	case "ipmSingleSampleSpot":
 		c.handleIpmCameraCommand("ipmSingleSampleSpot", cTCPHCSingleSampleSpot, control)
+	case "ipmShutdown":
+		c.handleIpmCameraCommand("ipmShutdown", cTCPHCIpmShutdown, control)
 	case "ipmShutterAdjustOn":
 		c.handleIpmCameraCommand("ipmShutterAdjustOn", cTCPHCShutterAdjustOn, control)
 	case "ipmShutterAdjustOff":
 		c.handleIpmCameraCommand("ipmShutterAdjustOff", cTCPHCShutterAdjustOff, control)
+	case "ipmGetMac":
+		c.handleIpmGetMAC(control)
+	case "ipmWakeOnLan":
+		c.handleIpmWakeOnLAN(control)
 	case "saveExitInfos":
 		c.handleExitInfosLog(control)
 	case "saveExitDisplay":
@@ -1237,7 +1249,74 @@ func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, 
 func (c *webSocketClient) handleIpmCameraCommand(topic string, commandID int32, control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendIpmCameraCommand(topic, commandID, control)
-		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+		c.sendCommandAckDetail(topic, commandID, destID, payloadBytes, result, commandAckMessage(result), control.RequestID)
+	}()
+}
+
+func (c *webSocketClient) handleIpmGetMAC(control webSocketControlMessage) {
+	go func() {
+		ip := strings.TrimSpace(control.IP)
+		setCTCPServerLastMessage("WebSocket ipmGetMac: lookup begin, ip=%s", ip)
+		mac, err := lookupRemoteMAC(ip)
+		result := 0
+		message := "mac found"
+		if err != nil {
+			result = -1
+			message = err.Error()
+			setCTCPServerLastMessage("WebSocket ipmGetMac failed: ip=%s, error=%v", ip, err)
+		} else {
+			setCTCPServerLastMessage("WebSocket ipmGetMac success: ip=%s, mac=%s", ip, mac)
+		}
+		c.sendFrame(webSocketFrame{
+			Type:  "commandAck",
+			Topic: "ipmgetmac",
+			Data: rawJSONFromValue(map[string]any{
+				"result":       result,
+				"ok":           result == 0,
+				"command":      "ipmGetMac",
+				"cmdId":        0,
+				"destId":       0,
+				"payloadBytes": 0,
+				"message":      message,
+				"requestId":    control.RequestID,
+				"ip":           ip,
+				"mac":          mac,
+			}),
+		})
+	}()
+}
+
+func (c *webSocketClient) handleIpmWakeOnLAN(control webSocketControlMessage) {
+	go func() {
+		ip := strings.TrimSpace(control.IP)
+		mac := strings.TrimSpace(control.MAC)
+		setCTCPServerLastMessage("WebSocket ipmWakeOnLan: sending WOL begin, ip=%s, mac=%s", ip, mac)
+		sentCount, err := sendWakeOnLAN(ip, mac)
+		result := 0
+		message := fmt.Sprintf("wol sent: %d", sentCount)
+		if err != nil {
+			result = -1
+			message = err.Error()
+			setCTCPServerLastMessage("WebSocket ipmWakeOnLan failed: ip=%s, mac=%s, error=%v", ip, mac, err)
+		} else {
+			setCTCPServerLastMessage("WebSocket ipmWakeOnLan success: ip=%s, mac=%s, sentPackets=%d", ip, mac, sentCount)
+		}
+		c.sendFrame(webSocketFrame{
+			Type:  "commandAck",
+			Topic: "ipmwakeonlan",
+			Data: rawJSONFromValue(map[string]any{
+				"result":       result,
+				"ok":           result == 0,
+				"command":      "ipmWakeOnLan",
+				"cmdId":        0,
+				"destId":       0,
+				"payloadBytes": 0,
+				"message":      message,
+				"requestId":    control.RequestID,
+				"ip":           ip,
+				"mac":          mac,
+			}),
+		})
 	}()
 }
 
@@ -1852,7 +1931,7 @@ func SendIpmCameraCommand(topic string, commandID int32, control webSocketContro
 
 func encodeIpmCameraCommandPayload(commandID int32, control webSocketControlMessage) ([]byte, int, error) {
 	switch commandID {
-	case cTCPHCSingleSample, cTCPHCSingleSampleSpot, cTCPHCShutterAdjustOn, cTCPHCShutterAdjustOff:
+	case cTCPHCSingleSample, cTCPHCSingleSampleSpot, cTCPHCIpmShutdown, cTCPHCShutterAdjustOn, cTCPHCShutterAdjustOff:
 		return nil, -1, nil
 	case cTCPHCAutoBalanceOnCamera, cTCPHCAutoBalanceOn:
 		payload, err := encodeIpmWhiteBalancePayload(control.WhiteBalancePayload)
@@ -1898,6 +1977,132 @@ func requireIpmCameraNum(control webSocketControlMessage) (int, error) {
 		return cameraNum, fmt.Errorf("cameraNum out of range: %d", cameraNum)
 	}
 	return cameraNum, nil
+}
+
+var arpMACPattern = regexp.MustCompile(`(?i)\b[0-9a-f]{2}([-:][0-9a-f]{2}){5}\b`)
+
+func lookupRemoteMAC(ip string) (string, error) {
+	ip = strings.TrimSpace(ip)
+	if net.ParseIP(ip) == nil {
+		return "", fmt.Errorf("invalid IP: %q", ip)
+	}
+	setCTCPServerLastMessage("WebSocket ipmGetMac: ping %s", ip)
+	if !NewCTcpClient().Ping(ip) {
+		return "", fmt.Errorf("ping failed: %s", ip)
+	}
+	setCTCPServerLastMessage("WebSocket ipmGetMac: arp -a %s", ip)
+	output, err := exec.Command("arp", "-a", ip).CombinedOutput()
+	mac, ok := parseARPOutputMAC(string(output), ip)
+	if ok {
+		return mac, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("arp failed: %v", err)
+	}
+	return "", fmt.Errorf("mac not found: %s", ip)
+}
+
+func parseARPOutputMAC(output string, ip string) (string, bool) {
+	ip = strings.TrimSpace(ip)
+	for _, line := range strings.Split(output, "\n") {
+		if !strings.Contains(line, ip) {
+			continue
+		}
+		mac := arpMACPattern.FindString(line)
+		if mac == "" {
+			continue
+		}
+		return normalizeMACForDisplay(mac), true
+	}
+	return "", false
+}
+
+func normalizeMACForDisplay(mac string) string {
+	return strings.ToUpper(strings.ReplaceAll(strings.TrimSpace(mac), ":", "-"))
+}
+
+func buildWakeOnLANPacket(mac string) ([]byte, error) {
+	normalized := strings.ReplaceAll(strings.TrimSpace(mac), "-", ":")
+	parts := strings.Split(normalized, ":")
+	if len(parts) != 6 {
+		return nil, fmt.Errorf("invalid MAC: %q", mac)
+	}
+	macBytes := make([]byte, 6)
+	for i, part := range parts {
+		if len(part) != 2 {
+			return nil, fmt.Errorf("invalid MAC: %q", mac)
+		}
+		value, err := strconv.ParseUint(part, 16, 8)
+		if err != nil {
+			return nil, fmt.Errorf("invalid MAC: %q", mac)
+		}
+		macBytes[i] = byte(value)
+	}
+	packet := make([]byte, 6+16*6)
+	for i := 0; i < 6; i++ {
+		packet[i] = 0xFF
+	}
+	for offset := 6; offset < len(packet); offset += 6 {
+		copy(packet[offset:offset+6], macBytes)
+	}
+	return packet, nil
+}
+
+func subnetBroadcastForIP(ip string) string {
+	parsed := net.ParseIP(strings.TrimSpace(ip)).To4()
+	if parsed == nil {
+		return ""
+	}
+	return fmt.Sprintf("%d.%d.%d.255", parsed[0], parsed[1], parsed[2])
+}
+
+func sendWakeOnLAN(ip string, mac string) (int, error) {
+	ip = strings.TrimSpace(ip)
+	if net.ParseIP(ip) == nil {
+		return 0, fmt.Errorf("invalid IP: %q", ip)
+	}
+	packet, err := buildWakeOnLANPacket(mac)
+	if err != nil {
+		return 0, err
+	}
+	targets := []string{subnetBroadcastForIP(ip), "255.255.255.255"}
+	sentCount := 0
+	var lastErr error
+	for _, target := range targets {
+		if target == "" {
+			continue
+		}
+		targetSentCount := 0
+		udpAddr := &net.UDPAddr{IP: net.ParseIP(target), Port: 9}
+		for retry := 0; retry < 3; retry++ {
+			conn, err := net.DialUDP("udp", nil, udpAddr)
+			if err != nil {
+				lastErr = err
+				setCTCPServerLastMessage("WebSocket ipmWakeOnLan: dial failed, target=%s:9, retry=%d, error=%v", target, retry+1, err)
+				continue
+			}
+			_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
+			n, err := conn.Write(packet)
+			_ = conn.Close()
+			if err != nil {
+				lastErr = err
+				setCTCPServerLastMessage("WebSocket ipmWakeOnLan: write failed, target=%s:9, retry=%d, error=%v", target, retry+1, err)
+				continue
+			}
+			if n == len(packet) {
+				sentCount++
+				targetSentCount++
+			}
+		}
+		setCTCPServerLastMessage("WebSocket ipmWakeOnLan: target=%s:9 sentPackets=%d/3", target, targetSentCount)
+	}
+	if sentCount == 0 {
+		if lastErr != nil {
+			return 0, lastErr
+		}
+		return 0, errors.New("wol packet not sent")
+	}
+	return sentCount, nil
 }
 
 func encodeIpmWhiteBalancePayload(values []int) ([]byte, error) {

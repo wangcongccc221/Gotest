@@ -24,6 +24,61 @@ func TestMotorPowerCommandIDsMatch48Enum(t *testing.T) {
 	}
 }
 
+func TestIpmPowerCommandIDsMatch48Enum(t *testing.T) {
+	if cTCPHCIpmShutdown != 0x2008 {
+		t.Fatalf("cTCPHCIpmShutdown = 0x%04X, want 0x2008", uint32(cTCPHCIpmShutdown))
+	}
+}
+
+func TestParseARPOutputExtractsRemoteMAC(t *testing.T) {
+	output := `? (192.168.0.17) at aa:bb:cc:dd:ee:ff [ether] on wlan0`
+
+	got, ok := parseARPOutputMAC(output, "192.168.0.17")
+	if !ok {
+		t.Fatal("parseARPOutputMAC() did not find MAC")
+	}
+	if got != "AA-BB-CC-DD-EE-FF" {
+		t.Fatalf("mac = %q, want AA-BB-CC-DD-EE-FF", got)
+	}
+}
+
+func TestParseARPOutputRejectsDifferentIP(t *testing.T) {
+	output := `? (192.168.0.18) at aa:bb:cc:dd:ee:ff [ether] on wlan0`
+
+	if mac, ok := parseARPOutputMAC(output, "192.168.0.17"); ok {
+		t.Fatalf("parseARPOutputMAC() = %q, want not found", mac)
+	}
+}
+
+func TestBuildWakeOnLANPacketRepeatsMAC(t *testing.T) {
+	packet, err := buildWakeOnLANPacket("AA-BB-CC-DD-EE-FF")
+	if err != nil {
+		t.Fatalf("buildWakeOnLANPacket() error = %v", err)
+	}
+	if len(packet) != 102 {
+		t.Fatalf("packet length = %d, want 102", len(packet))
+	}
+	for i := 0; i < 6; i++ {
+		if packet[i] != 0xFF {
+			t.Fatalf("packet[%d] = 0x%02X, want 0xFF", i, packet[i])
+		}
+	}
+	wantMAC := []byte{0xAA, 0xBB, 0xCC, 0xDD, 0xEE, 0xFF}
+	for offset := 6; offset < len(packet); offset += len(wantMAC) {
+		for i := range wantMAC {
+			if packet[offset+i] != wantMAC[i] {
+				t.Fatalf("packet[%d] = 0x%02X, want 0x%02X", offset+i, packet[offset+i], wantMAC[i])
+			}
+		}
+	}
+}
+
+func TestBuildWakeOnLANPacketRejectsInvalidMAC(t *testing.T) {
+	if _, err := buildWakeOnLANPacket("AA-BB-CC-DD-EE-100"); err == nil {
+		t.Fatal("buildWakeOnLANPacket() error = nil, want invalid MAC error")
+	}
+}
+
 func TestResetCupCommandIDsMatch48Enum(t *testing.T) {
 	if cTCPHCWAMWeightReset != 0x0111 {
 		t.Fatalf("cTCPHCWAMWeightReset = 0x%04X, want 0x0111", uint32(cTCPHCWAMWeightReset))

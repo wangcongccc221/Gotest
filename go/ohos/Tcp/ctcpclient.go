@@ -65,6 +65,7 @@ const (
 	cTCPHCAutoBalanceOnCamera = int32(0x2004) // 相机自带白平衡，payload: StWhiteBalanceParam
 	cTCPHCAutoBalanceOn       = int32(0x2005) // 启动白平衡，payload: StWhiteBalanceParam
 	cTCPHCSingleSampleSpot    = int32(0x2006) // 单张采集瑕疵图，无 payload
+	cTCPHCIpmShutdown         = int32(0x2008) // 命令 IPM 关机，无 payload
 	cTCPHCShutterAdjustOn     = int32(0x200A) // 快门调节开，无 payload
 	cTCPHCShutterAdjustOff    = int32(0x200B) // 快门调节关，无 payload
 
