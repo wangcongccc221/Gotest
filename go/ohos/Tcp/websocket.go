@@ -93,6 +93,7 @@ type webSocketControlMessage struct {
 	EvenShow                   *bool                               `json:"evenShow,omitempty"`
 	WhiteBalancePayload        []int                               `json:"whiteBalancePayload,omitempty"`
 	ChannelIndex               *int                                `json:"channelIndex,omitempty"`
+	ExitIndex                  *int                                `json:"exitIndex,omitempty"`
 	ResetADValue               *int                                `json:"resetADValue,omitempty"`
 	WeightInfo                 *StWeightBaseInfo                   `json:"weightInfo,omitempty"`
 	GlobalWeightInfo           *StGlobalWeightBaseInfo             `json:"globalWeightInfo,omitempty"`
@@ -408,6 +409,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleSimpleFSMCommand("fruitGradeInfoOn", cTCPHCFruitGradeOn, control)
 	case "fruitGradeInfoOff":
 		c.handleSimpleFSMCommand("fruitGradeInfoOff", cTCPHCFruitGradeOff, control)
+	case "testValve":
+		c.handleTestValveData("testValve", cTCPHCTestVolve, control)
+	case "testAllLaneValve":
+		c.handleTestValveData("testAllLaneValve", cTCPHCTestAllLaneVolve, control)
 
 	case "wamGetInfo":
 		c.handleSimpleWAMCommand("wamGetInfo", cTCPHCWAMWeightOn, control)
@@ -586,6 +591,13 @@ func (c *webSocketClient) handleExitInfoData(control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := SendExitInfoData(control)
 		c.sendCommandAck("saveExitInfo", cTCPHCExitInfo, destID, payloadBytes, result)
+	}()
+}
+
+func (c *webSocketClient) handleTestValveData(topic string, commandID int32, control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendTestValveData(topic, commandID, control)
+		c.sendCommandAckDetail(topic, commandID, destID, payloadBytes, result, commandAckMessage(result), control.RequestID)
 	}()
 }
 
@@ -1703,6 +1715,51 @@ func SendExitInfoData(control webSocketControlMessage) (int, int32, int) {
 	return 0, destID, len(payload)
 }
 
+func SendTestValveData(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+	destID := normalizeValveTestDestID(control)
+	exitIndex := 255
+	if control.ExitIndex != nil {
+		exitIndex = *control.ExitIndex
+	}
+	if exitIndex < 0 || exitIndex > 255 {
+		setCTCPServerLastMessage("WebSocket %s failed: exitIndex=%d out of range, dest=0x%04X", topic, exitIndex, uint32(destID))
+		return -1, destID, 0
+	}
+
+	volveTest := StVolveTest{ExitId: uint8(exitIndex)}
+	payload := encodeVolveTestPayload(volveTest)
+	targetIP, targetPort := resolveCTCPTarget(destID, commandID, "", 0)
+	channelText := "<nil>"
+	if control.ChannelIndex != nil {
+		channelText = fmt.Sprintf("%d", *control.ChannelIndex)
+	}
+	setCTCPServerLastMessage(
+		"WebSocket %s: sending cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes, channel=%s, StVolveTest{ExitId=%d, hex=0x%02X}",
+		topic,
+		uint32(commandID),
+		uint32(destID),
+		targetIP,
+		targetPort,
+		len(payload),
+		channelText,
+		volveTest.ExitId,
+		volveTest.ExitId,
+	)
+
+	result := StartCTCPClient(targetIP, targetPort, destID, commandID, payload)
+	if result != 0 {
+		setCTCPServerLastMessage("WebSocket %s failed: cmd=0x%04X result=%d", topic, uint32(commandID), result)
+		return result, destID, len(payload)
+	}
+
+	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X, exit=%d", topic, uint32(commandID), uint32(destID), exitIndex)
+	return 0, destID, len(payload)
+}
+
+func encodeVolveTestPayload(volveTest StVolveTest) []byte {
+	return []byte{volveTest.ExitId}
+}
+
 func SendMotorInfoData(control webSocketControlMessage) (int, int32, int) {
 	destID := normalizeDropDataDestID(control)
 	if control.Motor == nil {
@@ -2191,6 +2248,31 @@ func normalizeDropDataDestID(control webSocketControlMessage) int32 { //标准�
 		return control.FSMID
 	}
 	return cTCPDefaultFSMID
+}
+
+func normalizeValveTestDestID(control webSocketControlMessage) int32 {
+	if control.DestID != 0 {
+		return control.DestID
+	}
+	fsmID := control.FSMID
+	if fsmID == 0 {
+		fsmID = cTCPDefaultFSMID
+	}
+	channelIndex := 0
+	if control.ChannelIndex != nil {
+		channelIndex = *control.ChannelIndex
+	}
+	if channelIndex < 0 {
+		channelIndex = 0
+	}
+	if channelIndex >= cTCPMaxChannelNum {
+		channelIndex = cTCPMaxChannelNum - 1
+	}
+	subsysIndex := getSubsysIndex(fsmID)
+	if subsysIndex < 0 {
+		subsysIndex = 0
+	}
+	return encodeChannel(subsysIndex, channelIndex, channelIndex)
 }
 
 func normalizeWAMDestID(control webSocketControlMessage) int32 {

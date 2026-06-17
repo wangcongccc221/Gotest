@@ -275,6 +275,11 @@ type StResetAD struct {
 	Value int32
 }
 
+// 电磁阀测试
+type StVolveTest struct {
+	ExitId uint8
+}
+
 type StOldWeightBaseInfo struct { //IPM参数中的重量信息 16字节
 	fGADParam          [2]float32
 	fTemperatureParams float32
