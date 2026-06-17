@@ -43,8 +43,10 @@ const (
 	cTCPHCTestCupOff       = int32(0x0007) // 果杯测试关，HC-->FSM
 	cTCPHCFruitGradeOn     = int32(0x000F) // 水果实时分级信息开，HC-->FSM
 	cTCPHCFruitGradeOff    = int32(0x0010) // 水果实时分级信息关，HC-->FSM
+	cTCPHCMotorEnable      = int32(0x0016) // 电机使能，无 payload
 	cTCPHCSaveParas        = int32(0x0018) // 保存工程参数到 Flash
 	cTCPHCDisplayOn        = int32(0x0019) // 打开显示
+	cTCPHCExitClear        = int32(0x001F) // 出果清框，无 payload
 	cTCPHCSysConfig        = int32(0x0050) // 系统配置
 	cTCPHCGradeInfo        = int32(0x0051) // 等级设置 StGradeInfo
 	cTCPHCExitInfo         = int32(0x0052) // 出口信息 StExitInfo

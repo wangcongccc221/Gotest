@@ -1167,3 +1167,154 @@ In Default mode, strongly prefer making reasonable assumptions and executing the
 呃 你还有额度吗？
 
 ---
+
+
+**OpenAI Codex**
+
+有的，还在。继续发问题就行，我接着看。
+
+---
+
+
+**User**
+
+然后 你看一下这个加工统计的 这个内容 右边这个品质箱数统计  数据太大的话 看不到顶部的百分比
+
+---
+
+
+**OpenAI Codex**
+
+我用系统化调试流程来处理这个 UI 显示问题：先定位“加工统计/品质箱数统计”的组件和数据渲染路径，再做最小样式或布局修改。按你项目要求，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我已经读取了系统化调试要求。这个问题要改代码，所以接下来按测试先行：先写一个能抓住“顶部百分比被大数字挤掉”的静态回归检查，再改组件。
+
+---
+
+
+**OpenAI Codex**
+
+我刚才按当前 `E:\goTest` 工作目录搜了一下，发现鸿蒙工程实际还是在 `E:\new\my_harmony`。接下来切到那个目录定位组件，避免误读路径。
+
+---
+
+
+**OpenAI Codex**
+
+定位到了最像的组件：[WeightSizeStatisticsBarChart.ets]，里面明确写着右侧标题“品质箱数统计信息”。我现在读这个组件的画布计算逻辑，重点看柱顶百分比和大数值的坐标/留白是怎么计算的。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经很清楚：右侧箱数图的最大柱会顶到 `chartPadding.top = 20`，但百分比又画在柱顶上方 `25px`，所以最大柱的百分比会被画到画布外面。先加一个专门的回归检查来锁住这个布局边界。
+
+---
+
+
+**OpenAI Codex**
+
+回归脚本已经写好，它要求右侧箱数图给“百分比 + 箱数值”这组顶部标签单独预留至少 64px。现在先跑它确认当前代码会失败。
+
+---
+
+
+**OpenAI Codex**
+
+红灯确认了。现在只改右侧箱数图的纵向缩放区域：不改数据、不改百分比算法、不改左侧图，只把柱子最高点往下压一点，给顶部两行文字留位置。
+
+---
+
+
+**OpenAI Codex**
+
+改完了，开始跑针对性检查。除了刚新增的顶部留白检查，我也顺手跑现有“加工统计左右布局”检查，确保没把首页加工统计布局改坏。
+
+---
+
+
+**OpenAI Codex**
+
+两个静态验证都通过了，且本次相关文件 `diff --check` 没有空白问题。最后我做一下行号和状态核对，然后给你按项目要求列清楚根因、改动和验证方式。
+
+---
+
+
+**OpenAI Codex**
+
+已修。根因不是数据计算错，而是右侧“品质箱数统计信息”最大柱子的高度会顶到画布顶部：原来顶部只留 `20px`，但百分比文字画在柱顶上方 `25px`，所以最大值一大，顶部百分比就被裁掉。
+
+1. **改了哪些文件**
+- [WeightSizeStatisticsBarChart.ets](/E:/new/my_harmony/entry/src/main/ets/components/charts/WeightSizeStatisticsBarChart.ets:63)
+  - 新增 `BOX_COUNT_LABEL_TOP_PADDING = 64`
+  - 修改 `drawChart2()` 里箱数图的 `chartHeight` 计算，专门给“百分比 + 箱数值”两行文字留顶部空间。
+- [verify_weight_size_box_label_padding.mjs](/E:/new/my_harmony/tools/verify_weight_size_box_label_padding.mjs:31)
+  - 新增回归检查，防止以后又把顶部留白改回去。
+
+2. **数据流**
+`RealtimeStatsService / 历史统计数据` → `updateData()` 写入 `boxCountData` → `drawChart2()` 计算 `maxBox / totalBox / boxPercent` → 按比例画柱子 → 在柱顶上方画百分比和箱数 → 最后显示到右侧 Canvas。
+
+3. **核心函数作用**
+- `updateData()`：拿到实时或历史统计数据。
+- `drawChart2()`：绘制右侧品质箱数统计图。
+- `BOX_COUNT_LABEL_TOP_PADDING`：保证最大柱顶部的百分比不会被 Canvas 裁剪。
+
+4. **为什么这样改**
+这是布局边界问题，所以只改绘图留白，不改箱数、不改百分比、不改数据来源。不是为了某个具体数值硬编码，而是给所有最大柱统一预留标签空间。
+
+5. **可能影响旧功能**
+右侧箱数图的柱子可绘制高度会比之前略短一点，但比例关系不变。左侧“品质重量/尺寸等级统计信息”没有改。
+
+6. **边界情况**
+- 空数据：仍不绘制。
+- `0` 值：仍不显示标签。
+- 单个特别大的箱数：百分比现在会留在画布内。
+- 多个等级：仍走横向滚动。
+- 跨天/跨月/跨年：这里不处理时间，不受影响。
+
+7. **验证**
+已按测试先行跑过：
+- 先跑新增脚本，确认旧代码失败。
+- 修改后 `node tools/verify_weight_size_box_label_padding.mjs` 通过。
+- `node tools/verify_home_weight_stats_side_by_side.mjs` 通过。
+- `git diff --check -- entry/src/main/ets/components/charts/WeightSizeStatisticsBarChart.ets tools/verify_weight_size_box_label_padding.mjs` 通过。
+- 按你的要求，没有编译。
+
+8. **需要你人工确认**
+在设备上看一下右侧品质箱数统计：最大柱顶部现在应该能看到百分比；同时确认 64px 顶部留白视觉上是否太松。这个属于视觉手感，需要真机屏幕确认。
+
+---
+
+
+**User**
+
+什么情况
+
+---
+
+
+**User**
+
+然后这个上面的品质选项 这个下拉框里面有品质1  这个是硬编码吧
+
+---
+
+
+**User**
+
+然后这个上面的品质选项 这个下拉框里面有品质1  这个是硬编码吧
+
+---
+
+
+**User**
+
+然后这个上面的品质选项 这个下拉框里面有品质1  这个是硬编码吧
+
+---

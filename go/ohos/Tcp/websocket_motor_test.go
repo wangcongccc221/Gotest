@@ -12,6 +12,18 @@ func TestMotorInfoCommandIDMatches48Enum(t *testing.T) {
 	}
 }
 
+func TestMotorPowerCommandIDsMatch48Enum(t *testing.T) {
+	if cTCPHCMotorEnable != 0x0016 {
+		t.Fatalf("cTCPHCMotorEnable = 0x%04X, want 0x0016", uint32(cTCPHCMotorEnable))
+	}
+	if cTCPHCExitClear != 0x001F {
+		t.Fatalf("cTCPHCExitClear = 0x%04X, want 0x001F", uint32(cTCPHCExitClear))
+	}
+	if cTCPHCGlobalExitInfo != 0x0058 {
+		t.Fatalf("cTCPHCGlobalExitInfo = 0x%04X, want 0x0058", uint32(cTCPHCGlobalExitInfo))
+	}
+}
+
 func TestEncodeMotorInfoPayloadMatches48Layout(t *testing.T) {
 	motor := StMotorInfo{
 		BExitId:                  2,

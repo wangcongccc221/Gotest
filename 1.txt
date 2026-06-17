@@ -1,0 +1,188 @@
+06-16 18:56:16.729   35133-35133   A03D00/com.nut...Project/JSAPP  apppool               I     [WS_CLIENT] connecting: ws://127.0.0.1:18080/ws/data
+06-16 18:56:16.730   35133-35133   A00001/com.nut...DataInterface  apppool               I     全局数据接口初始化
+06-16 18:56:16.782   35133-35133   A03D00/com.nut...Project/JSAPP  apppool               I     [WS_CLIENT] connected: ws://127.0.0.1:18080/ws/data
+06-16 18:56:16.782   35133-35133   A03D00/com.nut...Project/JSAPP  apppool               I     [WS_CLIENT] message: {"type":"ready","at":1781607376750}
+06-16 18:56:16.783   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=0 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:16.786   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] levelAuxConfig applied: fruitTypesLen=119, gradeAccuracy=1, exitAlarmThreshold=30, packingWeight1=10, packingWeight2=75, weightStandards=17, labelerNamesNonEmpty=0
+06-16 18:56:16.953   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] fruitTypeConfig applied: majorLen=403, selectedLen=119, subKeys=29
+06-16 18:56:16.954   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal message received: 151055 chars
+06-16 18:56:16.960   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [DEBUG-QUALITY-GRADES-0615] ArkTS device=0x100 sizeCount=6 qualityCount=0
+06-16 18:56:16.960   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=0 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:16.962   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  I     配置已就绪: subsys=1 device=0x100 version=40201
+06-16 18:56:16.962   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  W     检测到非标准重启标志: subsys=1 device=0x100 restart=255
+06-16 18:56:16.966   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal mapped: device=0x100, exitNum=3, active=0:low=0x2,high=0x0,1:low=0x2,high=0x0,2:low=0x2,high=0x0,3:low=0x2,high=0x0,4:low=0x2,high=0x0,5:low=0x2,high=0x0, byExit=exit2=[0|1|2|3|4|5]
+06-16 18:56:16.972   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending queryFruitInfo: requestId=queryFruitInfo-1781607376972-1, StartTime=, EndTime=, CustomerName=, FarmName=, FruitName=, page=1, size=1
+06-16 18:56:17.008   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SET] fsm=FSM1, cards=3, summary=exit2=[23|27|32|40|48|56]
+06-16 18:56:17.012   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_0, exit=1, force=true, prop=none, source=none, local=none
+06-16 18:56:17.012   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_TITLE] stage=appear id=card_0 title=出口1
+06-16 18:56:17.015   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=none, local=none
+06-16 18:56:17.015   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_TITLE] stage=appear id=card_1 title=出口3
+06-16 18:56:17.016   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:17.017   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_TITLE] stage=appear id=card_2 title=出口2
+06-16 18:56:17.018   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THIRD_LAYER_RENDER] card=card_2, exit=2, count=6, labels=23|27|32|40|48|56
+06-16 18:56:17.069   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] command ack: topic=queryfruitinfo, ok=true, result=0, cmd=0x0, dest=0x0, payload=246 bytes, message=database queried
+06-16 18:56:17.077   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SET] fsm=FSM1, cards=3, summary=exit2=[23|27|32|40|48|56]
+06-16 18:56:17.375   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  I     开始加工
+06-16 18:56:31.384   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=0 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:31.384   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending saveExitInfos: fsmId=256, exitNamesNonEmpty=0, exitBoxTypes=[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]
+06-16 18:56:31.385   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending saveExitAdditionalText: fsmId=256, additionalNonEmpty=0
+06-16 18:56:31.385   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_GRADE_CONFIRM] selected fsm=FSM1, exit=3, useCells=false, names=23|27|32|40|48|56, cells=r0:c0:23|r0:c1:27|r0:c2:32|r0:c3:40|r0:c4:48|r0:c5:56
+06-16 18:56:31.393   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_GRADE_CONFIRM] localMapped exit=3, active=0:exit=4,1:exit=4,2:exit=4,3:exit=4,4:exit=4,5:exit=4, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:31.399   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_GRADE_CONFIRM] runtimeMerged exit=3, active=0:exit=4,1:exit=4,2:exit=4,3:exit=4,4:exit=4,5:exit=4, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:31.402   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_GRADE_CONFIRM] synchronized exit=3, active=0:exit=4,1:exit=4,2:exit=4,3:exit=4,4:exit=4,5:exit=4, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:31.404   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:31.405   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:31.408   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:31.411   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:31.414   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:31.414   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=2
+06-16 18:56:31.414   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SET] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.415   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:31.415   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:31.454   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.454   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:31.457   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:31.460   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:31.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:31.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=3
+06-16 18:56:31.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.464   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:31.464   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:31.469   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  D     分级信息更新: ID=0, 重量=0g, 等级=0
+06-16 18:56:31.471   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_GRADE_SEND] fsm=FSM1, fsmId=0x100, active=0:exit=4,1:exit=4,2:exit=4,3:exit=4,4:exit=4,5:exit=4, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:31.478   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending saveLevelData: requestId=saveLevelData-1781607391472-2, fsmId=256, grades=256, active=0:low=0x4,high=0x0,1:low=0x4,high=0x0,2:low=0x4,high=0x0,3:low=0x4,high=0x0,4:low=0x4,high=0x0,5:low=0x4,high=0x0, byExit=exit3=[0|1|2|3|4|5], preserveCachedGradeExits=false
+06-16 18:56:31.478   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:31.481   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:31.484   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:31.486   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:31.486   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=4
+06-16 18:56:31.486   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.487   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:31.487   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:31.489   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_GRADE_CARD_REFRESH] fsm=FSM1, signal=4, active=0:exit=4,1:exit=4,2:exit=4,3:exit=4,4:exit=4,5:exit=4, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:31.489   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] sending saveMotorInfo: fsmId=256, exit=2, mode=2
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=5
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendFullGradeInfoTracked: cmd=0x51, device=0x100, saveLevelData sent to Go backend
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] command ack: topic=saveleveldata, ok=true, result=0, cmd=0x51, dest=0x100, payload=11596 bytes, message=sent
+06-16 18:56:31.491   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendMotorInfoTracked: cmd=0x5c, device=0x100, saveMotorInfo sent to Go backend
+06-16 18:56:31.495   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:31.495   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  W     [ConfigSender] sendExitConfig skipped: device=0x100, 该配置命令尚未迁移到 Go 后端
+06-16 18:56:31.495   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] command ack: topic=savemotorinfo, ok=true, result=0, cmd=0x5c, dest=0x100, payload=20 bytes, message=sent
+06-16 18:56:31.843   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal message received: 151055 chars
+06-16 18:56:31.858   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [DEBUG-QUALITY-GRADES-0615] ArkTS device=0x100 sizeCount=6 qualityCount=0
+06-16 18:56:31.859   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:31.878   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.879   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  W     检测到非标准重启标志: subsys=1 device=0x100 restart=255
+06-16 18:56:31.880   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:31.883   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:31.886   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:31.889   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:31.889   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=6
+06-16 18:56:31.889   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.889   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:31.889   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:31.915   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:31.920   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal mapped: device=0x100, exitNum=3, active=0:low=0x4,high=0x0,1:low=0x4,high=0x0,2:low=0x4,high=0x0,3:low=0x4,high=0x0,4:low=0x4,high=0x0,5:low=0x4,high=0x0, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:32.293   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendFullGradeInfoTracked: requestStGlobal scheduled, attempt=1, fsm=0x100
+06-16 18:56:32.297   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:32.297   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=7
+06-16 18:56:32.297   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:32.299   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:32.299   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:32.310   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] levelAuxConfig applied: fruitTypesLen=119, gradeAccuracy=1, exitAlarmThreshold=30, packingWeight1=10, packingWeight2=75, weightStandards=17, labelerNamesNonEmpty=0
+06-16 18:56:32.321   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] fruitTypeConfig applied: majorLen=403, selectedLen=119, subKeys=29
+06-16 18:56:32.350   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal message received: 151055 chars
+06-16 18:56:32.364   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [DEBUG-QUALITY-GRADES-0615] ArkTS device=0x100 sizeCount=6 qualityCount=0
+06-16 18:56:32.365   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:32.386   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:32.387   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  W     检测到非标准重启标志: subsys=1 device=0x100 restart=255
+06-16 18:56:32.388   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:32.391   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:32.394   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:32.397   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:32.397   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=8
+06-16 18:56:32.397   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:32.398   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:32.398   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:32.424   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:32.429   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal mapped: device=0x100, exitNum=3, active=0:low=0x4,high=0x0,1:low=0x4,high=0x0,2:low=0x4,high=0x0,3:low=0x4,high=0x0,4:low=0x4,high=0x0,5:low=0x4,high=0x0, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:33.293   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendFullGradeInfoTracked: requestStGlobal scheduled, attempt=2, fsm=0x100
+06-16 18:56:33.309   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:33.310   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=9
+06-16 18:56:33.310   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:33.316   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:33.317   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:33.318   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] levelAuxConfig applied: fruitTypesLen=119, gradeAccuracy=1, exitAlarmThreshold=30, packingWeight1=10, packingWeight2=75, weightStandards=17, labelerNamesNonEmpty=0
+06-16 18:56:33.325   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] fruitTypeConfig applied: majorLen=403, selectedLen=119, subKeys=29
+06-16 18:56:33.350   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal message received: 151055 chars
+06-16 18:56:33.361   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [DEBUG-QUALITY-GRADES-0615] ArkTS device=0x100 sizeCount=6 qualityCount=0
+06-16 18:56:33.362   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:33.379   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:33.380   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  W     检测到非标准重启标志: subsys=1 device=0x100 restart=255
+06-16 18:56:33.381   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:33.384   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:33.390   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:33.393   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:33.393   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=10
+06-16 18:56:33.393   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:33.394   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:33.394   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:33.425   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:33.429   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal mapped: device=0x100, exitNum=3, active=0:low=0x4,high=0x0,1:low=0x4,high=0x0,2:low=0x4,high=0x0,3:low=0x4,high=0x0,4:low=0x4,high=0x0,5:low=0x4,high=0x0, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:33.429   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal message received: 151055 chars
+06-16 18:56:33.434   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [DEBUG-QUALITY-GRADES-0615] ArkTS device=0x100 sizeCount=6 qualityCount=0
+06-16 18:56:33.435   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:33.451   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:33.452   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  W     检测到非标准重启标志: subsys=1 device=0x100 restart=255
+06-16 18:56:33.452   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:33.455   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:33.460   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:33.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:33.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=11
+06-16 18:56:33.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:33.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:33.463   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:33.493   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:33.498   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal mapped: device=0x100, exitNum=3, active=0:low=0x4,high=0x0,1:low=0x4,high=0x0,2:low=0x4,high=0x0,3:low=0x4,high=0x0,4:low=0x4,high=0x0,5:low=0x4,high=0x0, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:34.692   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [ConfigSender] sendFullGradeInfoTracked: requestStGlobal scheduled, attempt=3, fsm=0x100
+06-16 18:56:34.697   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:34.698   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=12
+06-16 18:56:34.698   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:34.699   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:34.700   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:34.706   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] levelAuxConfig applied: fruitTypesLen=119, gradeAccuracy=1, exitAlarmThreshold=30, packingWeight1=10, packingWeight2=75, weightStandards=17, labelerNamesNonEmpty=0
+06-16 18:56:34.713   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] fruitTypeConfig applied: majorLen=403, selectedLen=119, subKeys=29
+06-16 18:56:34.760   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal message received: 151055 chars
+06-16 18:56:34.772   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [DEBUG-QUALITY-GRADES-0615] ArkTS device=0x100 sizeCount=6 qualityCount=0
+06-16 18:56:34.774   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:34.797   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:34.798   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  W     检测到非标准重启标志: subsys=1 device=0x100 restart=255
+06-16 18:56:34.799   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:34.802   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:34.805   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:34.808   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:34.808   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=13
+06-16 18:56:34.808   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:34.808   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:34.808   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:34.834   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:34.839   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal mapped: device=0x100, exitNum=3, active=0:low=0x4,high=0x0,1:low=0x4,high=0x0,2:low=0x4,high=0x0,3:low=0x4,high=0x0,4:low=0x4,high=0x0,5:low=0x4,high=0x0, byExit=exit3=[0|1|2|3|4|5]
+06-16 18:56:36.471   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal message received: 151055 chars
+06-16 18:56:36.490   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [DEBUG-QUALITY-GRADES-0615] ArkTS device=0x100 sizeCount=6 qualityCount=0
+06-16 18:56:36.492   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [SYNCONFIG_RUNTIME] sys=1 quality=0 size=6 exit=0 colorType=0 labelType=0 fruitType=0 icon=- exitMode0=0 wifi=-1 channel0=0
+06-16 18:56:36.517   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:36.518   35133-35133   A00001/com.nut...DataInterface  com.nutpi.My_Project  W     检测到非标准重启标志: subsys=1 device=0x100 restart=255
+06-16 18:56:36.519   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_APPLY] fsm=FSM1, cards=3
+06-16 18:56:36.522   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_0, exit=1, labels=none
+06-16 18:56:36.525   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_1, exit=3, labels=23|27|32|40|48|56
+06-16 18:56:36.528   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [OUTLET_CARD_MANAGER_CARD] fsm=FSM1, card=card_2, exit=2, labels=none
+06-16 18:56:36.528   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_UPDATE_SIGNAL] fsm=FSM1, signal=14
+06-16 18:56:36.528   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:36.528   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_1, exit=3, force=true, prop=none, source=23|27|32|40|48|56, local=23|27|32|40|48|56
+06-16 18:56:36.528   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [THREE_LAYER_CARD_SYNC] id=card_2, exit=2, force=true, prop=23|27|32|40|48|56, source=none, local=none
+06-16 18:56:36.554   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [LIQUID_CARD_RENDER_SKIP] fsm=FSM1, cards=3, summary=exit3=[23|27|32|40|48|56]
+06-16 18:56:36.558   35133-35133   A03D00/com.nut...Project/JSAPP  com.nutpi.My_Project  I     [WS_CLIENT] stglobal mapped: device=0x100, exitNum=3, active=0:low=0x4,high=0x0,1:low=0x4,high=0x0,2:low=0x4,high=0x0,3:low=0x4,high=0x0,4:low=0x4,high=0x0,5:low=0x4,high=0x0, byExit=exit3=[0|1|2|3|4|5]
