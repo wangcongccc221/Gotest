@@ -70,6 +70,7 @@ const (
 
 	cTCPHCWAMWeightOn          = int32(0x0110) // 启动/请求 WAM 重量参数
 	cTCPHCWAMWeightReset       = int32(0x0111) // 称重复位
+	cTCPHCWAMCupStateReset     = int32(0x0112) // 果杯状态复位
 	cTCPHCWAMSimulatedPulseOn  = int32(0x0113) // 内信号源开
 	cTCPHCWAMSimulatedPulseOff = int32(0x0114) // 内信号源关
 	cTCPHCWAMTestCupOn         = int32(0x0115) // 果杯测试开
@@ -354,6 +355,13 @@ func encodeChannel(x int, y int, z int) int32 {
 
 func encodeSubsys(x int) int32 {
 	return encodeChannel(x, -1, -1)
+}
+
+func encodeWAMID(subsysIndex int) int32 {
+	if subsysIndex < 0 {
+		subsysIndex = 0
+	}
+	return int32((subsysIndex+1)<<8) | 0x00D0
 }
 
 func getAllSysID(bChannelInfo []uint8) []int32 {

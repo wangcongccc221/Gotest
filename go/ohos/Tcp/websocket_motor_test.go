@@ -24,6 +24,41 @@ func TestMotorPowerCommandIDsMatch48Enum(t *testing.T) {
 	}
 }
 
+func TestResetCupCommandIDsMatch48Enum(t *testing.T) {
+	if cTCPHCWAMWeightReset != 0x0111 {
+		t.Fatalf("cTCPHCWAMWeightReset = 0x%04X, want 0x0111", uint32(cTCPHCWAMWeightReset))
+	}
+	if cTCPHCWAMCupStateReset != 0x0112 {
+		t.Fatalf("cTCPHCWAMCupStateReset = 0x%04X, want 0x0112", uint32(cTCPHCWAMCupStateReset))
+	}
+}
+
+func TestBuildWAMDestIDsForResetCupMatches48GetWAMID(t *testing.T) {
+	tests := []struct {
+		name  string
+		fsmID int32
+		want  []int32
+	}{
+		{name: "first subsystem", fsmID: 0x0100, want: []int32{0x01D0}},
+		{name: "second subsystem", fsmID: 0x0200, want: []int32{0x02D0}},
+		{name: "broadcast fallback", fsmID: -1, want: []int32{0x01D0}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := buildWAMDestIDsForResetCup(tt.fsmID)
+			if len(got) != len(tt.want) {
+				t.Fatalf("dest count = %d, want %d (%v)", len(got), len(tt.want), got)
+			}
+			for i := range got {
+				if got[i] != tt.want[i] {
+					t.Fatalf("dest[%d] = 0x%04X, want 0x%04X", i, uint32(got[i]), uint32(tt.want[i]))
+				}
+			}
+		})
+	}
+}
+
 func TestEncodeMotorInfoPayloadMatches48Layout(t *testing.T) {
 	motor := StMotorInfo{
 		BExitId:                  2,

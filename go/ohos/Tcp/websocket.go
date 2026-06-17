@@ -422,6 +422,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleSimpleWAMCommand("wamGetInfo", cTCPHCWAMWeightOn, control)
 	case "wamWeightReset":
 		c.handleSimpleWAMCommand("wamWeightReset", cTCPHCWAMWeightReset, control)
+	case "resetCup":
+		c.handleResetCupCommand("resetCup", cTCPHCWAMWeightReset, control)
+	case "cupStateReset":
+		c.handleResetCupCommand("cupStateReset", cTCPHCWAMCupStateReset, control)
 	case "wamSimulatedPulseOn":
 		c.handleSimpleWAMCommand("wamSimulatedPulseOn", cTCPHCWAMSimulatedPulseOn, control)
 	case "wamSimulatedPulseOff":
@@ -1240,6 +1244,13 @@ func (c *webSocketClient) handleIpmCameraCommand(topic string, commandID int32, 
 func (c *webSocketClient) handleSimpleWAMCommand(topic string, commandID int32, control webSocketControlMessage) {
 	result, destID, payloadBytes := SendSimpleWAMCommand(topic, commandID, control)
 	c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+}
+
+func (c *webSocketClient) handleResetCupCommand(topic string, commandID int32, control webSocketControlMessage) {
+	go func() {
+		result, destID, payloadBytes := SendResetCupWAMCommand(topic, commandID, control)
+		c.sendCommandAck(topic, commandID, destID, payloadBytes, result)
+	}()
 }
 
 func (c *webSocketClient) handleSimpleWAMChannelCommand(topic string, commandID int32, control webSocketControlMessage) {
@@ -2065,6 +2076,33 @@ func SendSimpleWAMCommand(topic string, commandID int32, control webSocketContro
 	return sendWAMCommand(topic, commandID, destID, nil)
 }
 
+func SendResetCupWAMCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
+	targetID := control.FSMID
+	if control.DestID != 0 {
+		targetID = control.DestID
+	}
+	dests := buildWAMDestIDsForResetCup(targetID)
+	if len(dests) == 0 {
+		setCTCPServerLastMessage("WebSocket %s failed: empty WAM dests, fsm=0x%04X, dest=0x%04X", topic, uint32(control.FSMID), uint32(control.DestID))
+		return -1, 0, 0
+	}
+
+	result := 0
+	for _, destID := range dests {
+		if sendResult, _, _ := sendWAMCommand(topic, commandID, destID, nil); sendResult != 0 {
+			result = sendResult
+		}
+	}
+	setCTCPServerLastMessage(
+		"WebSocket %s summary: cmd=0x%04X, wamDests=%s, result=%d",
+		topic,
+		uint32(commandID),
+		formatInt32HexList(dests),
+		result,
+	)
+	return result, dests[0], 0
+}
+
 func SendSimpleWAMChannelCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
 	destID := normalizeWAMChannelDestID(control)
 	return sendWAMCommand(topic, commandID, destID, nil)
@@ -2292,6 +2330,25 @@ func normalizeWAMDestID(control webSocketControlMessage) int32 {
 		subsysBits = cTCPDefaultFSMID & 0x0F00
 	}
 	return subsysBits | 0x00D0
+}
+
+func buildWAMDestIDsForResetCup(fsmID int32) []int32 {
+	if fsmID <= 0 {
+		return []int32{encodeWAMID(0)}
+	}
+	subsysIndex := getSubsysIndex(fsmID)
+	if subsysIndex < 0 {
+		subsysIndex = 0
+	}
+	return []int32{encodeWAMID(subsysIndex)}
+}
+
+func formatInt32HexList(values []int32) string {
+	parts := make([]string, 0, len(values))
+	for _, value := range values {
+		parts = append(parts, fmt.Sprintf("0x%04X", uint32(value)))
+	}
+	return "[" + strings.Join(parts, ",") + "]"
 }
 
 func normalizeWAMChannelDestID(control webSocketControlMessage) int32 {
