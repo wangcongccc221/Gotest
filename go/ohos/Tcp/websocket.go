@@ -107,6 +107,7 @@ type webSocketControlMessage struct {
 	GlobalWeightInfo           *StGlobalWeightBaseInfo             `json:"globalWeightInfo,omitempty"`
 	FruitCustomerInfo          *webSocketFruitCustomerInfoControl  `json:"fruitCustomerInfo,omitempty"`
 	FruitInfoQuery             *database.FruitInfoQueryRequest     `json:"fruitInfoQuery,omitempty"`
+	SortLogQuery               *database.SortLogQueryRequest       `json:"sortLogQuery,omitempty"`
 	FruitInfoDeleteCustomerIDs []int                               `json:"fruitInfoDeleteCustomerIds,omitempty"`
 }
 
@@ -420,6 +421,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleFruitCustomerInfoUpdate(control)
 	case "queryFruitInfo":
 		c.handleFruitInfoQuery(control)
+	case "querySortLog":
+		c.handleSortLogQuery(control)
 	case "deleteFruitInfo":
 		c.handleFruitInfoDelete(control)
 	case "fsmTestCupOn":
@@ -1338,6 +1341,49 @@ func (c *webSocketClient) handleFruitInfoQuery(control webSocketControlMessage) 
 	}()
 }
 
+func (c *webSocketClient) handleSortLogQuery(control webSocketControlMessage) {
+	go func() {
+		query := control.SortLogQuery
+		if query == nil {
+			c.sendCommandAckDetail("querySortLog", 0, 0, 0, -1, "sortLogQuery is required", control.RequestID)
+			return
+		}
+
+		result, err := database.QuerySortLog(*query)
+		payloadBytes := len(rawJSONFromValue(*query))
+		if err != nil {
+			setCTCPServerLastMessage("WebSocket querySortLog failed: err=%v", err)
+			c.sendCommandAckDetail("querySortLog", 0, 0, payloadBytes, -1, err.Error(), control.RequestID)
+			return
+		}
+
+		setCTCPServerLastMessage(
+			"WebSocket querySortLog success: begin=%s, end=%s, days=%d, totalMinutes=%d, database=%s",
+			firstNonEmptyLog(query.StartDate, query.StartTime),
+			firstNonEmptyLog(query.EndDate, query.EndTime),
+			len(result.Items),
+			result.TotalMinutes,
+			database.RealtimeSaveDatabaseForLog(),
+		)
+		c.sendFrame(webSocketFrame{
+			Type:  "commandAck",
+			Topic: "querySortLog",
+			Data: rawJSONFromValue(map[string]any{
+				"result":       0,
+				"ok":           true,
+				"command":      "querySortLog",
+				"cmdId":        0,
+				"destId":       0,
+				"payloadBytes": payloadBytes,
+				"message":      "database queried",
+				"requestId":    control.RequestID,
+				"SortLogItems": result.Items,
+				"TotalMinutes": result.TotalMinutes,
+			}),
+		})
+	}()
+}
+
 func (c *webSocketClient) handleFruitInfoDelete(control webSocketControlMessage) {
 	go func() {
 		customerIDs := control.FruitInfoDeleteCustomerIDs
@@ -1372,6 +1418,16 @@ func (c *webSocketClient) handleFruitInfoDelete(control webSocketControlMessage)
 			}),
 		})
 	}()
+}
+
+func firstNonEmptyLog(values ...string) string {
+	for _, value := range values {
+		text := strings.TrimSpace(value)
+		if text != "" {
+			return text
+		}
+	}
+	return ""
 }
 
 func (c *webSocketClient) handleSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) {

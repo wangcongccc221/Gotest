@@ -57,6 +57,17 @@ func SendEndProcessCommand(control webSocketControlMessage) (int, int32, int32, 
 		return -2, commandID, ackDestID, 0
 	}
 
+	if result, err := database.ReportSortRunningStateAt(database.SortRunningStateRequest{IsEndProcess: true}, now); err != nil {
+		setCTCPServerLastMessage("WebSocket endProcess failed: close sort running time: %v", err)
+		return -3, commandID, ackDestID, 0
+	} else {
+		setCTCPServerLastMessage(
+			"WebSocket endProcess sort running time: action=%s, closedId=%d",
+			result.Action,
+			result.ClosedRecordID,
+		)
+	}
+
 	result, err := database.EndCurrentFruitProcess(now)
 	if err != nil {
 		setCTCPServerLastMessage("WebSocket endProcess failed: update database: %v", err)

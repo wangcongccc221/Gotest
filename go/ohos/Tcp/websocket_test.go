@@ -260,6 +260,32 @@ func TestParseWebSocketControlMessageReadsFruitInfoQuery(t *testing.T) {
 	}
 }
 
+func TestParseWebSocketControlMessageReadsSortLogQuery(t *testing.T) {
+	message, ok := parseWebSocketControlMessage(`{
+		"type": "querySortLog",
+		"requestId": "sort-log-1",
+		"sortLogQuery": {
+			"StartDate": "2026-05-19",
+			"EndDate": "2026-06-18"
+		}
+	}`)
+	if !ok {
+		t.Fatal("parseWebSocketControlMessage() rejected querySortLog")
+	}
+	if message.RequestID != "sort-log-1" {
+		t.Fatalf("RequestID = %q, want sort-log-1", message.RequestID)
+	}
+	if message.SortLogQuery == nil {
+		t.Fatal("SortLogQuery is nil")
+	}
+	if message.SortLogQuery.StartDate != "2026-05-19" {
+		t.Fatalf("StartDate = %q, want 2026-05-19", message.SortLogQuery.StartDate)
+	}
+	if message.SortLogQuery.EndDate != "2026-06-18" {
+		t.Fatalf("EndDate = %q, want 2026-06-18", message.SortLogQuery.EndDate)
+	}
+}
+
 func TestParseWebSocketControlMessageReadsFruitInfoDeleteCustomerIDs(t *testing.T) {
 	message, ok := parseWebSocketControlMessage(`{
 		"type": "deleteFruitInfo",
