@@ -6,7 +6,9 @@ import (
 )
 
 func TestDeleteFruitInfoByCustomerIDsSoftDeletesPositiveIDsOnly(t *testing.T) {
+	resetORMForTest()
 	dbPath := filepath.Join(t.TempDir(), "history-delete.db")
+	t.Cleanup(resetORMForTest)
 	if err := InitORMWithPath(dbPath); err != nil {
 		t.Fatalf("InitORMWithPath: %v", err)
 	}

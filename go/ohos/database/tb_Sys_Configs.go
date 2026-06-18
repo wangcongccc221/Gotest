@@ -18,7 +18,7 @@ type TbSysConfigs struct {
 	FValueTypeDetail string     `json:"FValueTypeDetail" gorm:"column:FValueTypeDetail;type:longtext"`
 	FSubSystem       *int       `json:"FSubSystem" gorm:"column:FSubSystem"`
 	FCreateDate      *time.Time `json:"FCreateDate" gorm:"column:FCreateDate;type:datetime(6)"`
-	FZhType          string     `json:"FZhType" gorm:"-"`
+	FZhType          string     `json:"FZhType" gorm:"column:FZhType;type:longtext"`
 }
 
 func (TbSysConfigs) TableName() string {

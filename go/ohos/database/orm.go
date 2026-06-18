@@ -55,6 +55,7 @@ func RegisterRoutes(router *gin.Engine) {
 	registerORMRoutes(router)
 	registerFruitInfoRoutes(router)
 	registerFruitProcessInfoRoutes(router)
+	registerSysConfigRoutes(router)
 }
 
 func handleORMStatus(ctx *gin.Context) {
