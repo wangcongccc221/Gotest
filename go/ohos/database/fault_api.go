@@ -2,6 +2,7 @@ package database
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -44,48 +45,73 @@ func registerFaultRoutes(router *gin.Engine) {
 func handleBaseFaultGetList(ctx *gin.Context) {
 	var request baseFaultAPIRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		baseFaultAPILog("GetListBaseFaultInfo failed: invalid request: %v", err)
 		fruitInfoAPIFail(ctx, "invalid request: "+err.Error())
 		return
 	}
 
+	baseFaultAPILog("GetListBaseFaultInfo begin: type=%d", request.FType)
 	rows, err := QueryBaseFaults(request.FType)
 	if err != nil {
+		baseFaultAPILog("GetListBaseFaultInfo failed: type=%d, error=%v", request.FType, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
+	baseFaultAPILog("GetListBaseFaultInfo success: type=%d, rows=%d", request.FType, len(rows))
 	fruitInfoAPIOK(ctx, rows)
 }
 
 func handleBaseFaultSaveList(ctx *gin.Context) {
 	var rows []baseFaultAPIModel
 	if err := ctx.ShouldBindJSON(&rows); err != nil {
+		baseFaultAPILog("SaveBaseFaults failed: invalid request: %v", err)
 		fruitInfoAPIFail(ctx, "invalid request: "+err.Error())
 		return
 	}
 
+	faultType := baseFaultRowsType(rows)
+	baseFaultAPILog("SaveBaseFaults begin: type=%d, rows=%d", faultType, len(rows))
 	if err := SaveBaseFaults(rows); err != nil {
+		baseFaultAPILog("SaveBaseFaults failed: type=%d, rows=%d, error=%v", faultType, len(rows), err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
+	baseFaultAPILog("SaveBaseFaults success: type=%d, rows=%d", faultType, len(rows))
 	fruitInfoAPIOKRaw(ctx, "")
 }
 
 func handleBaseFaultDelete(ctx *gin.Context) {
 	var request baseFaultAPIRequest
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		baseFaultAPILog("DeleteBaseFaultInfo failed: invalid request: %v", err)
 		fruitInfoAPIFail(ctx, "invalid request: "+err.Error())
 		return
 	}
+	baseFaultAPILog("DeleteBaseFaultInfo begin: fid=%d", request.FID)
 	if request.FID <= 0 {
+		baseFaultAPILog("DeleteBaseFaultInfo failed: fid=%d, error=FID is required", request.FID)
 		fruitInfoAPIFail(ctx, "FID is required")
 		return
 	}
 
 	if err := DeleteBaseFault(request.FID); err != nil {
+		baseFaultAPILog("DeleteBaseFaultInfo failed: fid=%d, error=%v", request.FID, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
+	baseFaultAPILog("DeleteBaseFaultInfo success: fid=%d", request.FID)
 	fruitInfoAPIOKRaw(ctx, "")
+}
+
+func baseFaultRowsType(rows []baseFaultAPIModel) int {
+	if len(rows) == 0 {
+		return -1
+	}
+	return rows[0].FType
+}
+
+func baseFaultAPILog(format string, args ...any) {
+	fmt.Printf("%s Web API baseFault %s\n", databaseNow().Format("15:04:05.000"), fmt.Sprintf(format, args...))
 }
 
 func QueryBaseFaults(faultType int) ([]baseFaultAPIModel, error) {

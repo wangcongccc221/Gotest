@@ -2,6 +2,7 @@ package database
 
 import (
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
@@ -36,45 +37,71 @@ type faultInfoDBRow struct {
 func handleFaultInfoGetByDetailCondition(ctx *gin.Context) {
 	var request faultInfoAPIModel
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		faultInfoAPILog("GetListFaultInfoByDetailCondition failed: invalid request: %v", err)
 		fruitInfoAPIFail(ctx, "invalid request: "+err.Error())
 		return
 	}
 
+	faultInfoAPILog("GetListFaultInfoByDetailCondition begin: status=%d, start=%q, end=%q, keyword=%q",
+		request.FStatus, request.FBeginDate, request.FEndDate, request.FMessage)
 	rows, err := QueryFaultInfos(request)
 	if err != nil {
+		faultInfoAPILog("GetListFaultInfoByDetailCondition failed: status=%d, start=%q, end=%q, keyword=%q, error=%v",
+			request.FStatus, request.FBeginDate, request.FEndDate, request.FMessage, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
+	faultInfoAPILog("GetListFaultInfoByDetailCondition success: rows=%d", len(rows))
 	fruitInfoAPIOK(ctx, rows)
 }
 
 func handleFaultInfoGetList(ctx *gin.Context) {
 	var request faultInfoAPIModel
 	if err := ctx.ShouldBindJSON(&request); err != nil {
+		faultInfoAPILog("GetListFaultInfo failed: invalid request: %v", err)
 		fruitInfoAPIFail(ctx, "invalid request: "+err.Error())
 		return
 	}
 
+	faultInfoAPILog("GetListFaultInfo begin: type=%d, status=%d", request.FType, request.FStatus)
 	rows, err := QueryUnfinishedFaultInfos(request.FType)
 	if err != nil {
+		faultInfoAPILog("GetListFaultInfo failed: type=%d, status=%d, error=%v", request.FType, request.FStatus, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
+	faultInfoAPILog("GetListFaultInfo success: type=%d, status=%d, rows=%d", request.FType, request.FStatus, len(rows))
 	fruitInfoAPIOK(ctx, rows)
 }
 
 func handleFaultInfoSaveList(ctx *gin.Context) {
 	var rows []faultInfoAPIModel
 	if err := ctx.ShouldBindJSON(&rows); err != nil {
+		faultInfoAPILog("SaveFaultInfos failed: invalid request: %v", err)
 		fruitInfoAPIFail(ctx, "invalid request: "+err.Error())
 		return
 	}
 
+	faultType := faultInfoRowsType(rows)
+	faultInfoAPILog("SaveFaultInfos begin: type=%d, rows=%d", faultType, len(rows))
 	if err := SaveFaultInfos(rows); err != nil {
+		faultInfoAPILog("SaveFaultInfos failed: type=%d, rows=%d, error=%v", faultType, len(rows), err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
+	faultInfoAPILog("SaveFaultInfos success: type=%d, rows=%d", faultType, len(rows))
 	fruitInfoAPIOKRaw(ctx, "")
+}
+
+func faultInfoRowsType(rows []faultInfoAPIModel) int {
+	if len(rows) == 0 {
+		return -1
+	}
+	return rows[0].FType
+}
+
+func faultInfoAPILog(format string, args ...any) {
+	fmt.Printf("%s Web API faultInfo %s\n", databaseNow().Format("15:04:05.000"), fmt.Sprintf(format, args...))
 }
 
 func QueryFaultInfos(request faultInfoAPIModel) ([]faultInfoAPIModel, error) {
