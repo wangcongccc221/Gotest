@@ -56,6 +56,7 @@ func RegisterRoutes(router *gin.Engine) {
 	registerFruitInfoRoutes(router)
 	registerFruitProcessInfoRoutes(router)
 	registerSysConfigRoutes(router)
+	registerFaultRoutes(router)
 	registerRunningTimeInfoRoutes(router)
 	registerDeviceConfigCloudRoutes(router)
 }
