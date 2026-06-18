@@ -36,6 +36,9 @@ func registerFaultRoutes(router *gin.Engine) {
 	group.POST("/GetListBaseFaultInfo", handleBaseFaultGetList)
 	group.POST("/SaveBaseFaults", handleBaseFaultSaveList)
 	group.POST("/DeleteBaseFaultInfo", handleBaseFaultDelete)
+	group.POST("/GetListFaultInfoByDetailCondition", handleFaultInfoGetByDetailCondition)
+	group.POST("/GetListFaultInfo", handleFaultInfoGetList)
+	group.POST("/SaveFaultInfos", handleFaultInfoSaveList)
 }
 
 func handleBaseFaultGetList(ctx *gin.Context) {
