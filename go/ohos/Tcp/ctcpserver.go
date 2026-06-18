@@ -160,8 +160,10 @@ func StartCTCPServer() int {
 		goSz, cTCP48StGlobalExpectedSize)
 	LoadStExitInfosFromLocalConfig()
 	LoadExitDisplayInfoFromLocalConfig()
+	LoadExitDisplayBroadcastEnabledFromLocalConfig()
 	LoadExitAdditionalTextInfoFromLocalConfig()
 	LoadLevelAuxConfigInfoFromLocalConfig()
+	StartExitDisplayBroadcastLoop()
 	StartStStatisticsSpeedPublisher()
 	return cTCPServerStatPort
 }
@@ -357,6 +359,7 @@ func StopCTCPServer() int {
 	StopStParasImageFieldsPeriodicLog()
 	StopStGlobalExitInfoPeriodicLog()
 	StopStStatisticsSpeedPublisher()
+	StopExitDisplayBroadcastLoop()
 	resetRealtimeSaveState()
 	setCTCPServerLastMessage("CTCP servers stopped")
 	return 0

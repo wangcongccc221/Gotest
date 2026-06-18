@@ -186,6 +186,39 @@ func TestParseWebSocketControlMessageReadsExitDisplayData(t *testing.T) {
 	}
 }
 
+func TestParseWebSocketControlMessageReadsExitScreenSettings(t *testing.T) {
+	message, ok := parseWebSocketControlMessage(`{
+		"type": "saveExitScreenSettings",
+		"fsmId": 256,
+		"exitScreenSettings": {
+			"configs": [
+				{"exitNo": 1, "customName": "一号屏", "additionalInfo": "备注一", "useAutoName": false},
+				{"exitNo": 2, "customName": "", "additionalInfo": "备注二", "useAutoName": true}
+			]
+		}
+	}`)
+	if !ok {
+		t.Fatal("parseWebSocketControlMessage() rejected saveExitScreenSettings")
+	}
+	if message.ExitScreenSettings == nil {
+		t.Fatal("ExitScreenSettings is nil")
+	}
+	if message.FSMID != 256 {
+		t.Fatalf("FSMID = %d, want 256", message.FSMID)
+	}
+	if len(message.ExitScreenSettings.Configs) != 2 {
+		t.Fatalf("Configs length = %d, want 2", len(message.ExitScreenSettings.Configs))
+	}
+	useAutoName := message.ExitScreenSettings.Configs[0].UseAutoName
+	if useAutoName == nil || *useAutoName {
+		t.Fatalf("Configs[0].UseAutoName = %v, want false", useAutoName)
+	}
+	if message.ExitScreenSettings.Configs[0].CustomName != "一号屏" ||
+		message.ExitScreenSettings.Configs[1].AdditionalInfo != "备注二" {
+		t.Fatalf("Configs = %#v, want parsed names and additional text", message.ExitScreenSettings.Configs)
+	}
+}
+
 func TestParseWebSocketControlMessageReadsFruitInfoQuery(t *testing.T) {
 	message, ok := parseWebSocketControlMessage(`{
 		"type": "queryFruitInfo",
@@ -375,5 +408,52 @@ func TestApplyExitAdditionalTextUpdateOnlyReplacesProvidedTexts(t *testing.T) {
 	}
 	if next.AdditionalTexts[1] != "旧二号" {
 		t.Fatalf("AdditionalTexts[1] = %q, want preserved", next.AdditionalTexts[1])
+	}
+}
+
+func TestBuildExitScreenSettingsInfoLetsBackendCompute48Fields(t *testing.T) {
+	useCustom := false
+	useAuto := true
+	displayInfo, additionalInfo := buildExitScreenSettingsInfo(webSocketExitScreenSettingsControl{
+		Configs: []webSocketExitScreenConfigControl{
+			{ExitNo: 1, CustomName: " 一号屏 ", AdditionalInfo: " 备注一 ", UseAutoName: &useCustom},
+			{ExitNo: 48, CustomName: " 四十八号屏 ", AdditionalInfo: " 备注四十八 ", UseAutoName: &useCustom},
+			{ExitNo: 2, CustomName: "忽略自动名", AdditionalInfo: "备注二", UseAutoName: &useAuto},
+			{ExitNo: 0, CustomName: "无效", AdditionalInfo: "无效", UseAutoName: &useCustom},
+		},
+	})
+
+	if !exitDisplayNameEnabled(displayInfo.DisplayType, 0) || !exitDisplayNameEnabled(displayInfo.DisplayType, 47) {
+		t.Fatalf("DisplayType = %d, want bits 0 and 47 enabled", displayInfo.DisplayType)
+	}
+	if exitDisplayNameEnabled(displayInfo.DisplayType, 1) {
+		t.Fatalf("DisplayType = %d, want bit 1 disabled for auto name", displayInfo.DisplayType)
+	}
+	if displayInfo.DisplayNames[0] != "一号屏" || displayInfo.DisplayNames[47] != "四十八号屏" {
+		t.Fatalf("DisplayNames[0,47] = %q, %q", displayInfo.DisplayNames[0], displayInfo.DisplayNames[47])
+	}
+	if additionalInfo.AdditionalTexts[0] != "备注一" || additionalInfo.AdditionalTexts[47] != "备注四十八" {
+		t.Fatalf("AdditionalTexts[0,47] = %q, %q", additionalInfo.AdditionalTexts[0], additionalInfo.AdditionalTexts[47])
+	}
+}
+
+func TestBuildExitScreenSettingsControlLetsFrontendUseRowsDirectly(t *testing.T) {
+	displayInfo := defaultExitDisplayInfo()
+	displayInfo.DisplayType = setExitDisplayNameEnabled(displayInfo.DisplayType, 47, true)
+	displayInfo.DisplayNames[47] = "四十八号屏"
+	additionalInfo := defaultExitAdditionalTextInfo()
+	additionalInfo.AdditionalTexts[47] = "备注四十八"
+
+	settings := buildExitScreenSettingsControl(displayInfo, additionalInfo)
+
+	if len(settings.Configs) != cTCP48MaxExitNum {
+		t.Fatalf("Configs length = %d, want %d", len(settings.Configs), cTCP48MaxExitNum)
+	}
+	last := settings.Configs[47]
+	if last.ExitNo != 48 || last.CustomName != "四十八号屏" || last.AdditionalInfo != "备注四十八" {
+		t.Fatalf("Configs[47] = %#v, want exit 48 row", last)
+	}
+	if last.UseAutoName == nil || *last.UseAutoName {
+		t.Fatalf("Configs[47].UseAutoName = %v, want false", last.UseAutoName)
 	}
 }

@@ -82,6 +82,8 @@ type webSocketControlMessage struct {
 	ExitInfo                   *StExitInfo                         `json:"exitInfo,omitempty"`
 	ExitInfos                  *webSocketExitInfosControl          `json:"exitInfos,omitempty"`
 	ExitDisplay                *webSocketExitDisplayControl        `json:"exitDisplay,omitempty"`
+	ExitDisplayEnabled         *bool                               `json:"exitDisplayEnabled,omitempty"`
+	ExitScreenSettings         *webSocketExitScreenSettingsControl `json:"exitScreenSettings,omitempty"`
 	ExitAdditionalText         *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
 	LevelAuxConfig             *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
 	PreserveCachedGradeExits   *bool                               `json:"preserveCachedGradeExits,omitempty"`
@@ -146,9 +148,22 @@ type webSocketExitDisplayControl struct {
 	DisplayNames []string `json:"displayNames,omitempty"`
 }
 
+type webSocketExitScreenConfigControl struct {
+	ExitNo         int    `json:"exitNo,omitempty"`
+	CustomName     string `json:"customName,omitempty"`
+	AdditionalInfo string `json:"additionalInfo,omitempty"`
+	UseAutoName    *bool  `json:"useAutoName,omitempty"`
+}
+
+type webSocketExitScreenSettingsControl struct {
+	Configs []webSocketExitScreenConfigControl `json:"configs,omitempty"`
+}
+
 type webSocketExitDisplayData struct {
-	FSMID       int32           `json:"fsmId"`
-	ExitDisplay ExitDisplayInfo `json:"exitDisplay"`
+	FSMID              int32                              `json:"fsmId"`
+	Enabled            bool                               `json:"enabled"`
+	ExitDisplay        ExitDisplayInfo                    `json:"exitDisplay"`
+	ExitScreenSettings webSocketExitScreenSettingsControl `json:"exitScreenSettings"`
 }
 
 type webSocketExitAdditionalTextControl struct {
@@ -497,6 +512,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleExitInfosLog(control)
 	case "saveExitDisplay":
 		c.handleExitDisplayInfo(control)
+	case "setExitDisplayEnabled":
+		c.handleExitDisplayEnabled(control)
+	case "saveExitScreenSettings":
+		c.handleExitScreenSettings(control)
 	case "saveExitAdditionalText":
 		c.handleExitAdditionalTextInfo(control)
 	case "saveLevelAuxConfig":
@@ -682,21 +701,121 @@ func copyExactUint8Field(field string, dst []uint8, src []uint8) error {
 }
 
 func (c *webSocketClient) handleExitDisplayInfo(control webSocketControlMessage) {
+	result := 0
+	message := "sent"
 	if control.ExitDisplay == nil {
 		setCTCPServerLastMessage("WebSocket saveExitDisplay failed: empty ExitDisplayInfo, fsmId=0x%04X", uint32(control.FSMID))
-		return
+		result = -1
+		message = "empty ExitDisplayInfo"
+	} else {
+		baseInfo := defaultExitDisplayInfo()
+		if _, cachedInfo, ok := latestExitDisplayInfoSnapshot(); ok {
+			baseInfo = cachedInfo
+		}
+		info := applyExitDisplayUpdate(baseInfo, *control.ExitDisplay)
+		if err := SaveExitDisplayInfoToLocalConfig(control.FSMID, info); err != nil {
+			result = -1
+			message = "save failed"
+		} else {
+			setLastExitDisplayInfoSnapshot(control.FSMID, info)
+			publishExitDisplayData(control.FSMID, info)
+			if isExitDisplayBroadcastEnabled() {
+				BroadcastExitDisplayOnce()
+			}
+		}
 	}
+	c.sendCommandAckDetail("saveExitDisplay", 0, control.FSMID, 0, result, message, control.RequestID)
+}
 
-	baseInfo := defaultExitDisplayInfo()
-	if _, cachedInfo, ok := latestExitDisplayInfoSnapshot(); ok {
-		baseInfo = cachedInfo
+func (c *webSocketClient) handleExitDisplayEnabled(control webSocketControlMessage) {
+	result := 0
+	message := "sent"
+	if control.ExitDisplayEnabled == nil {
+		result = -1
+		message = "empty exitDisplayEnabled"
+		setCTCPServerLastMessage("WebSocket setExitDisplayEnabled failed: empty enabled")
+	} else if err := SaveExitDisplayBroadcastEnabledToLocalConfig(*control.ExitDisplayEnabled); err != nil {
+		result = -1
+		message = "save failed"
+		setCTCPServerLastMessage("WebSocket setExitDisplayEnabled failed: enabled=%t, err=%v", *control.ExitDisplayEnabled, err)
+	} else {
+		if *control.ExitDisplayEnabled {
+			BroadcastExitDisplayOnce()
+		}
+		setCTCPServerLastMessage("WebSocket setExitDisplayEnabled success: enabled=%t", *control.ExitDisplayEnabled)
 	}
-	info := applyExitDisplayUpdate(baseInfo, *control.ExitDisplay)
-	if err := SaveExitDisplayInfoToLocalConfig(control.FSMID, info); err != nil {
-		return
+	c.sendCommandAckDetail("setExitDisplayEnabled", 0, 0, 0, result, message, control.RequestID)
+	publishExitDisplayData(0, latestExitDisplayInfoOrDefault())
+}
+
+func (c *webSocketClient) handleExitScreenSettings(control webSocketControlMessage) {
+	result := 0
+	message := "sent"
+	if control.ExitScreenSettings == nil {
+		result = -1
+		message = "empty exitScreenSettings"
+		setCTCPServerLastMessage("WebSocket saveExitScreenSettings failed: empty settings, fsmId=0x%04X", uint32(control.FSMID))
+	} else {
+		displayInfo, additionalInfo := buildExitScreenSettingsInfo(*control.ExitScreenSettings)
+		if err := SaveExitDisplayInfoToLocalConfig(control.FSMID, displayInfo); err != nil {
+			result = -1
+			message = "save display failed"
+		} else if err := SaveExitAdditionalTextInfoToLocalConfig(control.FSMID, additionalInfo); err != nil {
+			result = -1
+			message = "save additional text failed"
+		} else {
+			setLastExitDisplayInfoSnapshot(control.FSMID, displayInfo)
+			setLastExitAdditionalTextInfoSnapshot(control.FSMID, additionalInfo)
+			publishExitDisplayData(control.FSMID, displayInfo)
+			publishExitAdditionalTextData(control.FSMID, additionalInfo)
+			if isExitDisplayBroadcastEnabled() {
+				BroadcastExitDisplayOnce()
+			}
+			setCTCPServerLastMessage(
+				"WebSocket saveExitScreenSettings success: fsmId=0x%04X, configs=%d, displayType=%d",
+				uint32(control.FSMID),
+				len(control.ExitScreenSettings.Configs),
+				displayInfo.DisplayType,
+			)
+		}
 	}
-	setLastExitDisplayInfoSnapshot(control.FSMID, info)
-	publishExitDisplayData(control.FSMID, info)
+	c.sendCommandAckDetail("saveExitScreenSettings", 0, control.FSMID, 0, result, message, control.RequestID)
+}
+
+func buildExitScreenSettingsInfo(settings webSocketExitScreenSettingsControl) (ExitDisplayInfo, ExitAdditionalTextInfo) {
+	displayInfo := defaultExitDisplayInfo()
+	additionalInfo := defaultExitAdditionalTextInfo()
+	for _, config := range settings.Configs {
+		exitIndex := config.ExitNo - 1
+		if exitIndex < 0 || exitIndex >= cTCP48MaxExitNum {
+			continue
+		}
+
+		useAutoName := true
+		if config.UseAutoName != nil {
+			useAutoName = *config.UseAutoName
+		}
+		displayInfo.DisplayType = setExitDisplayNameEnabled(displayInfo.DisplayType, exitIndex, !useAutoName)
+		displayInfo.DisplayNames[exitIndex] = strings.TrimSpace(config.CustomName)
+		additionalInfo.AdditionalTexts[exitIndex] = strings.TrimSpace(config.AdditionalInfo)
+	}
+	return displayInfo, additionalInfo
+}
+
+func buildExitScreenSettingsControl(displayInfo ExitDisplayInfo, additionalInfo ExitAdditionalTextInfo) webSocketExitScreenSettingsControl {
+	settings := webSocketExitScreenSettingsControl{
+		Configs: make([]webSocketExitScreenConfigControl, 0, cTCP48MaxExitNum),
+	}
+	for i := 0; i < cTCP48MaxExitNum; i++ {
+		useAutoName := !exitDisplayNameEnabled(displayInfo.DisplayType, i)
+		settings.Configs = append(settings.Configs, webSocketExitScreenConfigControl{
+			ExitNo:         i + 1,
+			CustomName:     displayInfo.DisplayNames[i],
+			AdditionalInfo: additionalInfo.AdditionalTexts[i],
+			UseAutoName:    &useAutoName,
+		})
+	}
+	return settings
 }
 
 func applyExitDisplayUpdate(base ExitDisplayInfo, update webSocketExitDisplayControl) ExitDisplayInfo {
@@ -1012,7 +1131,12 @@ func (c *webSocketClient) sendExitDisplayData(fsmID int32, info ExitDisplayInfo)
 	c.sendFrame(webSocketFrame{
 		Type:  webSocketTopicData,
 		Topic: webSocketTopicExitDisplay,
-		Data:  rawJSONFromValue(webSocketExitDisplayData{FSMID: fsmID, ExitDisplay: info}),
+		Data: rawJSONFromValue(webSocketExitDisplayData{
+			FSMID:              fsmID,
+			Enabled:            isExitDisplayBroadcastEnabled(),
+			ExitDisplay:        info,
+			ExitScreenSettings: buildExitScreenSettingsControl(info, latestExitAdditionalTextInfoOrDefault()),
+		}),
 	})
 }
 
@@ -1067,13 +1191,32 @@ func publishExitInfosData(fsmID int32, exitInfos StExitInfos) {
 }
 
 func publishExitDisplayData(fsmID int32, info ExitDisplayInfo) {
-	raw := rawJSONFromValue(webSocketExitDisplayData{FSMID: fsmID, ExitDisplay: info})
+	raw := rawJSONFromValue(webSocketExitDisplayData{
+		FSMID:              fsmID,
+		Enabled:            isExitDisplayBroadcastEnabled(),
+		ExitDisplay:        info,
+		ExitScreenSettings: buildExitScreenSettingsControl(info, latestExitAdditionalTextInfoOrDefault()),
+	})
 	frame, err := newWebSocketDataFrame(webSocketTopicExitDisplay, raw)
 	if err != nil {
 		setCTCPServerLastMessage("WebSocket publish exitDisplay failed: %v", err)
 		return
 	}
 	defaultWebSocketHub.publish(webSocketTopicExitDisplay, frame)
+}
+
+func latestExitDisplayInfoOrDefault() ExitDisplayInfo {
+	if _, info, ok := latestExitDisplayInfoSnapshot(); ok {
+		return info
+	}
+	return defaultExitDisplayInfo()
+}
+
+func latestExitAdditionalTextInfoOrDefault() ExitAdditionalTextInfo {
+	if _, info, ok := latestExitAdditionalTextInfoSnapshot(); ok {
+		return info
+	}
+	return defaultExitAdditionalTextInfo()
 }
 
 func publishExitAdditionalTextData(fsmID int32, info ExitAdditionalTextInfo) {

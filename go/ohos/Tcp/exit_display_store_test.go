@@ -97,3 +97,55 @@ func TestApplyExitDisplayInfoToBroadcastSysConfigCopies20ByteSlots(t *testing.T)
 		}
 	}
 }
+
+func TestParseExitDisplayEnabledConfigValueMatches48ContainsTrue(t *testing.T) {
+	if !parseExitDisplayEnabledConfigValue("true") {
+		t.Fatal("true should enable exit display broadcast")
+	}
+	if !parseExitDisplayEnabledConfigValue("true-from-db") {
+		t.Fatal("48 uses contains(\"true\"), so true-from-db should enable")
+	}
+	if parseExitDisplayEnabledConfigValue("false") {
+		t.Fatal("false should disable exit display broadcast")
+	}
+}
+
+func TestBuildExitDisplayBroadcastPacketUsesCustomNameWhenBitEnabled(t *testing.T) {
+	info := defaultExitDisplayInfo()
+	info.DisplayType = 1
+	info.DisplayNames[0] = "自定义出口"
+
+	packet := buildExitDisplayBroadcastPacket(info, StGradeInfo{}, false)
+
+	if len(packet) != 1+cTCP48MaxExitNum*cTCPExitGradeItemWireSize+1 {
+		t.Fatalf("packet len = %d, want %d", len(packet), 1+cTCP48MaxExitNum*cTCPExitGradeItemWireSize+1)
+	}
+	if packet[0] != 0xAA || packet[len(packet)-1] != 0x55 {
+		t.Fatalf("packet frame = 0x%02X ... 0x%02X, want 0xAA ... 0x55", packet[0], packet[len(packet)-1])
+	}
+	if got := int(packet[1]) | int(packet[2])<<8 | int(packet[3])<<16 | int(packet[4])<<24; got != 1 {
+		t.Fatalf("first ExitIndex = %d, want 1", got)
+	}
+	name := string(packet[5 : 5+len("自定义出口")])
+	if name != "自定义出口" {
+		t.Fatalf("first GradeName prefix = %q, want 自定义出口", name)
+	}
+}
+
+func TestBuildExitDisplayBroadcastPacketFallsBackToGradeNames(t *testing.T) {
+	grade := StGradeInfo{}
+	grade.NSizeGradeNum = 2
+	grade.NQualityGradeNum = 1
+	copy(grade.StrSizeGradeName[:], []byte("大果"))
+	copy(grade.StrSizeGradeName[cTCPServerMaxTextLength:], []byte("中果"))
+	copy(grade.StrQualityGradeName[:], []byte("A级"))
+	grade.Grades[1].ExitLow = 1
+
+	packet := buildExitDisplayBroadcastPacket(defaultExitDisplayInfo(), grade, true)
+
+	nameStart := 1 + 4
+	name := string(packet[nameStart : nameStart+len("中果.A级")])
+	if name != "中果.A级" {
+		t.Fatalf("first GradeName prefix = %q, want 中果.A级", name)
+	}
+}

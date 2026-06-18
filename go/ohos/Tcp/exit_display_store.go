@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	cTCPExitDisplayTypeConfigName = "出口显示名称类型"
-	cTCPExitDisplayNameWireSize   = 20
+	cTCPExitDisplayEnabledConfigName = "ExitDisplay"
+	cTCPExitDisplayTypeConfigName    = "出口显示名称类型"
+	cTCPExitDisplayNameWireSize      = 20
 )
 
 type ExitDisplayInfo struct {
@@ -24,6 +25,8 @@ var (
 	lastExitDisplayInfoFSMID      int32
 	lastExitDisplayInfoSnapshotOK bool
 	lastExitDisplayInfoSnapshotMu sync.RWMutex
+	exitDisplayBroadcastEnabled   bool
+	exitDisplayBroadcastEnabledMu sync.RWMutex
 )
 
 func LoadExitDisplayInfoFromLocalConfig() {
@@ -35,6 +38,42 @@ func LoadExitDisplayInfoFromLocalConfig() {
 
 	setLastExitDisplayInfoSnapshot(0, info)
 	setCTCPServerLastMessage("出口显示名称配置已加载: displayType=%d", info.DisplayType)
+}
+
+func LoadExitDisplayBroadcastEnabledFromLocalConfig() {
+	enabled, err := ReadExitDisplayBroadcastEnabledFromLocalConfig()
+	if err != nil {
+		setCTCPServerLastMessage("出口屏显示开关读取失败: %v", err)
+		return
+	}
+	setExitDisplayBroadcastEnabled(enabled)
+	setCTCPServerLastMessage("出口屏显示开关已加载: enabled=%t", enabled)
+}
+
+func ReadExitDisplayBroadcastEnabledFromLocalConfig() (bool, error) {
+	text, err := database.GetConfigValue(cTCPExitDisplayEnabledConfigName)
+	if err != nil {
+		return false, fmt.Errorf("read %s: %w", cTCPExitDisplayEnabledConfigName, err)
+	}
+	return parseExitDisplayEnabledConfigValue(text), nil
+}
+
+func SaveExitDisplayBroadcastEnabledToLocalConfig(enabled bool) error {
+	value := "false"
+	if enabled {
+		value = "true"
+	}
+	if err := database.SaveConfigValue(cTCPExitDisplayEnabledConfigName, value); err != nil {
+		setCTCPServerLastMessage("出口屏显示开关保存失败: enabled=%t, err=%v", enabled, err)
+		return err
+	}
+	setExitDisplayBroadcastEnabled(enabled)
+	setCTCPServerLastMessage("出口屏显示开关已保存: enabled=%t", enabled)
+	return nil
+}
+
+func parseExitDisplayEnabledConfigValue(text string) bool {
+	return strings.Contains(strings.ToLower(strings.TrimSpace(text)), "true")
 }
 
 func ReadExitDisplayInfoFromLocalConfig() (ExitDisplayInfo, error) {
@@ -169,4 +208,16 @@ func latestExitDisplayInfoSnapshot() (int32, ExitDisplayInfo, bool) {
 	lastExitDisplayInfoSnapshotMu.RLock()
 	defer lastExitDisplayInfoSnapshotMu.RUnlock()
 	return lastExitDisplayInfoFSMID, lastExitDisplayInfoSnapshot, lastExitDisplayInfoSnapshotOK
+}
+
+func setExitDisplayBroadcastEnabled(enabled bool) {
+	exitDisplayBroadcastEnabledMu.Lock()
+	exitDisplayBroadcastEnabled = enabled
+	exitDisplayBroadcastEnabledMu.Unlock()
+}
+
+func isExitDisplayBroadcastEnabled() bool {
+	exitDisplayBroadcastEnabledMu.RLock()
+	defer exitDisplayBroadcastEnabledMu.RUnlock()
+	return exitDisplayBroadcastEnabled
 }
