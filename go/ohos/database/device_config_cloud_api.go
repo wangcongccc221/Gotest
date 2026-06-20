@@ -249,7 +249,7 @@ func resolveDeviceConfigSecretKey() (string, error) {
 }
 
 func resolveDeviceConfigCloudBaseURL() (string, error) {
-	for _, key := range []string{"DeviceConfigCloudBaseUrl", "CloudApiUrl", "CurrentUrl"} {
+	for _, key := range []string{"DeviceConfigCloudBaseUrl", "CloudApiUrl", "CurrentUrl", "BaseUrl"} {
 		value, err := GetConfigValuePreferNonEmpty(key)
 		if err != nil {
 			return "", err
