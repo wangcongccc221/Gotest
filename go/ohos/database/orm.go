@@ -61,6 +61,7 @@ func RegisterRoutes(router *gin.Engine) {
 	registerDeviceConfigCloudRoutes(router)
 	registerPrintTemplateRoutes(router)
 	registerVersionUpdateRoutes(router)
+	registerDeviceInfoRoutes(router)
 }
 
 func handleORMStatus(ctx *gin.Context) {
