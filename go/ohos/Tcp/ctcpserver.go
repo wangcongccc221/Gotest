@@ -501,6 +501,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		)
 		cacheStParasImageFields(remoteAddr, head, stg)
 		cacheStGlobalExitInfo(remoteAddr, head, stg)
+		cacheAboutStGlobal(stg)
 		cacheHomeStatsGlobalConfig(stg)
 		cacheRealtimeSaveGlobalConfig(stg)
 		cacheLatestGradeInfo(head.NSrcId, stg.Grade)
@@ -563,6 +564,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		setCTCPServerLastMessage("CTCP StFruitGradeInfo JSON 生成失败: %v", jsonErr)
 
 	case cmdFSMGetVersion, cmdWAMVersionInfo:
+		cacheAboutVersion(head, payload)
 		setCTCPServerLastMessage("CTCP handled %s: version bytes=%q", cTCPCommandName(head.NCmdId), strings.TrimRight(string(payload), "\x00\r\n "))
 	case cmdFSMWeightInfo, cmdWAMWeightInfo:
 		weight, err := ParseData[StWeightResult](payload)

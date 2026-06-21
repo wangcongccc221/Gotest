@@ -320,7 +320,7 @@ func buildPrintReportHTML(item fruitInfoAPIModel, config printTemplateConfigAPIM
     body { margin: 0; background: #d8d8d8; color: #000; font-family: SimSun, "宋体", "Microsoft YaHei", Arial, sans-serif; }
     main { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 13mm 10.5mm 16mm; background: #fff; }
     .print-time { position: absolute; top: 7mm; right: 10.5mm; height: 22px; text-align: right; font-size: 15px; line-height: 22px; }
-    .logo-space { display: block; width: 400px; height: 55px; margin: 8px auto 15px; }
+    .logo { display: block; width: 400px; height: 55px; object-fit: contain; margin: 8px auto 15px; }
     h1 { margin: 0 0 10px; font-size: 20px; font-weight: 700; text-align: center; letter-spacing: 0; }
     .double-line { height: 6px; border-top: 2px solid #000; border-bottom: 2px solid #000; margin: 0 0 10px; }
     .meta { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px 0; padding: 0 0 10px; font-size: 15px; line-height: 22px; }
@@ -345,7 +345,7 @@ func buildPrintReportHTML(item fruitInfoAPIModel, config printTemplateConfigAPIM
 <body>
   <main>
     <div class="print-time">%s</div>
-    <div class="logo-space"></div>
+    <img class="logo" src="report_logo.png" alt="Reemoon logo">
     <h1>加工报表</h1>
     <div class="double-line"></div>
     <section class="meta">%s</section>

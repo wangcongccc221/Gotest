@@ -161,6 +161,12 @@ func TestPrintTemplatePreviewReportUsesSavedTemplate(t *testing.T) {
 	if !strings.Contains(report.HTML, "Customer") || !strings.Contains(report.HTML, "Alice") {
 		t.Fatalf("HTML missing selected customer field: %s", report.HTML)
 	}
+	if !strings.Contains(report.HTML, `<img class="logo" src="report_logo.png" alt="Reemoon logo">`) {
+		t.Fatalf("HTML missing Reemoon report logo: %s", report.HTML)
+	}
+	if strings.Contains(report.HTML, "logo-space") {
+		t.Fatalf("HTML still uses empty logo placeholder: %s", report.HTML)
+	}
 	if strings.Contains(report.HTML, "Hidden Farm") {
 		t.Fatalf("HTML contains unchecked farm field: %s", report.HTML)
 	}

@@ -44,6 +44,7 @@ func newRouter() http.Handler {
 	})
 	database.RegisterRoutes(router)
 	registerWebSocketRoutes(router)
+	registerAboutInfoRoutes(router)
 	return router
 }
 
