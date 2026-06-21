@@ -1,1 +1,2 @@
-呃 我的readme 不知道写什么 随便写写吧
+Golang+Arkts  go+鸿蒙
+通过交叉编译获取适用于harmonyOs的动态库文件 通过C napi 桥接
