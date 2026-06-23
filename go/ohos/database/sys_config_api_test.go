@@ -125,7 +125,10 @@ func TestSysConfigAPISavesRowsToDatabase(t *testing.T) {
 	}
 
 	var updated TbSysConfigs
-	if err := db.Select("FValue").Where("FModuleName = ? AND FType = ?", "RSS", "MaxSpeed").First(&updated).Error; err != nil {
+	if err := db.Select("FValue").
+		Where("FModuleName = ? AND FType = ?", "RSS", "MaxSpeed").
+		Order("FID desc").
+		First(&updated).Error; err != nil {
 		t.Fatalf("read updated row: %v", err)
 	}
 	if updated.FValue != "700" {

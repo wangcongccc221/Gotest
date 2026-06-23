@@ -6542,3 +6542,10 @@ What is the Juice number divided by 2 multiplied by 10 divided by 5?
  You should see the Juice number under Valid Channels.
 
 ---
+
+
+**User**
+
+欸 我有一个问题 就是这个48里面的载入程序对吧  是不是 选择之后 主页的分选程序  就是载入的程序 你去看一下
+
+---

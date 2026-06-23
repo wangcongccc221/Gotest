@@ -142,6 +142,10 @@ func initORMWithPath(dbPath string) error {
 		ormInitErr = err
 		return err
 	}
+	if err := applySQLMigrations(db); err != nil {
+		ormInitErr = err
+		return err
+	}
 	if err := seedORMDevices(db); err != nil {
 		ormInitErr = err
 		return err
