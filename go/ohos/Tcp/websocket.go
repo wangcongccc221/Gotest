@@ -37,21 +37,24 @@ const (
 	webSocketTopicWeightInfo         = "weightInfo"
 	webSocketTopicWaveInfo           = "waveInfo"
 
-	webSocketWriteWait             = 5 * time.Second  //写入等待
-	webSocketPongWait              = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
-	webSocketPingPeriod            = 30 * time.Second
-	webSocketMaxMessageSize        = 2056 * 2056 // 4MB 放数据用的
-	webSocketSendBufferSize        = 32          //最多发送32条消息
-	webSocketBroadcastBufferSize   = 64          // 广播最多64条消息
-	webSocketSysConfigRefreshDelay = 300 * time.Millisecond
+	webSocketWriteWait                            = 5 * time.Second  //写入等待
+	webSocketPongWait                             = 70 * time.Second // Pong 等待，比客户端心跳周期略长，允许偶尔的网络抖动
+	webSocketPingPeriod                           = 30 * time.Second
+	webSocketMaxMessageSize                       = 2056 * 2056 // 4MB 放数据用的
+	webSocketSendBufferSize                       = 32          //最多发送32条消息
+	webSocketBroadcastBufferSize                  = 64          // 广播最多64条消息
+	webSocketSysConfigRefreshDelay                = 300 * time.Millisecond
+	webSocketSaveLevelDataRefreshSuppressDuration = 4 * time.Second
 )
 
 var (
-	errEmptyWebSocketJSON   = errors.New("websocket json is empty")
-	errInvalidWebSocketJSON = errors.New("websocket json is invalid")
-	defaultWebSocketHub     = newWebSocketHub() //
-	gradeInfoCacheMu        sync.RWMutex
-	gradeInfoCache          = make(map[int32]StGradeInfo)
+	errEmptyWebSocketJSON         = errors.New("websocket json is empty")
+	errInvalidWebSocketJSON       = errors.New("websocket json is invalid")
+	defaultWebSocketHub           = newWebSocketHub() //
+	gradeInfoCacheMu              sync.RWMutex
+	gradeInfoCache                = make(map[int32]StGradeInfo)
+	gradeInfoRefreshSuppressMu    sync.Mutex
+	gradeInfoRefreshSuppressUntil = make(map[int32]time.Time)
 )
 
 var webSocketUpgrader = websocket.Upgrader{
@@ -402,7 +405,7 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		})
 
 	case "requestStGlobal":
-		c.handleRequestStGlobal()
+		c.handleRequestStGlobal(control)
 
 	case "close_client":
 		fmt.Println("123") //发送一个display_off 还有一个关闭啥来着 忘记了
@@ -555,17 +558,22 @@ func parseWebSocketControlMessage(text string) (webSocketControlMessage, bool) {
 	return message, message.Type != ""
 }
 
-func (c *webSocketClient) handleRequestStGlobal() {
+func (c *webSocketClient) handleRequestStGlobal(control webSocketControlMessage) {
 	c.sendLatestExitInfosData()
 	c.sendLatestExitDisplayData()
 	c.sendLatestExitAdditionalTextData()
 	c.sendLatestLevelAuxConfigData()
 	c.sendLatestFruitTypeConfigData()
+	fsmID := normalizeRequestStGlobalFSMID(control)
+	if shouldSuppressRequestStGlobalAfterSaveLevelData(fsmID) {
+		setCTCPServerLastMessage("WebSocket requestStGlobal skipped after saveLevelData: fsm=0x%04X", uint32(fsmID))
+		return
+	}
 	// 前端 WebSocket 连接成功后发 requestStGlobal，表示前端已经准备接收数据。
 	// 这里异步触发 CTCP 客户端发送 DISPLAY_ON，避免阻塞 WebSocket 的读循环。
 	go func() {
-		if result := RequestStGlobalFromDefaultFSM(); result != 0 {
-			setCTCPServerLastMessage("WebSocket requestStGlobal failed: result=%d", result)
+		if result := RequestStGlobalFromFSM(fsmID); result != 0 {
+			setCTCPServerLastMessage("WebSocket requestStGlobal failed: fsm=0x%04X, result=%d", uint32(fsmID), result)
 		}
 	}()
 }
@@ -1894,8 +1902,13 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 	}
 
 	cacheLatestGradeInfo(destID, grade)
-	requestStGlobalAfterConfigCommand(topic, destID)
-	setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X, refresh StGlobal scheduled", topic, uint32(commandID), uint32(destID))
+	if shouldRequestStGlobalAfterGradeInfoCommand(topic) {
+		requestStGlobalAfterConfigCommand(topic, destID)
+		setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X, refresh StGlobal scheduled", topic, uint32(commandID), uint32(destID))
+	} else {
+		suppressRequestStGlobalAfterSaveLevelData(destID)
+		setCTCPServerLastMessage("WebSocket %s success: cmd=0x%04X sent, dest=0x%04X, refresh StGlobal skipped", topic, uint32(commandID), uint32(destID))
+	}
 	return 0, destID, len(payload)
 }
 
@@ -2448,6 +2461,45 @@ func requestStGlobalAfterConfigCommand(topic string, destID int32) {
 			setCTCPServerLastMessage("WebSocket %s refresh StGlobal requested: attempt=%d, fsm=0x%04X, dest=0x%04X", topic, index+1, uint32(fsmID), uint32(destID))
 		}
 	}()
+}
+
+func shouldRequestStGlobalAfterGradeInfoCommand(topic string) bool {
+	return topic != "saveLevelData"
+}
+
+func normalizeRequestStGlobalFSMID(control webSocketControlMessage) int32 {
+	if control.FSMID != 0 {
+		return control.FSMID
+	}
+	if control.DestID != 0 {
+		return encodeSubsys(getSubsysIndex(control.DestID))
+	}
+	return cTCPDefaultFSMID
+}
+
+func suppressRequestStGlobalAfterSaveLevelData(destID int32) {
+	fsmID := encodeSubsys(getSubsysIndex(destID))
+	until := time.Now().Add(webSocketSaveLevelDataRefreshSuppressDuration)
+	gradeInfoRefreshSuppressMu.Lock()
+	gradeInfoRefreshSuppressUntil[fsmID] = until
+	gradeInfoRefreshSuppressMu.Unlock()
+}
+
+func shouldSuppressRequestStGlobalAfterSaveLevelData(fsmID int32) bool {
+	now := time.Now()
+	gradeInfoRefreshSuppressMu.Lock()
+	until, ok := gradeInfoRefreshSuppressUntil[fsmID]
+	if !ok {
+		gradeInfoRefreshSuppressMu.Unlock()
+		return false
+	}
+	if now.After(until) {
+		delete(gradeInfoRefreshSuppressUntil, fsmID)
+		gradeInfoRefreshSuppressMu.Unlock()
+		return false
+	}
+	gradeInfoRefreshSuppressMu.Unlock()
+	return true
 }
 
 func SendSimpleFSMCommand(topic string, commandID int32, control webSocketControlMessage) (int, int32, int) {
