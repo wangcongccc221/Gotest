@@ -13,3 +13,5 @@
 /entry/libs/**/*.so
 /entry/libs/**/*.h
 !/entry/libs/**/README.md
+.waylog
+.waylog
