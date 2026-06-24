@@ -100,6 +100,8 @@ type webSocketControlMessage struct {
 	WhiteBalancePayload        []int                               `json:"whiteBalancePayload,omitempty"`
 	IP                         string                              `json:"ip,omitempty"`
 	MAC                        string                              `json:"mac,omitempty"`
+	Phone                      string                              `json:"phone,omitempty"`
+	ValidateCode               string                              `json:"validateCode,omitempty"`
 	ChannelIndex               *int                                `json:"channelIndex,omitempty"`
 	ExitIndex                  *int                                `json:"exitIndex,omitempty"`
 	ResetADValue               *int                                `json:"resetADValue,omitempty"`
@@ -425,6 +427,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleSortLogQuery(control)
 	case "deleteFruitInfo":
 		c.handleFruitInfoDelete(control)
+	case "createProjectPassword":
+		c.handleCreateProjectPassword(control)
+	case "validateProjectPassword":
+		c.handleValidateProjectPassword(control)
 	case "fsmTestCupOn":
 		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
 	case "fsmTestCupOff":
