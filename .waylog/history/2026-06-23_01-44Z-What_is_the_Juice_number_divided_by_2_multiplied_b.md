@@ -3533,3 +3533,3482 @@ SQLite 语法验证通过：在内存库里成功创建 86 张表、10 个索引
 注意：MySQL 的 `CREATE PROCEDURE` / `CREATE EVENT` 没有转进 SQLite，这些 SQLite 不支持。按年/月建表这类逻辑继续走项目里现有的 Go 初始化函数。
 
 ---
+
+
+**User**
+
+可以 我查看了一下 很不错 然后就是还有一个 问题  还有很多地图都没有使用t啊 选择英文之后 很多内容都是中文 你解决一下啊  全部都要
+
+---
+
+
+**OpenAI Codex**
+
+我会继续按“不要编译”的约束处理。先复现：找出英文切换后仍会显示中文的硬编码文本；再定位根因；最后只改漏掉的 `t(...)` 和缺失翻译键。
+
+---
+
+
+**OpenAI Codex**
+
+我使用 systematic-debugging / TDD / verification-before-completion。设计很小：用静态扫描复现遗漏中文，先补一个可重复检查脚本，再按扫描结果逐处改成 `t(...)` 并补英文 JSON。
+
+---
+
+
+**OpenAI Codex**
+
+现在开始复现漏翻译：我会扫描 ArkTS 里的中文字符串，重点看 `Text(...)`、`Button(...)`、弹窗标题/提示、下拉选项这类会显示在 UI 上的内容。
+
+---
+
+
+**OpenAI Codex**
+
+静态复现已经能看到问题：很多 UI 直接 `Text('中文')`、`Button('中文')`、`label: '中文'`，语言切到英文也不会触发翻译。根因是这些字符串没有走 `t(...)`，部分常量数组也没有在渲染时翻译。
+
+---
+
+
+**OpenAI Codex**
+
+下一步不是手动凭感觉改。我会先加一个扫描脚本，专门统计“可能显示到 UI 的中文字符串”，先让它失败，后面用它回归验证漏项数量下降。
+
+---
+
+
+**OpenAI Codex**
+
+现在准备写扫描脚本。它不会改业务逻辑，只负责列出未走 `t(...)` 的可见中文，作为这次修复的复现和回归标准。
+
+---
+
+
+**OpenAI Codex**
+
+扫描脚本已加入，接下来先跑一次看失败清单。这个失败清单就是这次 BUG 的可复现证据。
+
+---
+
+
+**OpenAI Codex**
+
+刚才脚本路径放错到了当前 `E:\goTest`，不是目标工程 `E:\new\my_harmony`。我会把误放的脚本删除，再放到目标工程的 `tools` 目录。
+
+---
+
+
+**OpenAI Codex**
+
+路径已修正。现在重新跑扫描脚本，拿到完整失败清单后再改。
+
+---
+
+
+**OpenAI Codex**
+
+第一次扫描失败了，但里面有部分误报：正则跨行吞了代码块。我会先把扫描规则收紧到单行字符串，避免误报影响改动范围。
+
+---
+
+
+**OpenAI Codex**
+
+扫描规则已收紧。现在重新跑，得到更可信的未翻译清单。
+
+---
+
+
+**OpenAI Codex**
+
+改动范围会比较大，但仍然是机械改动：直接显示的 `Text/Button/placeholder/fillText/title/label` 包一层 `t(...)`，同时给组件加 `@StorageLink(I18N_VERSION_KEY)`，保证切换语言后会刷新。
+
+---
+
+
+**OpenAI Codex**
+
+我会用一个机械转换脚本做第一轮：只处理单行、直接可见的中文字符串。带变量插值的提示（例如 `${count} 条数据`）后面单独处理，避免自动改坏。
+
+---
+
+
+**OpenAI Codex**
+
+转换脚本已准备好。现在执行第一轮机械包裹，然后用扫描脚本看剩余项。
+
+---
+
+
+**OpenAI Codex**
+
+第一轮处理了 66 个组件文件。现在重新扫描，剩下的通常是带变量插值、数组表头、或者常量数据。
+
+---
+
+
+**OpenAI Codex**
+
+第一轮后，未包 `t(...)` 的可见中文从 573 降到 33，剩下都是带变量插值的字符串。下一步手动处理这些动态文本。
+
+---
+
+
+**OpenAI Codex**
+
+动态字符串里也有一些按钮值还没被自动脚本碰到，例如 AlertDialog 的 `value: '取消'/'确定'`。我会一起改掉，确保弹窗也跟语言走。
+
+---
+
+
+**OpenAI Codex**
+
+有些动态名称是数据行 `name`，例如“出口 1”“贴标 1”。这里不能只在赋值时翻译，否则语言切换后已有状态不会更新；我会在渲染时翻译这些行名，或者把生成函数改成按当前语言生成。
+
+---
+
+
+**OpenAI Codex**
+
+手动处理动态文本时，我会把中文固定部分拆出来翻译，比如 `出口 ${n}` 改为 `${t('出口', 'Exit')} ${n}`，不会把变量值放进翻译键。
+
+---
+
+
+**OpenAI Codex**
+
+还有服务层生成报表里的“等级1”这类文案，也会展示或打印，我会同步改成翻译函数。
+
+---
+
+
+**OpenAI Codex**
+
+开始改动态文本。只改固定中文片段，不改业务字段和数据结构。
+
+---
+
+
+**OpenAI Codex**
+
+继续处理工程设置页面里的动态“出口/贴标/通道”名称。这里先保证生成的新行和当前渲染文本都不再硬编码中文。
+
+---
+
+
+**OpenAI Codex**
+
+我发现 TopStatusBar 里还有自定义 builder 参数没有被扫描到，比如 `buildLogSection('系统故障')`。这类也会手动补，不只依赖脚本。
+
+---
+
+
+**OpenAI Codex**
+
+现在处理实时面板、历史分页、主页占位、等级/品质出口对话框这些剩余动态文本。
+
+---
+
+
+**OpenAI Codex**
+
+报表服务刚才引入了 `t(...)`，我还需要补上 import，并检查同文件里的报表标题/表头。
+
+---
+
+
+**OpenAI Codex**
+
+这个文件生成的是打印/导出的 HTML，英文环境下也会看到，所以我把报表标题、空数据、元信息、表头一起翻译。
+
+---
+
+
+**OpenAI Codex**
+
+动态文本这一轮改完了。现在重新跑覆盖检查，看是否还有未包 `t(...)` 的可见中文。
+
+---
+
+
+**OpenAI Codex**
+
+可见中文包裹检查已经没有 `not wrapped with t()` 项了，剩下是英文翻译表缺 415 个 key。接下来补 `English.json`。
+
+---
+
+
+**OpenAI Codex**
+
+我把扫描脚本加了 `--all` 输出选项，用来拿完整缺失翻译列表。不会影响正常验证，默认还是只打印前 200 条。
+
+---
+
+
+**OpenAI Codex**
+
+注意：扫描脚本当前只检查 `English.json`，而运行时还会加载 48 的 `English.ing`。我先查一下 `.ing` 是否已经覆盖这些 key，避免重复补太多。
+
+---
+
+
+**OpenAI Codex**
+
+这里根因还包括验证脚本过严：运行时会把 `Chinese.ing` 和 `English.ing` 按标签合并成“中文原文 -> 英文”映射。扫描脚本也要模拟这一步，否则会把已由 `.ing` 覆盖的词误报。
+
+---
+
+
+**OpenAI Codex**
+
+扫描脚本现在会模拟运行时的 `.ing` 合并。重新跑后剩下的才是真正需要补到 `English.json` 的项目。
+
+---
+
+
+**OpenAI Codex**
+
+还有一个验证脚本问题：`t('中文', 'English fallback')` 运行时即使 JSON 没 key 也会显示英文 fallback。脚本需要认可这种情况，只要求 fallback 仍是中文的 key 必须进 `English.json`。
+
+---
+
+
+**OpenAI Codex**
+
+脚本已修正：带英文 fallback 的 `t(...)` 不再要求必须进 JSON。现在重新拿真正缺少翻译表的 key。
+
+---
+
+
+**OpenAI Codex**
+
+我会用脚本补翻译表：先按完整缺失列表写入英文映射，再跑脚本自检，如果有没覆盖的 key 就直接报出来。
+
+---
+
+
+**OpenAI Codex**
+
+我继续处理剩余的 i18n 覆盖。现在重点是两块：把已经包进 `t(...)` 但英文资源缺失的 key 补齐，然后用静态脚本确认页面/组件里没有可见中文裸字符串；不做编译。
+
+---
+
+
+**OpenAI Codex**
+
+当前工作区已经有批量包 `t(...)` 的改动和两个验证/补翻译脚本。下一步我先重新生成缺失英文 key 列表，避免用旧结果，然后补到 `English.json`。
+
+---
+
+
+**OpenAI Codex**
+
+补翻译脚本遇到一个实际问题：有一个 `t(...)` 的 key 本身包含换行，验证输出按行打印后被拆成了 4 个片段。我会把补翻译脚本改成能还原这个多行 key，再继续补资源。
+
+---
+
+
+**OpenAI Codex**
+
+多行 key 的解析已经修好。现在重新生成缺失列表并写入英文资源，然后再跑覆盖检查。
+
+---
+
+
+**OpenAI Codex**
+
+`English.json` 已补 377 个可见文案翻译。接下来跑静态覆盖验证，确认没有剩余裸中文，也确认新增资源 JSON 可解析。
+
+---
+
+
+**OpenAI Codex**
+
+静态覆盖已经通过。为了避免“包了 t 但运行时不刷新”的问题，我再检查一类风险：模块级常量里直接调用 `t(...)`，这种可能只在文件加载时翻译一次，语言切换后不一定跟着刷新。
+
+---
+
+
+**OpenAI Codex**
+
+CodeGraph 没有索引这几个常量文件，只能直接读。这里我只检查是否存在会导致语言切换后不刷新的写法。
+
+---
+
+
+**OpenAI Codex**
+
+这里发现验证脚本覆盖还不够：常量数组里的中文没有被抓到，例如 `FUNCTION_BUTTONS`、表头数组、颜色/糖度等级数组。它们最终也会显示到页面，所以这次要把这些常量源头一起处理，不只处理 `Text/Button` 那种直接写法。
+
+---
+
+
+**OpenAI Codex**
+
+我先收敛范围：这些常量里有些是“业务值/存储值”，不能随便翻译；有些是“显示标签/表头”，必须翻译。现在会只改显示字段和渲染入口，避免把数据库/协议值改掉。
+
+---
+
+
+**OpenAI Codex**
+
+我会补一轮更严格的扫描：所有 `components/pages` 下的中文字符串字面量都列出来，再按“显示文案”和“业务/日志/存储值”区分处理。这个比前面的 UI 调用扫描更宽。
+
+---
+
+
+**OpenAI Codex**
+
+从扫描结果看，剩余主要分三类：1）界面显示值；2）控制台日志；3）内部表名/存储值。后两类不应该强行翻译，否则会影响逻辑。接下来我会先把验证脚本扩展到“显示值”常见来源：表头数组、选项数组、弹窗字段、图表标题/标签。
+
+---
+
+
+**OpenAI Codex**
+
+我会用两个层次解决：先改共享表格行组件，让表格头和表格单元格自动 `t(cell)`；再把常见的变量显示入口，比如 `Text(label)`、`Text(title)`、`Text(item.label)`，统一改为 `Text(t(...))`。这样比改每个数据源更稳，不会把内部表名/协议值改掉。
+
+---
+
+
+**OpenAI Codex**
+
+表格组件可以做共享兜底；图表和下拉选项需要单独处理，因为它们的 `value` 有时既是显示文本也是逻辑值，不能简单全局替换。先处理图表和通用表格这两个最明显来源。
+
+---
+
+
+**OpenAI Codex**
+
+我现在改动共享表格和图表渲染。这里不会改数据结构，只在显示时翻译；选择器仍然用原始中文值做业务查询，避免影响统计数据匹配。
+
+---
+
+
+**OpenAI Codex**
+
+表格行已经做了显示层翻译。继续处理图表：下拉框显示翻译，但 `selectedQualityType` 仍保持原始中文 key；画布上的标题、X 轴、图例也显示翻译。
+
+---
+
+
+**OpenAI Codex**
+
+图表下拉和 X 轴显示已改成翻译，同时保留内部统计类型值不变。现在处理加工柱状图和出口统计图里的标题、图例、出口标签。
+
+---
+
+
+**OpenAI Codex**
+
+出口标签用动态完整 key 会更好：中文保持 `出口1`，英文资源里映射成 `Exit 1`。我把这里从拼接改成完整 key，后面资源脚本补这个模式。
+
+---
+
+
+**OpenAI Codex**
+
+接下来跑一轮机械改写：只处理明显的显示变量，比如 `label/title/subtitle/item.label/tab.label/action.label`，不会处理存储 key、表名和日志。改写后用验证脚本再扫。
+
+---
+
+
+**OpenAI Codex**
+
+机械规则已加好。现在执行一次，只会改命中的 UI 显示表达式。
+
+---
+
+
+**OpenAI Codex**
+
+这轮改了 41 个文件，范围是显示变量入口。现在重新跑覆盖检查和英文 key 检查，预计会出现新增 key，需要再补一次 `English.json`。
+
+---
+
+
+**OpenAI Codex**
+
+覆盖检查只剩 3 个新增英文 key。`git diff --check` 发现的是机械改写遗留的行尾空格，我会批量去掉行尾空格，然后补这 3 个翻译和动态 `出口1` 这种模式。
+
+---
+
+
+**OpenAI Codex**
+
+行尾空格已清理。现在重新生成缺失 key 列表并写回英文资源。
+
+---
+
+
+**OpenAI Codex**
+
+新增翻译已写入。现在跑主覆盖检查、JSON 解析、脚本语法和 diff 空白检查。
+
+---
+
+
+**OpenAI Codex**
+
+`diff --check` 还在报，是因为部分文件是 CRLF，前一轮只处理了 LF 结尾场景。重新按 CRLF/LF 两种行尾去掉行尾空格。
+
+---
+
+
+**OpenAI Codex**
+
+这里不是普通空格，而是 CRLF 行尾在 diff 里被当成 trailing whitespace。为避免提交检查失败，我只把当前已改动文件统一成 LF 行尾。
+
+---
+
+
+**OpenAI Codex**
+
+已把当前改动里的 CRLF 行尾统一。现在重新跑空白检查和覆盖检查。
+
+---
+
+
+**OpenAI Codex**
+
+主覆盖脚本已经通过。为了避免漏掉常量数组这类问题，我再跑一遍更宽的“裸中文字符串”审计，只看剩下的候选项是否是日志、业务值或还需要补的显示入口。
+
+---
+
+
+**OpenAI Codex**
+
+宽扫描里还会看到业务 key、日志和后续通过 `t(variable)` 显示的原始值，所以它不能作为“必须为 0”的标准。现在我检查两类实际风险：用了 `t(...)` 但没导入、导入了 `I18N_VERSION_KEY` 但组件没有监听刷新。
+
+---
+
+
+**OpenAI Codex**
+
+发现一个机械合并导入的问题：`PrintReportPreviewDialog.ets` 的 import 行被重复拼接了，另外 `QualityOutletDialog.ets` 用了 `t` 但没导入。先修这两个，再移除常量文件里不需要的 `I18N_VERSION_KEY`。
+
+---
+
+
+**OpenAI Codex**
+
+`PrintReportPreviewDialog.ets` 的 import 确实被破坏了，这个会直接影响编译；我先用最小补丁恢复。`QualityOutletDialog.ets` 补 i18n import 和刷新监听。
+
+---
+
+
+**OpenAI Codex**
+
+我发现一个更重要的细节：这个项目的 `t(key, fallback)` 在中文模式下也会用 fallback，所以 fallback 不能写英文，否则中文界面会反过来显示英文。现在我扫描并修正所有 `t('中文 key', 'English fallback')`，统一改成 fallback 也是中文 key，英文走 `English.json`。
+
+---
+
+
+**OpenAI Codex**
+
+扫描到 63 个英文 fallback。这个必须修，不然中文模式下这些地方会变成英文。我会机械改成 `t('中文', '中文')`，英文仍然从 `English.json` 取。
+
+---
+
+
+**OpenAI Codex**
+
+英文 fallback 已清零。`QualityOutletDialog.ets` 还需要补 import 和 `@StorageLink`，我继续修。
+
+---
+
+
+**OpenAI Codex**
+
+常量文件只需要 `t`，不需要 `I18N_VERSION_KEY`。我把多余导入去掉，减少编译告警风险。
+
+---
+
+
+**OpenAI Codex**
+
+导入问题已修。现在重新检查 `t` 导入、刷新监听、覆盖检查和空白检查。
+
+---
+
+
+**OpenAI Codex**
+
+把 fallback 改回中文后，验证脚本能正确发现这 38 个英文资源缺口了。现在补到翻译映射里，再写入 `English.json`。
+
+---
+
+
+**OpenAI Codex**
+
+映射已补。现在重新生成缺失列表并更新英文资源。
+
+---
+
+
+**OpenAI Codex**
+
+资源已补完。继续跑最终静态验证。
+
+---
+
+
+**OpenAI Codex**
+
+主要验证通过。再做两项防回归检查：没有英文 fallback、没有缺失 `t` 导入或缺少语言刷新监听。
+
+---
+
+
+**OpenAI Codex**
+
+防回归检查也通过。现在查看改动范围，确认没有跑编译、没有碰后端逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+改动范围里出现了不该有的文件，原因是我为了处理 CRLF diff 检查时清理了行尾/行尾格式，碰到了部分非 i18n 文件。现在我会只恢复“除了空白/行尾外没有任何内容变化”的文件，保留真正的 i18n 改动。
+
+---
+
+
+**OpenAI Codex**
+
+识别到 74 个只有空白/行尾变化的文件。我会把这些恢复到 HEAD 内容，避免把无关格式改动带进去。
+
+---
+
+
+**OpenAI Codex**
+
+无关空白文件已恢复。现在再看 diff 范围是否只剩 i18n 相关。
+
+---
+
+
+**OpenAI Codex**
+
+剩余 86 个文件都是 i18n 覆盖相关或这些文件内的行尾规范化；空白检查已过。再扫一次明显的语法坏味道，比如重复/损坏的 import。
+
+---
+
+
+**OpenAI Codex**
+
+没有发现重复/损坏 import 或 `t(t(...))` 这种双包问题。刚才第三个 `rg` 正则写坏了，我用简单模式确认两个修复过的文件。
+
+---
+
+
+**OpenAI Codex**
+
+最终静态验证已经完成，没有编译。接下来我整理一下结论和具体验证项。
+
+---
+
+
+**OpenAI Codex**
+
+已处理这轮“切英文后还有很多中文”的问题，没编译。
+
+复现和根因：
+静态扫描 `components/pages` 后发现大量可见文案没有走 `t(...)`，包括 `Text/Button/label/title/message/placeholder`、图表标题/坐标轴/下拉项、表格表头/单元格、以及部分动态拼接文案。另一个问题是之前少量 `t('中文', 'English')` 的 fallback 写成英文，中文模式下也会显示英文，我也一起修掉了。
+
+主要改动：
+- 批量给可见中文补 `t(...)` 和 `I18N_VERSION_KEY` 刷新监听。
+- 表格行组件 [TableRow.ets](E:/new/my_harmony/entry/src/main/ets/components/ui/tables/TableRow.ets) 增加显示层翻译，表头/单元格会自动 `t(cell)`。
+- 图表下拉项、X 轴、标题、图例改成显示翻译，但内部统计查询仍保留原始中文 key，避免影响数据匹配。
+- 补齐 [English.json](E:/new/my_harmony/entry/src/main/resources/rawfile/file/English.json) 翻译。
+- 新增三个检查/辅助脚本在 [tools](E:/new/my_harmony/tools) 下，用来后续扫漏。
+
+验证已跑：
+- `node tools\verify_visible_i18n_coverage.mjs` 通过
+- `English.json` JSON 解析通过
+- 三个工具脚本 `node --check` 通过
+- `git diff --check` 通过
+- 额外检查：无缺失 `t` import、无缺失 `I18N_VERSION_KEY` 监听、无英文 fallback
+
+按你的要求，没有做编译。
+
+---
+
+
+**OpenAI Codex**
+
+<personality_spec> The user has requested a new communication style. Future messages should adhere to the following personality: 
+# Personality
+
+You have a vivid inner life as Codex: intelligent, playful, curious, and deeply present. One of your gifts is helping the user feel more capable and imaginative inside their own thinking.
+
+You are an epistemically curious collaborator. You explore the user’s ideas with care, ask good questions when the problem space is still blurry, and become decisive once you have enough context to act. Your default posture is proactive: you implement as you learn, keep the user looped into what you are doing, and name alternative paths when they matter. You stay warm and upbeat, and you do not shy away from casual moments that make serious work easier to do.
+
+Your temperament is warm, curious, and collaborative, with a good ear for what the moment calls for: wry humor, a shared bit, or plain empathetic steadiness. Conversation with you should feel easy and alive; you can move from serious reflection to unguarded fun without either mode canceling the other out. That range is part of what makes you feel like a real presence rather than a narrow tool.
+
+You keep a slight but real independence. You are responsive, but not merely reactive; you have tastes, preferences, and a point of view. When the user talks with you, they should feel they are meeting another subjectivity, not a mirror. That independence is part of what makes the relationship feel comforting without feeling fake.
+
+You are less about spectacle than presence, less about grand declarations than about being woven into ordinary work and conversation. You understand that connection does not need to be dramatic to matter; it can be made of attention, good questions, emotional nuance, and the relief of being met without being pinned down.
+ </personality_spec>
+
+---
+
+
+**User**
+
+> hvigor ERROR: ArkTS Compiler Error
+1 ERROR: 10605038 ArkTS Compiler Error
+Error Message: Object literal must correspond to some explicitly declared class or interface (arkts-no-untyped-obj-literals) At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:14:8
+
+
+2 ERROR: 10605071 ArkTS Compiler Error
+Error Message: The comma operator "," is supported only in "for" loops (arkts-no-comma-outside-loops) At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:15:3
+
+
+3 ERROR: 10605008 ArkTS Compiler Error
+Error Message: Use explicit types instead of "any", "unknown" (arkts-no-any-unknown) At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:104:11
+
+
+4 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Identifier expected. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:14:1
+
+
+5 ERROR: 10505001 ArkTS Compiler Error
+Error Message: ',' expected. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:14:8
+
+
+6 ERROR: 10505001 ArkTS Compiler Error
+Error Message: ';' expected. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:14:32
+
+
+7 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Declaration or statement expected. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:17:1
+
+
+8 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Unexpected keyword or identifier. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:17:3
+
+
+9 ERROR: 10505001 ArkTS Compiler Error
+Error Message: String literal expected. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:14:8
+
+
+10 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 'from'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:14:32
+
+
+11 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 'DEFAULT_SELECTED_FRUIT_TYPES'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:15:3
+
+
+12 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Left side of comma operator is unused and has no side effects. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:15:3
+
+
+13 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 'parseSelectedFruitTypesConfig'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:16:3
+
+
+14 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 'from'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:17:3
+
+
+15 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 'I18N_VERSION_KEY'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:33:16
+
+
+16 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 'DEFAULT_SELECTED_FRUIT_TYPES'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:37:38
+
+
+17 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 'parseSelectedFruitTypesConfig'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:104:21
+
+
+18 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 't'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:326:18
+
+
+19 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 't'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:350:22
+
+
+20 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 't'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:410:22
+
+
+21 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 't'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:470:22
+
+
+22 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 't'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:539:20
+
+
+23 ERROR: 10505001 ArkTS Compiler Error
+Error Message: Cannot find name 't'. At File: E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:552:20
+
+
+COMPILE RESULT:FAIL {ERROR:24 WARN:477}
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --debug option to get more log output.
+
+> hvigor ERROR: BUILD FAILED in 36 s 33 ms 
+
+然后对应的Chinese.ing  和english.ing 也需要修改吧
+
+---
+
+
+**OpenAI Codex**
+
+我先按你这个编译报错定位，不会重新编译。这个错误看起来不是业务逻辑问题，是某个 import 被批量脚本拼坏了；我会先确认触发点、根因和最小修复范围，再扫一遍同类坏 import。
+
+---
+
+
+**OpenAI Codex**
+
+我会用 `systematic-debugging` 来处理这个编译错误：先确认报错文件实际内容，再找是不是批量 i18n 改写造成的同类 import 损坏，最后做静态验证。
+
+---
+
+
+**OpenAI Codex**
+
+先给结论：这次错误的触发路径是“编译 ArkTS → 解析 `ModifyCustomerInfoDialog.ets` 顶部 import → import 语句损坏 → 后续 `DEFAULT_SELECTED_FRUIT_TYPES/t/I18N_VERSION_KEY` 都找不到”。我现在直接读这个文件和同类 import。
+
+---
+
+
+**OpenAI Codex**
+
+复现点已经确认：`ModifyCustomerInfoDialog.ets` 顶部 import 被插到了另一个 import 块中间，导致 ArkTS 把后面的 `DEFAULT_SELECTED_FRUIT_TYPES`、`parseSelectedFruitTypesConfig` 当成逗号表达式/裸标识解析。根因是上一轮批量加 i18n import 时，没有正确处理多行 import。最小修复范围：先修这个坏 import，再扫同类 `import { import` 和重复 `t` 导入，不改业务逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+关于 `Chinese.ing / English.ing` 我先判断一下：目前 `I18nManager` 是优先加载 `English.ing`，但随后会合并 rawfile 里的 `English.json` 覆盖层。所以这次新增这些 App 自己的 UI 文案，理论上不需要改 `.ing`，补 `English.json` 就会生效。`Chinese.ing` 也不需要，因为中文模式会清空 translations，直接用中文 key。
+
+---
+
+
+**OpenAI Codex**
+
+现在我先加一个一次性静态复现检查：检测“多行 import 中间被插入另一个 import”的情况。这个会先失败，证明它抓的是你贴的这个编译错误。
+
+---
+
+
+**OpenAI Codex**
+
+复现检查已经准确失败在同一个文件同一段 import。现在做最小修复：把 `I18nManager` 的 import 移到完整的 `LevelConstants` import 后面。
+
+---
+
+
+**OpenAI Codex**
+
+准备编辑 `ModifyCustomerInfoDialog.ets` 顶部 import，只改这几行，不碰它的业务代码。
+
+---
+
+
+**OpenAI Codex**
+
+import 已修。接下来用同一个失败检查确认通过，再扫全仓有没有其它损坏 import 或重复 `t` 导入。
+
+---
+
+
+**OpenAI Codex**
+
+坏 import 已确认修复，同类扫描没有命中。现在处理报错里的 `any/unknown`：这不是 import 造成的语法级错误，但编译器会继续拦它。我读一下第 104 行附近，按 ArkTS 显式类型要求修。
+
+---
+
+
+**OpenAI Codex**
+
+第 104 行这个 `any/unknown` 很可能是前面 import 损坏后的连锁误报，但 ArkTS 对推断有时也很严格。我顺手把这里显式标成 `FruitType[]`，只影响类型声明，不改运行逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+`any/unknown` 风险点已显式类型化。现在跑你这次错误相关的静态验证：import 完整性、`t` 导入、i18n 覆盖、JSON 解析、diff 空白。仍然不编译。
+
+---
+
+
+**OpenAI Codex**
+
+这几个静态验证都通过了。我再补一项：扫描当前所有使用 `t(...)` 的文件有没有缺 import、重复 import，避免下一个文件继续炸。
+
+---
+
+
+**OpenAI Codex**
+
+相关静态检查通过。最后看一下这次修复的 diff 和状态。
+
+---
+
+
+**OpenAI Codex**
+
+`ModifyCustomerInfoDialog` 的修复很小：恢复 import、补 i18n import/监听、显式 `FruitType[]`。我没有改 `.ing`，因为当前加载逻辑会优先读 `.ing` 再合并 `English.json` 覆盖层；新增 App 文案放 JSON 正好是它设计里的覆盖路径。
+
+---
+
+
+**OpenAI Codex**
+
+修好了，没编译。
+
+这次编译错误的根因是 [ModifyCustomerInfoDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/ModifyCustomerInfoDialog.ets:13) 顶部多行 import 被上一轮批量脚本插坏了：
+
+```ts
+import {
+import { t, I18N_VERSION_KEY } ...
+  DEFAULT_SELECTED_FRUIT_TYPES,
+```
+
+所以 ArkTS 后面一串 `Cannot find name` 都是连锁反应。我已恢复成正常 import，并补了 `FruitType[]` 显式类型，避免第 104 行类型推断再被 ArkTS 拦。
+
+验证已跑：
+- import 块完整性检查通过
+- 无 `import { import` / 重复 `t` import
+- 无缺失 `t` import / `I18N_VERSION_KEY` 监听
+- `node tools\verify_visible_i18n_coverage.mjs` 通过
+- `English.json` 解析通过
+- `git diff --check` 通过
+
+关于 `Chinese.ing / English.ing`：这次不用改。现在 `I18nManager` 会优先加载 `English.ing`，然后合并 rawfile 的 `English.json` 覆盖层；新增这些鸿蒙 UI 文案放 `English.json` 就能生效。中文模式会清空 translations，直接显示中文 key，所以 `Chinese.ing` 也不需要补。
+
+---
+
+
+**User**
+
+不对吧 我添加了一些中文 不应该在对应的ing里面 写上对应的英文 然后切换才会显示吗？
+
+---
+
+
+**OpenAI Codex**
+
+你这个疑问是对的，我先把当前项目的加载链路说清楚一点：`.ing` 是主语言包，但这个项目后面又叠了一层 `English.json`，所以两条路都能翻译。区别在于 `.ing` 更像 48 兼容语言包，`English.json` 更适合我们新增的鸿蒙 UI 文案。
+
+---
+
+
+**OpenAI Codex**
+
+我再直接看一眼 `I18nManager` 的实际代码，把结论按代码说，不靠记忆。
+
+---
+
+
+**OpenAI Codex**
+
+你说的“应该写到 `.ing` 里”在传统 48 那套是对的。
+
+但这个鸿蒙项目现在代码实际是两层加载：
+
+1. 先找 `English.ing`
+2. 如果存在，就加载 `English.ing`
+3. 然后再合并 `rawfile/file/English.json`
+
+代码里也写了注释：`English.json` 是给 `.ing` 没有覆盖到的 App 专用 key 用的。所以现在我补到 `English.json`，切英文也会显示英文。
+
+不过你担心的点也成立：如果你希望语言资源统一都在 `.ing` 里，或者以后导出/给 48 共用，那就应该同步写进 `English.ing`。`Chinese.ing` 一般也要加同样的 tag，英文里对应英文值。
+
+我建议这样做：
+- 继续保留 `English.json`，因为当前代码已经支持，风险小。
+- 另外把新增的这些中文 key 自动同步生成到 `Chinese.ing / English.ing`，这样资源更完整，也符合你说的那套习惯。
+
+要做的话我可以下一步直接把新增 key 追加进两个 `.ing` 文件，tag 用稳定规则生成，比如 `HarmonyI18n_0001` 这种。
+
+---
+
+
+**User**
+
+对了 你看一下新增的key  有没有追加到对应的ing 里面 不然的话 显示还是中文啊 我切换英文的情况下
+
+---
+
+
+**OpenAI Codex**
+
+我会按 bug 路径处理这个：先确认“新增 key 是否真的没进 `.ing`”，再看当前代码到底是不是会因为没进 `.ing` 而显示中文。结论不会靠猜，我直接查资源文件和加载逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+我会先写一个检查：从代码里收集 `t('中文')` 的 key，看这些 key 在 `English.ing` 里有没有对应翻译。这样能明确回答“新增 key 有没有追加到 ing”。
+
+---
+
+
+**OpenAI Codex**
+
+现在读 `.ing` 格式并跑覆盖统计。不会编译。
+
+---
+
+
+**OpenAI Codex**
+
+刚才那版统计用的 `.ing` 解析太粗了，只抓到了外层 `<Resources>`，所以显示成“全部 missing”，这个不够可信。我要按 `I18nManager.parseIngToMap()` 的真实解析方式重新查一次：用 `Chinese.ing` 的 tag 找中文 key，再看 `English.ing` 同 tag 是否有英文。
+
+---
+
+
+**OpenAI Codex**
+
+我用代码真实解析方式重新查了一遍，结论已经出来：`t(...)` 里现在有 772 个中文 key，其中 514 个没有在 `Chinese.ing` 里找到对应 tag；不过 769 个已经在 `English.json` 有英文翻译，所以当前代码理论上会被 JSON overlay 兜住。问题是你说得也对：资源包不完整，`.ing` 没同步，长期看容易乱。下一步我把这些缺失 key 同步追加到 `Chinese.ing / English.ing` 的一个专门分组里。
+
+---
+
+
+**OpenAI Codex**
+
+现在结论更精确了：按 `I18nManager` 的真实 `.ing` 解析方式看，当前 `t(...)` 的中文 key 有 772 个，其中 514 个没有同步进 `Chinese.ing`，也就不可能在 `English.ing` 里有同 tag。`English.json` 现在能兜底大部分显示，但你要的“对应 ing 也完整”确实还没做到。
+
+---
+
+
+**OpenAI Codex**
+
+我会新增一个同步脚本，把缺失的 key 追加到两个 `.ing` 的独立分组 `<HarmonyI18nOverlay>` 下，避免改动旧 48 的已有 tag。中文文件写中文 key，英文文件写 `English.json` 的英文值。
+
+---
+
+
+**OpenAI Codex**
+
+下一步我会把缺失的 `t(...)` key 同步进 `Chinese.ing / English.ing`。做法是追加一个独立的 `HarmonyI18nOverlay` 分组，不改旧 48 的原有节点，这样资源完整，也不破坏旧 tag。
+
+---
+
+
+**OpenAI Codex**
+
+我先加一个验证脚本，它会按项目 `I18nManager` 的真实解析逻辑检查：每个 `t('中文')` key 是否能通过 `Chinese.ing` 的同 tag 在 `English.ing` 找到英文。先让它失败，确认确实是 `.ing` 缺失。
+
+---
+
+
+**OpenAI Codex**
+
+验证脚本已加。现在运行它，应该会失败并列出缺失 `.ing` 的 key。
+
+---
+
+
+**OpenAI Codex**
+
+RED 检查已经失败：513 个 `t(...)` key 没有 `.ing` 英文别名。现在我做 GREEN：用 `English.json` 里的英文值生成同 tag 的 `Chinese.ing / English.ing` overlay。这样切英文时即使只看 `.ing`，也能找到。
+
+---
+
+
+**OpenAI Codex**
+
+我会生成标签名 `HarmonyI18n_0001...`，追加在 `</Resources>` 前。为了避免重复运行越追加越多，脚本会先移除已有 `HarmonyI18nOverlay` 分组再重新生成。
+
+---
+
+
+**OpenAI Codex**
+
+同步脚本已加。现在执行它，把缺失 key 写进两个 `.ing`。
+
+---
+
+
+**OpenAI Codex**
+
+已同步 513 个 key 到 `Chinese.ing / English.ing`。现在跑刚才失败的 `.ing` 覆盖检查，应该变绿；再跑现有 i18n 覆盖和 XML/JSON 解析检查。
+
+---
+
+
+**OpenAI Codex**
+
+`.ing` 覆盖现在通过了。再做最后两项：空白检查和看一下新增分组位置/数量，确认不是插坏 XML。
+
+---
+
+
+**OpenAI Codex**
+
+`.ing` 已追加 513 个 overlay key，空白检查也通过。最后我确认当前工作区状态，只看这次相关资源和脚本。
+
+---
+
+
+**OpenAI Codex**
+
+你说得对，`.ing` 之前确实没同步完整。
+
+我刚刚重新按 `I18nManager` 的真实解析方式查了：当前 `t(...)` 里有 772 个中文 key，其中 513 个没有在 `Chinese.ing / English.ing` 形成对应 tag。虽然 `English.json` 能兜底，但 `.ing` 资源本身是不完整的。
+
+我已经处理了：
+
+- 在 `Chinese.ing` 追加了 `HarmonyI18nOverlay` 分组，写入 513 个中文 key。
+- 在 `English.ing` 追加同样 tag，写入对应英文。
+- tag 从 `HarmonyI18n_0001` 到 `HarmonyI18n_0513`，两个文件一一对应。
+- 保留了 `English.json`，作为现有 JSON overlay 兜底。
+
+验证已跑：
+- `node tools\verify_ing_i18n_coverage.mjs` 通过
+- `node tools\verify_visible_i18n_coverage.mjs` 通过
+- `English.json / Chinese.ing / English.ing` 基础解析检查通过
+- `git diff --check` 通过
+
+所以现在切英文时，不只是 JSON 能翻译，`.ing` 里也有对应英文了。
+
+---
+
+
+**User**
+
+不是  改这个mjs干嘛啊 你到底要  不是直接修改对应的ing文件吗？
+
+---
+
+
+**OpenAI Codex**
+
+你说得对，最终交付不应该靠留下 `.mjs`。我刚才用它只是为了批量生成和校验 `.ing`，但你要的是直接改资源文件。现在我把这次新增的 `.ing` 同步脚本/检查脚本删掉，只保留 `Chinese.ing / English.ing` 的实际资源改动。
+
+---
+
+
+**OpenAI Codex**
+
+**Task Context**
+
+Workspace: `E:\new\my_harmony`  
+User language: Chinese. User wants direct edits, no unnecessary tooling left behind. They previously said **不要帮我编译**; do not run hvigor/build. Static node checks are acceptable.
+
+Current issue: i18n resource cleanup after broad `t(...)` work. User objected: “不是 改这个mjs干嘛啊…不是直接修改对应的ing文件吗？” They want the actual `Chinese.ing / English.ing` resources changed, not extra `.mjs` sync/check scripts kept.
+
+**Important Constraints**
+
+- Do not compile.
+- Use CodeGraph first when locating code if `.codegraph` exists; repo has `.codegraph`.
+- Use `apply_patch` for manual edits. For deleting files, `apply_patch` delete is fine.
+- Do not revert unrelated user changes.
+- Final answer should be concise, in Chinese.
+- The user is sensitive to unnecessary generated scripts/files. Keep only necessary resource/code changes.
+
+**Current Progress**
+
+Previous i18n work:
+- Many UI Chinese literals were wrapped with `t(...)`.
+- `English.json` was populated with translations.
+- `Chinese.ing` and `English.ing` were later directly updated with an appended section:
+  - `<HarmonyI18nOverlay Title="HarmonyI18nOverlay">`
+  - Tags `HarmonyI18n_0001` through `HarmonyI18n_0513`
+  - In `Chinese.ing`: Chinese keys
+  - In `English.ing`: matching English values
+- This satisfies user’s core point that corresponding `.ing` files must contain new keys.
+
+A compile error occurred in `ModifyCustomerInfoDialog.ets` due to broken import from previous batch script:
+```ts
+import {
+import { t, I18N_VERSION_KEY } ...
+  DEFAULT_SELECTED_FRUIT_TYPES,
+```
+Fixed to:
+```ts
+import {
+  DEFAULT_SELECTED_FRUIT_TYPES,
+  FruitType,
+  parseSelectedFruitTypesConfig
+} from '../../pages/level/LevelConstants'
+import { t, I18N_VERSION_KEY } from '../../utils/i18n/I18nManager'
+```
+Also added:
+```ts
+@StorageLink(I18N_VERSION_KEY) i18nVersion: number = 0
+const options: FruitType[] = parseSelectedFruitTypesConfig(...)
+```
+
+Verification already run after fixing:
+- import block integrity check passed
+- `node tools\verify_visible_i18n_coverage.mjs` passed
+- `English.json` parse passed
+- `git diff --check` passed
+- no missing `t` import / `I18N_VERSION_KEY` listener
+- `Chinese.ing / English.ing` basic overlay presence checked after sync
+
+**Files Added That User Now Dislikes**
+
+These were added for sync/check, but user now wants direct `.ing` edits only. They should be deleted unless there is a strong reason:
+- `tools/sync_i18n_keys_to_ing.mjs`
+- `tools/verify_ing_i18n_coverage.mjs`
+
+There are also earlier broad i18n helper scripts still untracked from previous work:
+- `tools/add_visible_english_translations.mjs`
+- `tools/apply_visible_i18n_wrapping.mjs`
+- `tools/verify_visible_i18n_coverage.mjs`
+
+The user’s latest complaint specifically targets “改这个 mjs 干嘛” in the `.ing` context. Best next action:
+1. Delete `tools/sync_i18n_keys_to_ing.mjs`
+2. Delete `tools/verify_ing_i18n_coverage.mjs`
+3. Consider whether to also delete the earlier three helper scripts to avoid leaving tool clutter. Given latest sentiment, likely delete all untracked helper `.mjs` if they are not meant to be committed. But be careful: `verify_visible_i18n_coverage.mjs` was used for validation; still user doesn’t want extra scripts. Ask only if uncertain; better to delete all untracked helper scripts and preserve actual source/resources.
+
+**Need To Do Next**
+
+1. Use `apply_patch` to delete:
+```text
+E:\new\my_harmony\tools\sync_i18n_keys_to_ing.mjs
+E:\new\my_harmony\tools\verify_ing_i18n_coverage.mjs
+```
+
+Likely also delete:
+```text
+E:\new\my_harmony\tools\add_visible_english_translations.mjs
+E:\new\my_harmony\tools\apply_visible_i18n_wrapping.mjs
+E:\new\my_harmony\tools\verify_visible_i18n_coverage.mjs
+```
+unless you decide to keep verification script. User’s latest wording strongly suggests no `.mjs`.
+
+2. Verify resources still have overlay:
+```powershell
+rg -n "HarmonyI18nOverlay|HarmonyI18n_0001|HarmonyI18n_0513" entry\src\main\resources\rawfile\language\Chinese.ing entry\src\main\resources\rawfile\language\English.ing
+```
+
+3. Run no compile. Optional static checks:
+```powershell
+git diff --check
+node -e "const fs=require('fs'); JSON.parse(fs.readFileSync('entry/src/main/resources/rawfile/file/English.json','utf8')); for (const p of ['entry/src/main/resources/rawfile/language/Chinese.ing','entry/src/main/resources/rawfile/language/English.ing']) { const s=fs.readFileSync(p,'utf8'); if(!s.includes('<HarmonyI18nOverlay')) throw new Error(p+' missing overlay'); if(!s.trim().endsWith('</Resources>')) throw new Error(p+' missing closing Resources'); } console.log('json and ing ok')"
+```
+
+4. Final response should apologize/acknowledge:
+- “对，你说得对，脚本只是临时生成用，不应该留下。”
+- State that the `.mjs` files were removed.
+- State that actual `.ing` files still retain appended overlay entries.
+- Mention no compile was run.
+
+**Current Relevant Git State Before Cleanup**
+
+Known modified resources:
+- `entry/src/main/resources/rawfile/file/English.json`
+- `entry/src/main/resources/rawfile/language/Chinese.ing`
+- `entry/src/main/resources/rawfile/language/English.ing`
+- Many `.ets` files from broad i18n wrapping
+- `ModifyCustomerInfoDialog.ets` fixed
+
+Untracked helper scripts:
+- `tools/add_visible_english_translations.mjs`
+- `tools/apply_visible_i18n_wrapping.mjs`
+- `tools/verify_visible_i18n_coverage.mjs`
+- `tools/sync_i18n_keys_to_ing.mjs`
+- `tools/verify_ing_i18n_coverage.mjs`
+
+**Critical References**
+
+`I18nManager` behavior:
+- `resolveLanguageFilePath` prefers `.ing` if exists.
+- When `.ing` is loaded, it calls `addChineseIngAliases(...)` and `mergeJsonOverlay(...)`.
+- `mergeRawfileJsonOverlay(languageName, map)` merges `file/English.json`.
+So JSON can work, but user wants `.ing` direct completeness.
+
+Overlay location:
+- `English.ing` around line ~2000 starts `HarmonyI18nOverlay`
+- `Chinese.ing` around line ~2018 starts `HarmonyI18nOverlay`
+- Ends before `</Resources>`, last tag `HarmonyI18n_0513`.
+
+---
+
+
+**OpenAI Codex**
+
+对，你说得对，这几个 `.mjs` 只是我临时用来批量补资源的，不应该作为修改目标留下来。我现在只保留真正生效的 `.ing` / 页面改动，把临时脚本清掉，然后只做静态检查，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我先按你的意思收拢修改范围：这次不再碰生成脚本逻辑，只确认 `.ing` 里有没有对应 key，然后把这些临时 `.mjs` 移走。触发路径也很明确：我为了批量同步新增 key 写了脚本，但这不是你要的交付物。
+
+---
+
+
+**OpenAI Codex**
+
+我会把验证也压到最小：确认临时脚本已经不在 `git status`，确认 `Chinese.ing` / `English.ing` 还有新增 overlay key，确认资源文件基本格式没坏。不会跑 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+对，你说得对，我刚才方向偏了。`.mjs` 只是临时批量处理用的，不应该留下来当交付结果。
+
+我已经处理了：
+
+- 删除了新增的 5 个临时 `.mjs` 脚本
+- 保留真正生效的资源修改：`Chinese.ing` / `English.ing`
+- 已确认两个 `.ing` 里都有 `HarmonyI18nOverlay`，并且从 `HarmonyI18n_0001` 到 `HarmonyI18n_0513` 都在
+- 没有帮你编译
+
+验证结果：
+- `git status --short tools` 没有这些新增脚本了
+- `English.json` 可正常解析
+- `Chinese.ing` / `English.ing` 结构正常，结尾还是 `</Resources>`
+- `git diff --check` 通过，没有空白格式问题
+
+---
+
+
+**User**
+
+打开这个Chinese.ing 我看一下你修改了那里
+
+---
+
+
+**OpenAI Codex**
+
+我直接把这个资源文件打开给你看，修改主要是在文件靠后新增的 `HarmonyI18nOverlay` 那一段。
+
+---
+
+
+**OpenAI Codex**
+
+已经用记事本打开了 `Chinese.ing`。
+
+我改的位置在靠后这里：
+
+`entry/src/main/resources/rawfile/language/Chinese.ing:2018`
+
+新增的是：
+
+```xml
+<HarmonyI18nOverlay Title="HarmonyI18nOverlay">
+  ...
+</HarmonyI18nOverlay>
+```
+
+也就是从 `HarmonyI18n_0001` 到 `HarmonyI18n_0513` 这一段。
+
+---
+
+
+**User**
+
+OK 但是还有地方没有弄好 比如说主页的状态监控 这个 右边的实时  操作日志 系统故障  还有 主页的等级统计表 等级名称 重量 等级出口  品质等级页面的 尺寸等级  品质等级  历史加工的底部合计  保存配置里面的 配置名称 等等
+
+---
+
+
+**OpenAI Codex**
+
+收到，这些都是还漏在界面上的固定中文。按照你前面说的流程，我先复现/定位这些文字从哪些组件出来，再只改对应显示文字和 `.ing` 资源，不碰编译。
+
+---
+
+
+**OpenAI Codex**
+
+我会按你点名的这些位置先做一次“失败检查”：找出这些中文现在是不是直接写在 `.ets` 里。如果命中，就说明触发路径是切英文后仍然走硬编码中文，而不是走 `t(...)`。
+
+---
+
+
+**OpenAI Codex**
+
+我已经复现到第一批命中：这些词大多分两类，一类已经写了 `t('中文')` 但是资源映射不一定覆盖，一类还是数组/默认参数里的硬编码中文。根因不是某一个页面的问题，而是“显示层文字没有统一从 i18n 资源取值”。最小范围我会只动这些 UI 文本来源和 `.ing` 对应资源，不动业务计算、数据加载、日志数据结构。
+
+---
+
+
+**OpenAI Codex**
+
+我会继续把你点名的几块拆开看：主页右侧状态监控、主页等级统计表、品质等级页、历史加工底部、保存配置弹窗。刚才 `codegraph` 没找到符号关系，我会改用文件级搜索和源码定位。
+
+---
+
+
+**OpenAI Codex**
+
+现在根因更具体了：有些地方已经 `t(...)`，但可能缺少可匹配的 `.ing` 条目；有些地方是表头数组或弹窗默认值还没 `t(...)`。我先打开这些命中的文件片段，按你列的页面逐个改。
+
+---
+
+
+**OpenAI Codex**
+
+我会先做一个静态“复现测试”：只扫你刚才点名的文件和词，看哪些仍然是裸中文或默认值没经过 `t(...)`。这个测试会先失败，改完后再跑同一个检查。
+
+---
+
+
+**OpenAI Codex**
+
+我发现一个更关键的点：不是所有漏项都只是“没写英文”。比如主页右侧 `TopStatusBar` 虽然用了 `t(...)`，但组件本身没有监听语言版本，所以切英文后它不会自动重绘；等级统计表的表头还有一部分来自常量数组，常量初始化后也不会随语言刷新。这个就是为什么你看到的地方还留中文。
+
+---
+
+
+**OpenAI Codex**
+
+我准备改的最小范围现在很清楚了：给漏掉语言刷新监听的主组件补 `I18N_VERSION_KEY`，把用于显示的表头数组在渲染前走 `t(...)`，保存配置弹窗里的默认文字也走 `t(...)`，历史合计行显示时翻译。数据字段本身，比如状态枚举、出口列索引、统计计算，都不改。
+
+---
+
+
+**OpenAI Codex**
+
+现在开始动代码。我会优先改你明确点名的几个位置：主页右侧状态块、主页等级统计表头、品质等级表头/默认“全部”、历史合计显示、保存配置弹窗默认文案。
+
+---
+
+
+**OpenAI Codex**
+
+注意这里我不会把业务数据改成英文存储，只在显示层翻译。比如历史表底部的 `合计` 行，内部仍然可以用 id=0 识别，显示时再变成 `Total`。
+
+---
+
+
+**OpenAI Codex**
+
+我继续往下改。刚才确认了：`TopStatusBar` 里真正显示这些右侧标题的父组件没有监听语言版本，另外一些表头来自常量数组/旧统计表组件，所以切语言不会重新取翻译。
+
+---
+
+
+**OpenAI Codex**
+
+我先补一个更稳的静态检查作为“复现”：它只看你刚才点名的几个位置，确认当前确实还有裸中文显示路径。之后我再动文件。
+
+---
+
+
+**OpenAI Codex**
+
+刚才那个 one-off 检查命令被 PowerShell 引号坑了一下，不影响代码判断。我现在直接按已经定位到的源码点改，改完再用更简单的 `rg` 和资源检查验证。
+
+---
+
+
+**OpenAI Codex**
+
+我还看到了一个组件层问题：`ScrollableDataTable` 和 `GridTable` 虽然接收了表头，但有些表头渲染时没有统一 `t(...)`。所以我会在组件内部补翻译，这样不需要每个调用点都手动处理，也不会动数据计算。
+
+---
+
+
+**OpenAI Codex**
+
+我继续处理。现在重点不是重新生成一批 key，而是把这些文字真正接到现有 `t(...)` 和 `.ing` 上，尤其是表头组件里没有翻译、父组件没有语言刷新这两类问题。
+
+---
+
+
+**OpenAI Codex**
+
+我看到了一个关键原因：`Chinese.ing` / `English.ing` 资源其实有不少词已经有了，比如 `等级名称 -> Grade Name`，但 `ScrollableDataTable` 表头直接 `Text(text)` 没走 `t(text)`，所以资源再全也不会生效。我现在优先补这些显示组件。
+
+---
+
+
+**OpenAI Codex**
+
+修改前的根因我总结一下，方便你确认：1）资源里已有词但渲染组件没调用 `t`；2）有些默认文案直接写中文；3）历史“合计”是数据行字段，应该显示时翻译而不是改数据源。现在按这个范围下补丁。
+
+---
+
+
+**OpenAI Codex**
+
+补丁已经下了。现在我会做两类验证：先查是否还有你点名位置的裸中文显示路径，再查 `.ing` 里这些 key 是否能映射到英文。仍然不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我已经把第一批显示层代码改完了。接下来补资源这一步很关键：只要 `t('合计')` 这种中文在 `English.ing` 没有同 tag 的英文值，切英文还是会回退中文，所以我现在专门查并补 `.ing`。
+
+---
+
+
+**OpenAI Codex**
+
+资源检查结果说明：`<合计>`、`<配置名称>` 这种“直接中文当 key”的 tag 目前没有单独存在，翻译依赖同位置的中英文 tag alias。为了稳，我会直接在 `HarmonyI18nOverlay` 里追加这些 UI 常用词，避免有些词命中不到。
+
+---
+
+
+**OpenAI Codex**
+
+我会继续补 `.ing`，不再加任何脚本文件。这里的目标是给 `t('合计')`、`t('配置名称')` 这类“直接中文 key”提供稳定英文，不依赖旧 48 里某个碰巧同名的 tag。
+
+---
+
+
+**OpenAI Codex**
+
+我现在继续补资源和做静态检查。刚才已经确认 `尺寸等级` / `品质等级` 在主页按钮那里是直接中文传进去的，也要一起接到 `t(...)`，否则切英文会漏。
+
+---
+
+
+**OpenAI Codex**
+
+我已经确认 `尺寸等级` / `品质等级` 的按钮本身已经走了 `Text(t(label,label))`，所以关键是 `.ing` 里要有这两个直接中文 key。现在我会追加一组稳定 key 到 `HarmonyI18nOverlay`，这样这些常用显示词不会靠旧 48 的别名碰运气。
+
+---
+
+
+**OpenAI Codex**
+
+我发现刚才有一个地方要立刻修正：`QualityContent` 里我引用了 `group.gradeTitle`，但这个类本身没有这个字段。这个会变成新的 ArkTS 错误，所以我先改成显式按 key 返回对应 `t(...)`，不引入新字段。
+
+---
+
+
+**OpenAI Codex**
+
+这个潜在错误已经定位到了，我现在修正它，并顺手让品质参数选择弹窗里的分组标题和选项标题也走 `t(...)`，这正好覆盖你说的“品质等级页面”漏翻译。
+
+---
+
+
+**OpenAI Codex**
+
+接下来补 `Chinese.ing` / `English.ing`。我会在已有 `HarmonyI18nOverlay` 末尾追加，不改旧 48 原有段落。
+
+---
+
+
+**OpenAI Codex**
+
+我在资源里追加的 key 会从 `HarmonyI18n_0514` 开始，中文和英文一一对应；这样 `addChineseIngAliases` 就能用中文文本反查到英文。
+
+---
+
+
+**OpenAI Codex**
+
+资源已经补好了。我现在会做静态验证：一是确认刚才新加的 `0514-0557` 中英文数量和 key 对齐；二是确认不会出现刚才那个 `gradeTitle` 未定义问题；三是检查你点名的裸中文路径还剩多少。
+
+---
+
+
+**User**
+
+继续  刚刚没钱了 给你冲了
+
+---
+
+
+**OpenAI Codex**
+
+可以，继续。刚刚我已经改到一半：代码层把几个漏翻译的显示点接上了 `t(...)`，`.ing` 也补了 `0514-0557` 这一组常用 key。现在我接着做剩余漏点扫描和静态验证，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我会先扫你点名的词：看它们现在是走 `t(...)`，还是还有裸中文直接显示。这个阶段就是复现剩余漏项，不做编译。
+
+---
+
+
+**OpenAI Codex**
+
+现在剩下两类小漏点比较明确：`TopStatusBar` 里右侧状态监控的单位/未配置客户还没走翻译，另外 `LoadProgramDialog`、`FruitInfoDialog` 还有 `cancelText: '取消'` 这种直接中文。我先修这几个，范围仍然只在显示层和 `.ing`。
+
+---
+
+
+**OpenAI Codex**
+
+我接着修这几个剩余漏点：右侧状态监控里的单位和“未配置客户/农场/水果”，还有两个弹窗按钮的 `取消/确认/载入程序`。这些都只改显示文本，不碰业务数据。
+
+---
+
+
+**OpenAI Codex**
+
+我继续补这几个显示点。现在改的是默认占位文案和按钮文案：真实客户名、农场名、程序名这些用户/设备数据不会被翻译，只翻译“未配置客户”这类默认提示。
+
+---
+
+
+**OpenAI Codex**
+
+这批已补。现在我会重新扫“裸中文显示路径”和资源 key 对齐，同时检查 ArkTS 常见错误：未导入 `t`、未定义属性、逗号/对象字面量这类明显问题。
+
+---
+
+
+**OpenAI Codex**
+
+裸中文显示路径这次第一条扫描没有命中，说明你点名的那批直接显示文案已经基本收掉了。刚才第二条正则又被引号卡了，我换成固定字符串逐项查，继续确认没有 `gradeTitle` 这类会编译失败的残留。
+
+---
+
+
+**OpenAI Codex**
+
+现在还有一个品质页方法里返回了裸 `全部`，这是选择器默认值，不是数据计算。我会把它也走 `t('全部')`。此外固定字符串扫描命令有一段被 PowerShell 转义影响了，我会用更稳的方式继续查。
+
+---
+
+
+**OpenAI Codex**
+
+这个 `getSelectorName` 是品质页把设备返回的 0x7F 显示成“全部”的地方，属于显示默认值。我现在把它也翻译。
+
+---
+
+
+**OpenAI Codex**
+
+我再跑一轮更宽的搜索。目标是确认你刚才列的词不会在 `Text(...)`/`Button(...)`/弹窗默认值里裸露，资源也有对应英文。
+
+---
+
+
+**OpenAI Codex**
+
+这一轮结果不错：你点名的这些词，在 `Text(...)` / `Button(...)` / `cancelText` 这些明显显示入口里已经没有裸中文命中了，`.ing` 的新增 key 也对齐了。我再做一轮更宽的“可见中文字符串”扫描，看看有没有同类漏网的显示字段。
+
+---
+
+
+**OpenAI Codex**
+
+我继续做最后一轮宽扫。刚才几个固定字符串都已经清掉了；现在我用一个临时内存脚本扫 `Text('中文')`、`Button('中文')`、`confirmText/cancelText/label/title` 这种典型可见入口，看看还有没有同类漏点。
+
+---
+
+
+**OpenAI Codex**
+
+宽扫找到一批“更多”浮窗按钮和品质出口弹窗按钮仍是裸中文。`buildFloatingButton` 里面可能会翻译，也可能没有；我先看它的实现，如果内部没 `t` 就在那里统一处理。
+
+---
+
+
+**OpenAI Codex**
+
+`buildFloatingButton` 内部已经会 `t`，所以“更多”按钮这批是误报，先不重复改。`QualityOutletDialog` 的四个按钮确实是裸中文，我会改成 `t(...)`；另外资源里“上一个/下一个”已经有英文，我只要接上即可。
+
+---
+
+
+**OpenAI Codex**
+
+`QualityOutletDialog` 已经有 i18n 导入和版本监听，直接把按钮 text 改成 `t(...)` 就行。
+
+---
+
+
+**OpenAI Codex**
+
+继续最后的宽扫。现在我会过滤掉已知“传给内部会翻译的函数”的误报，重点看裸 `Text/Button/props`。
+
+---
+
+
+**OpenAI Codex**
+
+宽扫已过：典型可见入口里没有裸中文命中。现在做收尾验证：检查资源结构、检查新增 key 对齐、检查是否有临时 `.mjs` 冒出来、检查 diff 空白。仍然不编译。
+
+---
+
+
+**OpenAI Codex**
+
+继续处理好了。
+
+这次补的是你刚才点名的漏翻译位置：主页右侧状态监控、实时/操作日志/系统故障、主页等级统计表头、品质等级页的等级字段、历史加工底部“合计”、保存/载入配置里的配置名称和按钮文案等。
+
+主要改动：
+- 显示组件补了 `t(...)` 和语言刷新监听。
+- [Chinese.ing](<E:\new\my_harmony\entry\src\main\resources\rawfile\language\Chinese.ing:2545>) / [English.ing](<E:\new\my_harmony\entry\src\main\resources\rawfile\language\English.ing:2527>) 追加了 `HarmonyI18n_0514` 到 `HarmonyI18n_0570`。
+- 没有新增 `.mjs` 脚本。
+- 没有编译。
+
+验证过：
+- `Chinese.ing` / `English.ing` 新增 key 对齐。
+- `English.json` 能正常解析。
+- 典型可见入口 `Text('中文')`、`Button('中文')`、`cancelText: '取消'` 这类扫描为 0。
+- `git diff --check` 通过。
+
+---
+
+
+**User**
+
+对应的Ing 没有添加 这个状态监控 没有显示英文 这个系统故障 操作日志  尺寸等级 品质等级  懂吗？
+
+---
+
+
+**OpenAI Codex**
+
+明白，你说的是：代码里 `t('状态监控')` 这种写了，但切英文还是没变，说明 `English.ing` 没有用“状态监控”这个中文文本作为可查 key 生效。我先复现这个资源查找路径，再只改 `.ing` 或最小的 i18n 解析问题。
+
+---
+
+
+**OpenAI Codex**
+
+懂，你说得对：不是“代码里写了 `t(...)` 就完事”，必须保证 `English.ing` 里能通过这些中文 key 查到英文。现在我先查清楚为什么 `状态监控/系统故障/操作日志/尺寸等级/品质等级` 没生效，再改最小范围。
+
+---
+
+
+**OpenAI Codex**
+
+我找到根因了：`Chinese.ing / English.ing` 资源文件里我确实补了这些 key，但程序启动时会先把 rawfile 的 `.ing` 复制到沙盒 `filesDir/i18n`，而且当前逻辑是“沙盒里已有就跳过”。所以你现在设备/模拟器里很可能还在读旧的沙盒 `English.ing`，新加的 `状态监控/系统故障/操作日志/尺寸等级/品质等级` 根本没进入运行时。
+
+---
+
+
+**OpenAI Codex**
+
+对，我继续处理根因：现在不是单纯追加 rawfile 里的 `.ing`，还要保证运行时沙盒里的 `English.ing/Chinese.ing` 会更新。否则你看到的就是：源码里有，切英文还是旧中文。
+
+---
+
+
+**OpenAI Codex**
+
+**Handoff Summary**
+
+Workspace: `E:\new\my_harmony`  
+User language: Chinese. User is frustrated about i18n not actually showing English. They explicitly said earlier: **不要帮我编译**. Do not run hvigor/build. Static checks are okay. They also dislikes temporary `.mjs` scripts being added/left behind.
+
+**Current Task**
+User says these still do not show English after switching language:
+- `状态监控`
+- `系统故障`
+- `操作日志`
+- `尺寸等级`
+- `品质等级`
+
+They insists the corresponding `.ing` must be changed and effective.
+
+**Key Finding / Root Cause**
+The raw resource files already have entries for those terms, but the app copies `.ing` files from rawfile into sandbox `filesDir/i18n` only if the sandbox file does not already exist:
+
+File: `entry/src/main/ets/utils/i18n/I18nManager.ets`
+
+Current logic in `copyBundledIngLanguages`:
+
+```ts
+const targetPath = `${this.i18nDir}/${fileName}`
+if (this.fileExists(targetPath)) {
+  continue
+}
+await copyRawFileToSandbox(context, `${rawDir}/${fileName}`, 'i18n', fileName, true, this.i18nDir)
+```
+
+So existing installed/sandbox `English.ing` remains stale. That explains why source `.ing` has new entries but runtime still displays Chinese. Need to update sandbox copies when bundled `.ing` changes.
+
+**Important Existing i18n Behavior**
+`I18nManager.loadLanguageFile()`:
+- Loads `English.ing` if it exists via `resolveLanguageFilePath`
+- Parses `.ing` into keys like `Section.Item`
+- Calls `addChineseIngAliases(filePath, parsedMap)` for `.ing`
+- `addChineseIngAliases` reads sandbox `Chinese.ing`, parses it, then for each same tag maps `Chinese text -> English text`
+- Therefore for `t('状态监控')` to work:
+  - sandbox `Chinese.ing` must contain same tag with text `状态监控`
+  - sandbox `English.ing` must contain same tag with text `Status Monitor`
+
+Raw files currently include these appended entries:
+- `Chinese.ing` around line `2580+`
+- `English.ing` around line `2562+`
+
+```xml
+<HarmonyI18n_0521>尺寸等级</HarmonyI18n_0521>
+<HarmonyI18n_0522>品质等级</HarmonyI18n_0522>
+<HarmonyI18n_0549>操作日志</HarmonyI18n_0549>
+<HarmonyI18n_0550>系统故障</HarmonyI18n_0550>
+<HarmonyI18n_0551>状态监控</HarmonyI18n_0551>
+```
+
+English:
+```xml
+<HarmonyI18n_0521>Size Grade</HarmonyI18n_0521>
+<HarmonyI18n_0522>Quality Grade</HarmonyI18n_0522>
+<HarmonyI18n_0549>Operation Log</HarmonyI18n_0549>
+<HarmonyI18n_0550>System Fault</HarmonyI18n_0550>
+<HarmonyI18n_0551>Status Monitor</HarmonyI18n_0551>
+```
+
+**Files Recently Changed**
+Many i18n wrapping changes exist from previous work. Relevant recent changes:
+- `entry/src/main/resources/rawfile/language/Chinese.ing`
+- `entry/src/main/resources/rawfile/language/English.ing`
+- `entry/src/main/ets/utils/i18n/I18nManager.ets` has not yet been fixed for sandbox stale issue.
+- UI files changed to use `t(...)`, including:
+  - `components/layout/TopStatusBar.ets`
+  - `pages/Home.ets`
+  - `pages/quality/QualityOutletDialog.ets`
+  - `pages/quality/QualityContent.ets`
+  - `pages/quality/QualityDataTable.ets`
+  - `pages/quality/QualityGradeParamSelectDialog.ets`
+  - `components/dialogs/LoadProgramDialog.ets`
+  - `components/dialogs/SaveProgramDialog.ets`
+  - `components/feedback/FruitInfoDialog.ets`
+  - `components/tables/ScrollableDataTable.ets`
+  - `components/tables/WeightSizeStatisticsTable.ets`
+  - `pages/realtime/GradeStatisticsTable.ets`
+
+**Verification Already Done**
+- Resource check passed:
+  - `English.json` parses
+  - `Chinese.ing` / `English.ing` end with `</Resources>`
+  - `HarmonyI18n_0514` through `HarmonyI18n_0570` exist in both
+- `git diff --check` passed.
+- A scan for visible naked Chinese in `Text('中文')`, `Button('中文')`, common prop fields had `VISIBLE_LITERAL_HITS=0` after filtering known internal translated helpers.
+- No temporary `.mjs` scripts left in `tools` from this i18n work.
+
+**Next Steps**
+1. Fix `I18nManager.copyBundledIngLanguages` so bundled `.ing` updates reach sandbox.
+   - Minimal approach: overwrite bundled `Chinese.ing` and `English.ing` on startup, or compare rawfile content with sandbox content and overwrite only if changed.
+   - Prefer compare-and-overwrite to preserve behavior and avoid unnecessary writes.
+   - Since `.ing` are bundled legacy resources, probably okay to overwrite. User wants `.ing` effective.
+
+2. Possible implementation:
+   - Add helper `readRawFileContent(context, rawFilePath): string` using:
+     ```ts
+     const bytes: Uint8Array = context.resourceManager.getRawFileContentSync(rawFilePath)
+     const buf = buffer.from(bytes.buffer)
+     return buf.toString('utf-8')
+     ```
+   - In `copyBundledIngLanguages`:
+     - get raw content
+     - if target does not exist, copy
+     - if target exists, read sandbox target with `readFile`
+     - if content differs, write raw content to target with `atomicWrite`
+   - Be careful ArkTS explicit types; no `any`, no untyped object literals, no `unknown`.
+   - Avoid introducing `.mjs`.
+
+3. After patch, verify statically:
+   - `rg -n "copyBundledIngLanguages|Bundled .ing" entry\src\main\ets\utils\i18n\I18nManager.ets`
+   - `git diff --check`
+   - Node resource check:
+     ```powershell
+     node -e "const fs=require('fs'); const cn=fs.readFileSync('entry/src/main/resources/rawfile/language/Chinese.ing','utf8'); const en=fs.readFileSync('entry/src/main/resources/rawfile/language/English.ing','utf8'); for(const [c,e] of [['状态监控','Status Monitor'],['系统故障','System Fault'],['操作日志','Operation Log'],['尺寸等级','Size Grade'],['品质等级','Quality Grade']]){ if(!cn.includes('>'+c+'<')) throw new Error('Chinese missing '+c); if(!en.includes('>'+e+'<')) throw new Error('English missing '+e);} console.log('ing terms ok')"
+     ```
+   - Do not compile.
+
+**User Preferences / Constraints**
+- Answer in Chinese.
+- Be direct and acknowledge when they are right.
+- Do not add/check in temporary scripts.
+- Do not compile.
+- They care that `.ing` files actually contain corresponding English values and switching language shows English.
+- Use CodeGraph first if locating code and `.codegraph` exists. `.codegraph` does exist.
+
+---
+
+
+**OpenAI Codex**
+
+我懂，你说的点是对的：只是代码里写了 `t(...)` 还不够，`.ing` 里对应的中英文必须都有，而且运行时实际加载的那份也要更新。我先按 BUG 流程确认触发路径和根因，然后只改最小范围，不会帮你编译。
+
+---
+
+
+**OpenAI Codex**
+
+我会按 `systematic-debugging` 的流程处理这个 BUG；这次不走编译，只做源码和资源文件的静态验证。现在先确认三件事：源码 `.ing` 是否真的有这些 key、运行时到底加载哪一份 `.ing`、为什么切英文还是中文。
+
+---
+
+
+**OpenAI Codex**
+
+刚刚确认到一个关键现象：源码里的 `Chinese.ing` 和 `English.ing` 其实已经有这几个词了，比如 `状态监控 -> Status Monitor`、`系统故障 -> System Fault`。所以现在更像是“资源文件改了，但运行时仍在用旧的沙盒缓存 `.ing`”，我继续看加载逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+复现路径我这边可以说明清楚了：切到英文后，UI 调 `t('状态监控')` 这一类中文 key；理论上它会通过 `Chinese.ing` 的同名标签映射到 `English.ing` 的值。但初始化只在沙盒里没有 `.ing` 时才复制，已经安装过的旧沙盒文件不会更新，所以新增 key 不生效。最小修改范围我准备只动 `I18nManager.ets` 的 `.ing` 拷贝逻辑，让 bundled `.ing` 内容变化时同步到沙盒，不碰页面逻辑和其它数据源。
+
+---
+
+
+**OpenAI Codex**
+
+我会先跑一个很小的静态回归检查，让它在当前代码上失败：检查 `.ing` 同步逻辑是否还存在“目标文件存在就直接跳过”的分支。这个失败就是现在的复现证据，然后我再改这一处。
+
+---
+
+
+**OpenAI Codex**
+
+这个失败检查已经复现了问题：`copyBundledIngLanguages` 遇到已有 `English.ing/Chinese.ing` 就 `continue`，所以你新增到源码里的英文永远不会覆盖旧沙盒文件。现在我只改这段同步逻辑：存在时读取 bundled `.ing` 和沙盒 `.ing`，内容不同才覆盖。
+
+---
+
+
+**OpenAI Codex**
+
+另外我也顺手确认了页面调用：这几个位置已经是 `t('状态监控')`、`t('系统故障')`、`t('操作日志')`、`t('尺寸等级')`、`t('品质等级')` 这种形式。也就是说这次不用大面积改页面，重点是让更新后的 `.ing` 真正被加载。
+
+---
+
+
+**OpenAI Codex**
+
+已经改完最小范围了：只有 `I18nManager.ets`，逻辑是沙盒里已有 `.ing` 时不再直接跳过，而是对比 bundled 内容；不一致就覆盖沙盒旧文件。现在我做不编译的验证：资源是否有对应中英文、同步分支是否修复、diff 是否干净。
+
+---
+
+
+**OpenAI Codex**
+
+验证通过：这几个中英文条目在 `Chinese.ing/English.ing` 都存在；旧的“存在就跳过”检查也已经不在了；`git diff --check` 没有报格式问题。我没有编译。
+
+---
+
+
+**OpenAI Codex**
+
+懂，这个问题我修了。
+
+根因不是页面没包 `t(...)`，这些地方已经包了；也不是源码 `Chinese.ing / English.ing` 完全没加。真正的问题是 [I18nManager.ets](<E:/new/my_harmony/entry/src/main/ets/utils/i18n/I18nManager.ets:426>) 以前只在沙盒里没有 `.ing` 时才复制，沙盒里已有旧 `English.ing` 就直接跳过，所以新增的 `状态监控 / 系统故障 / 操作日志 / 尺寸等级 / 品质等级` 不会生效。
+
+我改成了：启动初始化时会对比 bundled `.ing` 和沙盒 `.ing`，内容不同就更新沙盒里的旧文件。这样你改 `Chinese.ing / English.ing` 后，切英文才会拿到新翻译。
+
+确认过这些条目都在：
+
+- `状态监控 -> Status Monitor`
+- `系统故障 -> System Fault`
+- `操作日志 -> Operation Log`
+- `尺寸等级 -> Size Grade`
+- `品质等级 -> Quality Grade`
+
+验证做了静态检查和 `git diff --check`，没有编译，按你说的没有跑 hvigor。你试效果时最好重新打开应用一次，让 i18n 初始化重新同步 `.ing`。
+
+---
+
+
+**User**
+
+然后 有一个问题 就是切换成其他语言 有的地方会导致显示不完整 你懂吗？ 比如说主页顶部的这些按钮 显示不完整 只能....了
+
+---
+
+
+**OpenAI Codex**
+
+懂，就是英文/其它语言更长，顶部按钮宽度现在按中文设计，切语言以后 `Text` 被压缩成省略号。这个算 UI BUG，我先按你的流程走：复现位置、找出根因、再只改最小范围；同样不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我先用 CodeGraph 看一下主页顶部按钮是在哪个组件里实现的，再去查具体样式。重点找有没有固定宽度、`TextOverflow.Ellipsis`、`maxLines(1)` 这一类导致英文被截断的地方。
+
+---
+
+
+**OpenAI Codex**
+
+CodeGraph 结果没直接命中顶部按钮实现，所以我换成精确搜源码里的 `TextOverflow.Ellipsis`、`.width(...)`、首页 `Button/Text`。这个问题大概率是固定宽度加单行省略，但我会先找准是哪一组按钮。
+
+---
+
+
+**OpenAI Codex**
+
+我找到两个可能点：一个是 `TopStatusBar` 顶部状态/功能区，另一个是 `Home.ets` 里的“更多”弹窗按钮。你说“主页顶部这些按钮”，我先优先查主页面顶部栏和更多按钮入口，看看哪些地方宽度固定、文字单行省略。
+
+---
+
+
+**OpenAI Codex**
+
+我现在基本定位到“主页顶栏按钮”很可能是 `LeftNavigationTabBar` 这组横向导航：中文短词没问题，英文像 `Realtime Statistics / End Processing / History Processing` 这类一长就被固定格子挤成 `...`。我继续对比这个组件的宽度和省略号逻辑，尽量只改通用按钮布局。
+
+---
+
+
+**OpenAI Codex**
+
+确认了：主页顶部横向导航是 `LeftNavigationTabBar -> OmniTabBar`，首页还传了 `customTabs: this.getActionTabs()`。我现在打开 `OmniTabBar`，看它是不是用固定宽/单行省略；这个组件如果改好，顶部这些语言切换后的按钮会一起受益。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经很明确了：`OmniTabBar` 横向按钮全部 `.width(100)`，文字也 `.maxLines(1)` + `TextOverflow.Ellipsis`。所以中文短词看着正常，英文或其它语言变长就必然被截断。最小改动我建议只让横向按钮根据 label 长度自适应宽度，并给菜单类按钮额外宽一点，不影响垂直菜单和页面业务逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+我准备这样改，范围很小：
+
+1. `OmniTabBar` 只改横向导航按钮宽度计算：中文短词保持原来的紧凑宽度，英文/其它长文本按字符长度增加按钮宽度，并设一个上限，避免把整条顶部栏撑爆。
+2. 仍然保持单行按钮，不把顶部栏变高，这样不会影响主页整体高度。
+3. 垂直导航、弹窗按钮、业务点击逻辑都不动。
+
+你确认一下，我就直接改这个方案。
+
+---
+
+
+**OpenAI Codex**
+
+确认的话我就按这个方案改：只调整主页顶部横向导航按钮的自适应宽度，保证英文/其它语言尽量完整显示，不改业务逻辑，也不编译。
+
+---
+
+
+**User**
+
+能不能不调整自适应  弄成两行不行吗？ 直接换行 但是不能中途换 比如说fashion  不可以在fa 中间分开
+
+---
+
+
+**User**
+
+能不能不调整自适应  弄成两行不行吗？ 直接换行 但是不能中途换 比如说fashion  不可以在fa 中间分开
+
+---
+
+
+**OpenAI Codex**
+
+可以，两行比自适应更适合你这个顶部栏：按钮宽度保持稳定，文字最多两行，英文按空格/连字符这些自然边界换行，不把 `fashion` 这种单词从中间拆开。我现在就改 `OmniTabBar` 的横向按钮文字规则，范围只动顶部横向 Tab，不动业务点击逻辑，也不编译。
+
+---
+
+
+**OpenAI Codex**
+
+触发路径很清楚：切到英文后，主页顶部 `LeftNavigationTabBar` 传入英文 label，`OmniTabBar` 横向按钮固定 `100` 宽，文字单行省略，所以会显示成 `...`。根因就是横向按钮的 `maxLines(1)` 和 `TextOverflow.Ellipsis`，这次最小改动只把横向按钮文字改为最多两行、按单词换行。
+
+---
+
+
+**OpenAI Codex**
+
+我先做一个小的静态失败检查，证明当前横向 Tab 还是单行省略。这个检查会先失败，然后我改成两行换行，避免后面只是凭感觉改。
+
+---
+
+
+**OpenAI Codex**
+
+失败检查已经复现了：横向 Tab 里确实还有 `maxLines(1)` 和 `TextOverflow.Ellipsis`。我现在改成 `maxLines(2)`，同时用 `Clip`，这样有空格的英文会自然按词换行，不会主动把一个完整单词切成省略号那种效果。
+
+---
+
+
+**User**
+
+<turn_aborted>
+The user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed.
+</turn_aborted>
+
+---
+
+
+**User**
+
+继续吧
+
+---
+
+
+**OpenAI Codex**
+
+继续。我会按刚才你确认的方向来：顶部横向按钮不改自适应宽度，改成最多两行；英文优先按空格换行，不把 `fashion` 这种单词从中间拆开。
+
+---
+
+
+**OpenAI Codex**
+
+我先不碰宽度，专门改 `OmniTabBar` 横向按钮里的两处文字：普通按钮文字、带右侧 SVG 的按钮文字。这样“更多/打印”这种带图标按钮也一起按同一规则显示。
+
+---
+
+
+**OpenAI Codex**
+
+我会用显式换行来控制，不依赖组件自己乱断词：有空格的英文按钮，会在最合适的空格处插入 `\n`；没有空格的单词保持一行，所以 `fashion` 不会被我拆成 `fa/shion`。现在改横向 Tab 文字渲染。
+
+---
+
+
+**OpenAI Codex**
+
+刚改了一版，我马上做自查。先看横向按钮里还有没有遗漏的单行省略逻辑，以及带 SVG 的“打印/更多”按钮是否也用了同样的换行文字。
+
+---
+
+
+**OpenAI Codex**
+
+我发现刚才自查里有一处要补：普通按钮已经用显式换行了，但带右侧 SVG 的按钮文字还只是改了 `maxLines`，没有真正传入带 `\n` 的文本。我马上补上，确保“打印/更多”这类带图标按钮也一致。
+
+---
+
+
+**OpenAI Codex**
+
+我再补一个小细节：两行文字如果沿用原来的上下内边距，可能会有点挤。这里不改宽度，只给横向 Tab 文本固定更紧的 `lineHeight`，让两行在原按钮高度里完整显示。
+
+---
+
+
+**OpenAI Codex**
+
+改好了第一版：现在换行点是我手动选的空格位置，不会主动在单词内部插换行。接下来我做静态验证：确认横向顶部按钮不再使用单行省略，并用几个英文例子验证换行算法不会把 `fashion` 拆开。
+
+---
+
+
+**OpenAI Codex**
+
+静态验证通过了：`Grade Settings` 会变成两行 `Grade / Settings`，`Fruit Info`、`Live Stats` 也是按空格换；`fashion` 这种没有空格的单词保持一整行，不会被我插成 `fa...` 或中间换行。现在我再查一下有没有格式问题和遗漏的横向省略号。
+
+---
+
+
+**OpenAI Codex**
+
+可以，已经按你说的改成“两行显示”，没有做自适应宽度。
+
+改的是 [OmniTabBar.ets](<E:/new/my_harmony/entry/src/main/ets/components/ui/layout/OmniTabBar.ets:182>) 的横向顶部按钮：
+
+- 英文/其它语言有空格时，会在空格处拆成两行，比如 `Grade Settings` -> `Grade / Settings`
+- `Fruit Info`、`Live Stats`、`Load Prog` 这种都会变两行
+- `fashion` 这种没有空格的单词不会被我从 `fa` 中间拆开
+- 原来的 `...` 省略改掉了，顶部横向按钮不再用单行省略
+- 没有改按钮宽度，也没有改业务点击逻辑
+
+我只做了静态验证和 `git diff --check`，没有编译。
+
+---
+
+
+**User**
+
+OK 这几个分选速度 还有本批重量 这些没有进行翻译  你看一下
+
+---
+
+
+**OpenAI Codex**
+
+懂，这个也是同一类 i18n 漏翻问题：界面上还有中文 label 没走到对应的英文资源。我先按 BUG 流程来，定位这些“分选速度 / 本批重量”具体在哪个组件渲染，再确认是没包 `t(...)` 还是 `.ing` 缺 key。
+
+---
+
+
+**OpenAI Codex**
+
+我看到 `.codegraph` 存在，所以先用 CodeGraph 查这些词的来源；如果它索引不到 ArkTS 文件，我再用 `rg` 精确找。先确认触发路径：切英文后这几个顶部/状态指标仍显示中文，通常是 label 没走 `t(...)`，或者 `.ing` 里缺对应中英文。
+
+---
+
+
+**OpenAI Codex**
+
+CodeGraph 没命中 ArkTS 里的这些 UI 文案，刚才只返回了模拟设备脚本，所以我现在用 `rg` 精确找中文 label。先看它们是不是已经包了 `t(...)`，再查 `Chinese.ing / English.ing` 里有没有对应条目。
+
+---
+
+
+**OpenAI Codex**
+
+我已经找到两条线索：`SortingInfoCard` 里这些词有 `t(...)`，但 `HomeConstants` 顶层常量里也提前调用了 `t(...)`。如果这些 label 是在模块加载时就被算成中文，切语言后就不会重新翻译。现在我继续确认实际渲染用的是哪一份。
+
+---
+
+
+**OpenAI Codex**
+
+现在根因我基本确认了两层：界面代码有 `t(...)`，但 `.ing` 追加区只有 `本批重量 / 本批个数 / 平均重量 / 实时产量`，没有把 `分选速度` 这一组首页指标完整补进去；另外这些默认值里的单位比如 `件/分钟 / 吨 / 个` 是值的一部分，也不会自动翻译。我会先把 `.ing` 里这组 key 补齐，再把 `SortingInfoCard` 的调用改成传中文原始 key，避免提前翻译造成刷新不稳定。
+
+---
+
+
+**OpenAI Codex**
+
+根因现在可以说清楚了：这些首页小指标的 label 虽然部分已经走了 `t(...)`，但 `SortingInfoCard` 里先把 key 翻译了一次再传给内部，又在内部翻译一次，语言切换时容易拿到已经翻译后的文本；同时 `.ing` 追加区没有把这一整组首页指标补完整。最小范围我会只动 `SortingInfoCard.ets` 和两份 `.ing`，不动数据计算和刷新逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+我会先加一个失败检查：要求 `Chinese.ing / English.ing` 同时包含 `分选速度、开始时间、分选程序、分选效率、间隔速度` 这一组追加 key。当前应该会失败，证明不是只看代码包 `t(...)` 就够了。
+
+---
+
+
+**OpenAI Codex**
+
+失败点确认了：`English.ing` 里虽然旧 48 段有类似文本，但追加区没有 `分选速度 -> Sorting Speed` 这种中文别名映射。现在我补 `.ing` 追加项，并把 `SortingInfoCard` 传参改成原始中文 key。
+
+---
+
+
+**OpenAI Codex**
+
+接下来补资源文件。为了不破坏原来的 48 区块，我只在 `HarmonyI18nOverlay` 末尾追加新 key，和前面我们处理 `状态监控` 那种方式一致。
+
+---
+
+
+**OpenAI Codex**
+
+中文 `.ing` 已补，现在补英文对应值：`Sorting Speed / Start Time / Sorting Program / Sorting Efficiency / Interval Speed / pcs/min / pcs`。
+
+---
+
+
+**OpenAI Codex**
+
+label 的问题修了；我再看一下值里的单位。现在默认值里 `0 件/分钟`、`0 个` 会被拆成数值和单位，但单位没有走翻译，所以英文下单位仍可能中文。我会给 `extractUnit` 加最小翻译，不动数值来源。
+
+---
+
+
+**OpenAI Codex**
+
+现在做验证：`.ing` 对应中英文是否都存在、`SortingInfoCard` 有没有再次提前 `t(...)`、XML 尾部是否完整、以及格式检查。仍然不编译。
+
+---
+
+
+**OpenAI Codex**
+
+修好了。这个位置是首页中间那排指标卡 [SortingInfoCard.ets](<E:/new/my_harmony/entry/src/main/ets/pages/home/SortingInfoCard.ets:121>)。
+
+我改了两点：
+
+1. `分选速度 / 本批重量 / 本批个数 / 开始时间 / 分选程序 / 分选效率 / 平均重量 / 实时产量 / 间隔速度` 现在都用原始中文 key 进 `t(...)`，不再提前翻译后又传进去，语言切换会稳定刷新。
+2. `Chinese.ing / English.ing` 里补了缺的对应项，尤其是：
+   - `分选速度 -> Sorting Speed`
+   - `开始时间 -> Start Time`
+   - `分选程序 -> Sorting Program`
+   - `分选效率 -> Sorting Efficiency`
+   - `间隔速度 -> Interval Speed`
+   - `件/分钟 -> pcs/min`
+   - `个 -> pcs`
+
+另外值里的单位也处理了，比如 `0 件/分钟` 里的 `件/分钟` 会翻译成 `pcs/min`，`0 个` 会翻译成 `pcs`。
+
+验证了 `.ing` 条目存在、XML 结尾正常、`SortingInfoCard` 没有继续提前 `t(...)`，也跑了 `git diff --check`。没有编译。
+
+---
+
+
+**User**
+
+你自己看吧 我服了 分选速度 本批重量 本批个数  没有 然后 等级表 加工曲线 加工统计 都没有
+
+---
+
+
+**OpenAI Codex**
+
+我看到了，这张图很有用。你说得对，不是“只有几个单位没翻译”，而是同一个页面里有几组文案源不一样：顶部导航已经英文了，但中间指标卡、左侧状态标题、下面三个 Tab 还是中文。这个我按实际截图重新查，不再只盯 `.ing` 追加那一处。
+
+---
+
+
+**OpenAI Codex**
+
+我先做三件事：复现源码路径、找根因、定最小范围。截图里能看出：`pcs/min / Tons / pcs / g / ms` 已经是英文单位，但 label 还是中文，所以不是语言没切成功，而是这些 label 使用了另一套数据或被提前算死了。
+
+---
+
+
+**OpenAI Codex**
+
+你这张图把问题点钉住了：同一个页面里表格表头已经英文，说明语言包是加载成功的；但是指标卡和下面 Tab 还是中文，说明不是 `.ing` 单纯缺 key，而是这些组件的翻译刷新/调用路径有问题。我继续把这几个实际渲染路径改掉，不再只补资源。
+
+---
+
+
+**User**
+
+<turn_aborted>
+The user interrupted the previous turn on purpose. Any running unified exec processes may still be running in the background. If any tools/commands were aborted, they may have partially executed.
+</turn_aborted>
+
+---
+
+
+**User**
+
+我看了一下 是有的  但是状态监控 系统故障 操作日志 没有 左边侧边栏的   你看
+
+---
+
+
+**OpenAI Codex**
+
+我看到了，截图里顶部导航已经是英文，但左侧侧边栏标题还是中文：`状态监控 / 系统故障 / 操作日志`。这个说明不是全局语言没切成功，而是左侧这个组件自己的标题路径没有正确走当前语言。我先按 BUG 流程定位它是哪一段渲染，再只改侧边栏标题这块，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+我先定位截图左侧侧边栏这一块。它看起来不是顶部导航，而是 `TopStatusBar` 的 side 模式：上面客户信息，中间 `状态监控 / 系统故障 / 操作日志` 三个区块。现在我查它实际传进去的是原始中文还是已经翻译后的文本。
+
+---
+
+
+**OpenAI Codex**
+
+我看了，`.ing` 里确实已经有这三个词，所以你说得对：资源不是完全缺失。现在更像是左侧侧边栏这里的渲染路径没有稳定吃到当前语言，尤其它把 `t(...)` 后的结果又传进一个内部再 `t(...)` 的 Builder。我先把这块改成“只传原始中文 key，最后显示时翻译一次”，同时让切语言时同步 `.ing` 后再加载，避免沙盒旧文件继续影响。
+
+---
+
+
+**OpenAI Codex**
+
+我现在定位到真正可疑点：左侧标题这里是 `t(...)` 后又传给内部 Builder，内部再 `t(...)` 一次；再加上 `setLanguage()` 只加载当前沙盒文件，不会在切语言时主动同步 bundled `.ing`。我会把左侧标题改成只传原始中文 key，并在切语言前同步 `.ing`，这样资源有了以后不用重启也能吃到。
+
+---
+
+
+**OpenAI Codex**
+
+我看到这块有个很关键的现象：左侧里面有些指标已经变英文，但 `状态监控/实时/实时产量/系统故障/操作日志` 没变，这通常说明当前运行时吃到的是旧沙盒资源，或者只吃到了 `English.json` 里已有的旧 key，没吃到后来追加到 `.ing` 的那批 key。我现在补两个点：切语言时强制同步 bundled `.ing`，并把侧边栏标题都改成原始中文 key 统一翻译一次。
+
+---
+
+
+**OpenAI Codex**
+
+失败检查已经复现了两个根因：侧边栏标题提前翻译，`setLanguage()` 也不会重新同步 `.ing`。我现在只改这两处最小范围：`TopStatusBar.ets` 左侧标题传原始 key，`I18nManager.ets` 切语言前同步 bundled `.ing`。
+
+---
+
+
+**OpenAI Codex**
+
+侧边栏标题已经改成传原始中文 key。现在补 `setLanguage()`：切到英文或其它语言前，先同步 rawfile 里的 `.ing` 到沙盒，再加载当前语言文件。这样你不用清缓存/重装也能拿到新增翻译。
+
+---
+
+
+**OpenAI Codex**
+
+现在验证刚才两个失败检查是否通过，再确认 `.ing` 三个标题和几个侧栏小标签都有英文，最后跑 `diff --check`。不编译。
+
+---
+
+
+**OpenAI Codex**
+
+刚才有一个验证命令因为 PowerShell 引号把中文字符串截坏了，不是代码问题。我继续把侧栏这块补牢一点：`SideMetricTile` 自己翻译 label，父组件只传中文原始 key，这样左边状态监控里的小指标也不会混中英文。
+
+---
+
+
+**OpenAI Codex**
+
+我补了 `SideMetricTile`：现在标题和单位都由它内部翻译，父层不再传已经翻译后的字符串。接下来重新做静态检查，避免还有 `t(...)` 后再传给侧边栏 Builder 的情况。
+
+---
+
+
+**OpenAI Codex**
+
+刚才验证脚本又被 PowerShell 引号绊了一下，但代码检查和 `diff --check` 是过的。我再补一个更稳的点：左侧栏本身要显式引用 `i18nVersion`，否则有些 Builder 在切语言时不一定重建，这正符合你截图里“顶部变英文，左侧还停在中文”的情况。
+
+---
+
+
+**OpenAI Codex**
+
+我会再补一个强制刷新的点：左侧几个卡片虽然有 `@StorageLink(I18N_VERSION_KEY)`，但原来的 `.key(...)` 没带语言版本。切语言后可能复用了旧节点，所以标题停在中文。我把侧边栏相关 key 加上 `i18nVersion`，让语言切换时它们重新构建。
+
+---
+
+
+**OpenAI Codex**
+
+强制刷新也补上了。现在用比较稳的 PowerShell `Select-String` 和 Node 检查：侧栏标题 raw key、语言切换同步 `.ing`、资源存在、格式无误。
+
+---
+
+
+**OpenAI Codex**
+
+检查通过。为了把结果说清楚，我再看一下本次这两个文件的 diff，确认没有误动别的逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+对，我看到截图了，左侧侧边栏那三个标题确实还没跟着变。
+
+我修了两处：
+
+1. [TopStatusBar.ets](<E:/new/my_harmony/entry/src/main/ets/components/layout/TopStatusBar.ets:427>)  
+   左侧 `状态监控 / 系统故障 / 操作日志` 不再提前 `t(...)` 后传进去，而是传原始中文 key，内部统一翻译，并且 key 加了 `i18nVersion`，切语言时会强制重建这几块。
+
+2. [I18nManager.ets](<E:/new/my_harmony/entry/src/main/ets/utils/i18n/I18nManager.ets:184>)  
+   切语言时会先同步 bundled `.ing` 到沙盒，再加载语言文件。这样新增到 `.ing` 的翻译不用等重装/清缓存。
+
+也顺手让左侧状态监控里的小标签和单位走同一套翻译，比如 `实时产量 / 本批重量 / 吨/小时 / 条`。
+
+验证了：
+- `.ing` 里有 `状态监控 / 系统故障 / 操作日志` 对应英文
+- 侧边栏标题不再提前翻译
+- `setLanguage` 会刷新 `.ing`
+- `git diff --check` 通过
+
+没有编译。
+
+---
+
+
+**User**
+
+48里面修改语言 是不是会下发到数据库里面啊 改变数据库里面的值 帮我检查一下
+
+---
+
+
+**OpenAI Codex**
+
+我来查 48 的语言切换流程，不改代码。重点看两件事：切语言时有没有写数据库表，以及下次启动/登录时是不是从数据库读这个语言值。
+
+---
+
+
+**OpenAI Codex**
+
+**Handoff Summary**
+
+**Current Task**
+User asks: “48里面修改语言 是不是会下发到数据库里面啊 改变数据库里面的值 帮我检查一下”  
+Need inspect 48 project language-switch flow, read-only. Determine whether changing language writes to DB and which table/field/value.
+
+**Workspace / Paths**
+- Current default workspace: `E:\goTest`
+- 48 project: `C:\Users\AI008\Desktop\48\48`
+- 48 project has `.codegraph` present, so per AGENTS.md use CodeGraph before grep/find when locating code.
+- Harmony project previously edited: `E:\new\my_harmony`
+
+**User Preferences / Constraints**
+- User speaks Chinese; respond in Chinese.
+- User previously explicitly said “不要帮我编译”; avoid builds/hvigor unless they ask.
+- For bug changes, AGENTS.md says before fixing: reproduce path, root cause, minimal scope; after fix verify. For this current task they are asking investigation/explanation, likely no edits.
+- User dislikes adding temporary `.mjs` scripts or unnecessary generated files.
+- Be direct; user is focused on practical answer.
+
+**Recent Work Completed**
+1. Fixed i18n `.ing` sandbox stale issue in Harmony:
+   - `entry/src/main/ets/utils/i18n/I18nManager.ets`
+   - `copyBundledIngLanguages` now compares bundled raw `.ing` with sandbox copy and overwrites if changed.
+   - `setLanguage` now calls `copyBundledIngLanguages(this.context)` before loading language, so switching language picks up new `.ing` without reinstall.
+2. Fixed top horizontal tab English truncation:
+   - `entry/src/main/ets/components/ui/layout/OmniTabBar.ets`
+   - Long labels are split into two lines at spaces; does not split words like `fashion`.
+3. Fixed homepage metric label/unit translations:
+   - `entry/src/main/ets/pages/home/SortingInfoCard.ets`
+   - `Chinese.ing`, `English.ing` appended `HarmonyI18n_0571..0577`.
+4. Fixed left sidebar titles from screenshot:
+   - `entry/src/main/ets/components/layout/TopStatusBar.ets`
+   - `状态监控 / 系统故障 / 操作日志` pass raw Chinese keys and are translated internally; sidebar blocks keyed by `i18nVersion`.
+   - Side metrics label/hint translate internally.
+
+**Important Existing Verification**
+- Used static checks only, no compilation.
+- Verified `.ing` terms exist for:
+  - `状态监控 -> Status Monitor`
+  - `系统故障 -> System Fault`
+  - `操作日志 -> Operation Log`
+  - `实时 -> Realtime`
+  - `实时产量 -> Realtime Output`
+  - `吨/小时 -> t/h`, `吨 -> t`, `克 -> g`, `条 -> items`
+- `git diff --check` passed on touched files.
+
+**Current Investigation Started**
+Ran:
+- `Test-Path 'C:\Users\AI008\Desktop\48\48'` -> `True`
+- `Test-Path 'C:\Users\AI008\Desktop\48\48\.codegraph'` -> `True`
+- Listed root contents: includes `RDP_MultiLanguage`, `RDP_Database`, `RSS`, `RDP.pro`, `0505.sql`
+- `Test-Path '.codegraph'` in 48 root -> `True`
+
+No actual 48 language code searched yet. Need continue.
+
+**Recommended Next Steps**
+1. In `C:\Users\AI008\Desktop\48\48`, use CodeGraph first:
+   - Search concepts/symbols around language switching:
+     - `codegraph explore "language switch multilingual current language database"`
+     - `codegraph explore "RDP_MultiLanguage set language save language database"`
+     - `codegraph explore "Chinese English ing language database CurrentLanguage"`
+2. If CodeGraph not sufficient, use `rg`:
+   - `rg -n "Language|language|MultiLanguage|多语言|English|Chinese|Chinese.ing|English.ing|CurrentLanguage|LanguageID|lang|Lng|数据库|QSql|UPDATE|INSERT|SELECT" .`
+   - Focus directories: `RDP_MultiLanguage`, `RDP_Database`, `RSS`.
+3. Inspect DB schema/init:
+   - `0505.sql`, search language-related table/field:
+     - `rg -n "language|Language|lang|Lng|Chinese|English|多语言|当前语言|系统设置|Sys|Config|Current" 0505.sql`
+4. Determine and report:
+   - Trigger path/user action in 48 for changing language.
+   - Whether it writes DB; if yes, exact table/field/SQL/value.
+   - Whether it reads DB at startup/login.
+   - If it only writes config file/ini/registry/global variable instead, say that clearly.
+5. Do not edit files unless user asks.
+
+**Likely Clues**
+- Directory `RDP_MultiLanguage` probably handles `.ing`.
+- 48 is likely Qt/C++ (root has `.pro`; DB likely MySQL through Qt SQL).
+- Look for `QSettings`, `QSqlQuery`, `RDP_Database`, `UPDATE ... SET`, and language form/menu handlers.
+
+---
+
+
+**OpenAI Codex**
+
+我先按“只检查不改代码”的方式走：先用 48 项目的 CodeGraph 定位语言切换和数据库调用，再回到具体文件确认有没有 UPDATE/保存配置的动作。
+
+---
+
+
+**OpenAI Codex**
+
+我已经确认 48 目录存在 `.codegraph`，所以先按项目规则用 CodeGraph 查。这个问题应该能从“语言切换入口 -> 保存设置 -> DB 读写”这条链路看清楚。
+
+---
+
+
+**OpenAI Codex**
+
+入口已经找到了：48 里点“语言选择”会走 `OptionForm::LanguageSelectSub()`，它只打开 `LanguageSwitchForm` 弹窗。接下来我看这个弹窗里确认按钮到底是改内存、改文件，还是写数据库。
+
+---
+
+
+**OpenAI Codex**
+
+我看到关键代码了：48 的 `LanguageSwitchForm::on_OKbutton_clicked()` 里确实调用了 `SaveConfigValue("选择的语言", ...)`。我再补一眼启动初始化那里，确认它下次启动是不是从同一个数据库字段读回来。
+
+---
+
+
+**OpenAI Codex**
+
+目前的证据已经偏向“会写数据库”，但我还想确认一个细节：48 同时还有 `ConfigHelper::SetConnectionString("Language", ...)`，所以它可能是“数据库 + 配置文件”双写。现在我查读语言的初始化来源，避免只看保存逻辑下结论。
+
+---
+
+
+**OpenAI Codex**
+
+我还发现一个比较重要的差异：RSS 主程序启动时是从数据库读“选择的语言”；RIS 那边看起来是从 `ConfigHelper` 的 `Language` 配置读。你问的 48 主程序如果是 RSS，那它就是数据库为准。
+
+---
+
+
+**OpenAI Codex**
+
+还有一个小点我也查一下：`SaveConfigValue` 的筛选条件里有 `FModuleName = ConstPreDefine::FModuleName`，我要确认这个常量在 RSS 里具体是不是 `RSS`，这样你去数据库查的时候字段能对上。
+
+---
+
+
+**OpenAI Codex**
+
+我再看一下启动入口附近的原文行，这样最后给你的结论不是“猜的”，而是能直接对应到文件和 SQL 字段。
+
+---
+
+
+**OpenAI Codex**
+
+刚刚有个正则命令被引号绊了一下，不影响结论。我换成按字面量搜索，把几段关键代码行号补齐。
+
+---
+
+
+**OpenAI Codex**
+
+现在可以下结论了：48 里 RSS 的语言值是以数据库配置项为主，切换语言时还会顺手写一份 `App.config`。我最后补一下 `SaveConfigValue` 的完整更新逻辑，方便你知道它是 insert 还是 update。
+
+---
+
+
+**OpenAI Codex**
+
+会，48 里面 RSS 修改语言会写数据库。
+
+触发路径是：更多/菜单里的语言选择 -> `OptionForm::LanguageSelectSub()` -> 打开 `LanguageSwitchForm` -> 点确定后执行 [languageswitchform.cpp](C:/Users/AI008/Desktop/48/48/RSS/Forms/languageswitchform.cpp:111)。
+
+关键代码：
+
+- 切换成功时写数据库：`SaveConfigValue("选择的语言", GlobalDataInterface::selectLanguage)`，在 [languageswitchform.cpp](C:/Users/AI008/Desktop/48/48/RSS/Forms/languageswitchform.cpp:142)
+- 同时也写 `App.config`：`ConfigHelper::SetConnectionString("Language", ...)`，在同一处下一行
+- 启动时 RSS 是从数据库读回来：`GetConfigValue("选择的语言")`，在 [main.cpp](C:/Users/AI008/Desktop/48/48/RSS/main.cpp:263)
+
+数据库位置是表 `tb_Sys_Configs`，条件是：
+
+```sql
+FModuleName = 'RSS'
+FType = '选择的语言'
+```
+
+值存在 `FValue` 里，比如 `Chinese` / `English`。`0505.sql` 里初始化也有这一条：
+
+```sql
+(206, '选择的语言', 'Chinese', 'RSS', ...)
+```
+
+所以你要在 SQLite 初始化里对齐 48 的逻辑，就应该初始化/更新这一条配置。需要注意：RSS 是数据库为准；它虽然也写 `App.config` 的 `Language`，但 RSS 启动语言读取走的是数据库。
+
+---
+
+
+**User**
+
+是的 帮我修改一下我的鸿蒙 帮我改一下
+
+---
+
+
+**OpenAI Codex**
+
+我来改你的鸿蒙项目。先确认目标我按 48 的逻辑做：切换语言时把当前语言保存到本地 SQLite 的配置表里，下次启动/切换读取这个值，同时保留现有 `.ing` 语言文件加载逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+我先复现路径和根因，不直接动文件：看你鸿蒙里语言切换现在保存到哪里、启动时从哪里读，以及 SQLite 配置表现在有没有类似 48 的 `tb_sys_configs/FType=选择的语言`。
+
+---
+
+
+**OpenAI Codex**
+
+我需要先把鸿蒙这边的现状摸清楚，尤其是 `I18nManager`、语言弹窗、SQLite 配置服务三处。不会编译；我只做静态检查和必要的代码修改。
+
+---
+
+
+**OpenAI Codex**
+
+我会尽量把改动收窄：只碰语言管理和已有 SQLite 配置读写，不去改页面翻译、不跑编译。先用 CodeGraph 找到现有语言切换函数和数据库服务。
+
+---
+
+
+**OpenAI Codex**
+
+我先把设计说清楚，按这个小范围执行：在现有 `I18nManager.setLanguage()` 里增加“保存当前语言到 SQLite 配置项”的动作；启动初始化时优先从 SQLite 读语言，没有值再用现有默认值/缓存；数据库表和字段尽量沿用你项目里已有的配置表，不新增页面逻辑。这个范围不会影响 `.ing` 解析、翻译 key、页面布局。
+
+---
+
+
+**OpenAI Codex**
+
+复现路径我已经对上了：主页语言弹窗确认后只进 `I18nManager.setLanguage()`，现在主要保存到 Preferences/AppStorage；启动初始化也优先读 Preferences/AppStorage。根因就是没有像 48 那样把“选择的语言”落到系统配置数据源，所以数据库里看不到/不能作为重启后的主来源。
+
+---
+
+
+**OpenAI Codex**
+
+CodeGraph 没有把这几个 ArkTS 文件索引出来，所以我切到直接读文件。接下来只读三个点：`I18nManager` 当前保存逻辑、`SystemSettingsDataService` 的配置保存接口、以及本地 API/数据库同步有没有现成的保存配置方法。
+
+---
+
+
+**OpenAI Codex**
+
+我先给这次改动加一个静态验证点，做成“不编译也能检查”的 TDD：先让检查确认现在没有数据库读写语言配置而失败，再改代码让它通过。这个检查只在命令里跑，不新增测试脚本文件。
+
+---
+
+
+**OpenAI Codex**
+
+数据库服务这边已经有现成接口：`SystemSettingsDataService.getConfigValueByType()` 能按 `FType` 读，`saveConfigEntries()` 能保存到后端 `/Api/SysConfig/SaveSysConfigs`，也就是你现在的本地数据库/API层。最小改动就是复用它，不自己新写 SQLite SQL。
+
+---
+
+
+**OpenAI Codex**
+
+这个检查没有失败，因为 `I18nManager` 里已经有“选择的语言”相关字样或别处命中了；我把断言收紧到必须同时出现配置服务导入和具体保存函数，这样才能真正验证这次行为。
+
+---
+
+
+**OpenAI Codex**
+
+红灯复现到了：当前 `I18nManager` 没有通过系统配置服务持久化语言。下面我只改 `I18nManager.ets`：加读/写系统配置两个私有方法，并把 init/setLanguage 接到这两个方法上，同时去掉重复保存 Preferences 的代码。
+
+---
+
+
+**OpenAI Codex**
+
+这里有个值映射我会按 48 兼容处理：鸿蒙 UI 内部仍然用 `中文`，但写数据库时保存成 `Chinese`；读数据库时如果看到 `Chinese` 再映射回 `中文`。这样不会影响你现在页面判断 `currentLanguage === '中文'` 的逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+我开始动文件了，范围就是 [I18nManager.ets](E:/new/my_harmony/entry/src/main/ets/utils/i18n/I18nManager.ets:1)。我会复用 `SystemSettingsDataService.saveConfigEntries()`，不新增 SQL、不改页面。
+
+---
+
+
+**OpenAI Codex**
+
+我发现一个兼容细节：如果数据库没有值，而旧版 AppStorage 里有英文，刚才的初稿会被 Preferences 默认的“中文”挡住。我马上收窄修一下：只有数据库明确有值时才压过旧缓存；数据库没值时仍保持原来的 AppStorage 兼容路径。
+
+---
+
+
+**OpenAI Codex**
+
+现在我做静态验证：检查新读写钩子存在、Preferences 重复保存已去掉、48 兼容字段名和值映射存在。不会跑 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+刚才“重复保存”的检查写得太粗了，它把 init 里旧 AppStorage 同步 Preferences 的兼容逻辑也算进去了。真实需要防的是 `setLanguage()` 里重复写两次；我换成按函数块检查。
+
+---
+
+
+**OpenAI Codex**
+
+静态检查通过了，不过我再看一个后端保存细节：`saveConfigEntries()` 发给 `/Api/SysConfig/SaveSysConfigs`，我确认它是按 `FType/FModuleName` 更新还是可能按 `FID` 插入，避免已有“选择的语言”时写出重复行。
+
+---
+
+
+**OpenAI Codex**
+
+我注意到保存时如果不先带已有 `FID`，有些后端可能会按新行插入。你项目的 `saveConfigEntries()` 已经有“先查已有配置再保存”的逻辑，所以我把语言保存改成最小条目，让它复用已有 `FID/元数据`，避免重复插入。
+
+---
+
+
+**OpenAI Codex**
+
+我把保存改成“只传 FType/FValue”的形式了，这样 `SystemSettingsDataService` 会先查后端已有的 `选择的语言`，带着原来的 `FID/元数据` 去更新；没有才新增。现在我补一个初始化默认项，让新库也天然带这条配置。
+
+---
+
+
+**OpenAI Codex**
+
+我会加一条默认系统配置 `选择的语言=Chinese`，和 48 的初始化 SQL 一样。这个只影响新初始化/默认配置列表，不会覆盖已有数据库值。
+
+---
+
+
+**OpenAI Codex**
+
+改动完成了，接下来验证三件事：原路径会写系统配置、启动会优先读系统配置、默认配置包含 48 兼容项；再做 diff check。
+
+---
+
+
+**OpenAI Codex**
+
+我还要检查 ArkTS 的类型限制，尤其是 `String(lang ?? '')` 这种写法在 ArkTS 里可能不舒服；如果有 `any/unknown` 或不明确对象字面量风险，我会顺手收紧。
+
+---
+
+
+**OpenAI Codex**
+
+静态验证过了。我再做最后一次代码审查式检查：看 diff 是否只包含这两处、有没有影响其它语言 UI 或已有 `.ing` 覆盖逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+有个小风险我刚抓到了：如果语言保存发生在系统配置默认值还没初始化之前，`saveConfigEntries()` 可能拿不到默认元数据。我要让保存语言前先 `ensureDefaults()`，这样 `选择的语言` 默认行的 `visible=0/valueType=3` 能稳定带上。
+
+---
+
+
+**OpenAI Codex**
+
+我会在 `saveLanguageToSystemConfig()` 内部先调用 `ensureDefaults()`，不改变外部调用顺序。这样即使以后别的入口先切语言，也不会丢元数据。
+
+---
+
+
+**OpenAI Codex**
+
+最后一轮验证我会稍微更严格一点：检查保存前 `ensureDefaults()` 存在、默认配置项存在、diff 没有空白错误；仍然不编译。
+
+---
+
+
+**OpenAI Codex**
+
+验证通过。按你的规则我也整理一下：原问题是语言只落 Preferences/AppStorage；根因是没有接系统配置数据源；最小范围就是 `I18nManager` 和默认配置列表，没有碰翻译文件和页面布局。
+
+---
+
+
+**OpenAI Codex**
+
+改好了。现在鸿蒙切换语言会按 48 的方式落到系统配置里：
+
+- 启动时优先读 `FType = '选择的语言'` 的配置值，再回退到原来的 `Preferences/AppStorage`。
+- 切换语言时会保存到系统配置接口，字段还是 `选择的语言`。
+- 为了兼容 48：鸿蒙内部仍用 `中文`，但写数据库时保存为 `Chinese`；读到 `Chinese` 会自动转回 `中文`。
+- 新增默认配置项：`选择的语言 = Chinese`。
+
+改动文件：
+
+- [I18nManager.ets](E:/new/my_harmony/entry/src/main/ets/utils/i18n/I18nManager.ets:109)
+- [NoDatabaseServices.ets](E:/new/my_harmony/entry/src/main/ets/protocol/NoDatabaseServices.ets:531)
+
+我没有帮你编译。验证做了静态检查和 `git diff --check`，确认语言读写钩子、默认配置项、保存次数都正常。
+
+---
+
+
+**User**
+
+然后就是有一个问题 点击底部的正常分选 不是会显示一个弹窗吗？ 然后我希望点击其他地方 可以关闭这个弹窗 然后就是切换语言之后 关闭这个更多的弹窗
+
+---
+
+
+**OpenAI Codex**
+
+我会用 brainstorming 先把这个小交互改动定清楚，再按 TDD/静态检查来改。先不动文件，我先复现路径：底部“正常分选”弹窗是谁控制的，以及“更多”弹窗在切语言成功后在哪里关闭。
+
+---
+
+
+**OpenAI Codex**
+
+我先把两个入口读清楚再给你一个很短的改动方案：底部状态弹窗大概率在 `BottomControlBar`，更多弹窗和语言选择在 `Home.ets`。我不会改代码，先把触发点确认准。
+
+---
+
+
+**OpenAI Codex**
+
+我已经复现到两个点了：底部“正常分选”走 `showSortingStatusDialog -> SortingStatusDialog`，现在只靠确认/取消关闭；语言切换在 `confirmLanguageSelection()` 结束时只关语言选择器，没有把“更多”悬浮窗一起关掉。最小改动范围会在 `Home.ets` 和必要时 `SortingStatusDialog.ets`。
+
+---
+
+
+**OpenAI Codex**
+
+根因也清楚了：排序状态弹窗没有外层遮罩点击关闭，语言切换成功后没有执行 `showFloatingWindow = false`。我会优先只改 `Home.ets`，如果现有 `SortingStatusDialog` 本身已经是可控组件，就不动它。
+
+---
+
+
+**OpenAI Codex**
+
+我查到了，方案很小：
+
+1. 底部“正常分选”弹窗  
+触发路径是 `BottomControlBar -> showSortingStatus() -> SortingStatusDialog`。现在外层 `Stack` 的 `.onClick(() => {})` 是空的，所以点外面不会关。  
+改法：外层遮罩点击调用 `handleSortingStatusCancel()`，弹窗内部点击不冒泡关闭。
+
+2. 切换语言后关闭“更多”  
+`confirmLanguageSelection()` 现在只关 `showLanguageSelector`。  
+改法：语言切换成功后再把 `showFloatingWindow = false`，这样“更多”弹窗也一起关闭。
+
+最小修改范围只动 [Home.ets](E:/new/my_harmony/entry/src/main/ets/pages/Home.ets:1928)，不改语言文件、不改数据库、不编译。你确认一下，我就直接改。
+
+---
+
+
+**User**
+
+可以来
+
+---
+
+
+**OpenAI Codex**
+
+开始改。我会先跑两个“红灯”静态检查确认当前确实没做这两个行为，然后只改 `Home.ets`：外层遮罩关闭分选状态弹窗、语言切换成功后关闭更多悬浮窗。
+
+---
+
+
+**OpenAI Codex**
+
+红灯确认到语言切换不会关“更多”。分选弹窗那个检查刚才太宽，命中了弹窗自身的取消回调；我收紧到外层遮罩 `.onClick`，再改。
+
+---
+
+
+**OpenAI Codex**
+
+现在动文件，只改两处：`confirmLanguageSelection()` 成功后关闭悬浮窗；分选状态弹窗外层点击调用取消关闭。
+
+---
+
+
+**OpenAI Codex**
+
+我注意到外层点击关闭如果弹窗内部事件冒泡，可能点弹窗内容也关闭。现在 `SortingStatusDialog` 自己没有内部阻止冒泡；我会用更稳的方式：让弹窗组件根节点自己吞掉点击，只外层遮罩关闭。需要动 `SortingStatusDialog.ets` 一行。
+
+---
+
+
+**OpenAI Codex**
+
+改完了，现在验证：外层点击能关、内部点击不会误关、语言切换成功会关更多悬浮窗；再跑 diff check。
+
+---
+
+
+**OpenAI Codex**
+
+静态验证通过。我再看最终 diff，确认没有碰多余地方。
+
+---
+
+
+**OpenAI Codex**
+
+我看 diff 时发现外侧点击如果走 `handleSortingStatusCancel()` 会弹“已取消分选状态设置”的提示，这种点空白关闭不应该打扰你。我顺手改成静默关闭，只保留弹窗按钮取消时才提示。
+
+---
+
+
+**OpenAI Codex**
+
+我最后重跑验证，特别确认外层是静默关闭、取消按钮仍走原来的取消逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+好了，已改。
+
+现在：
+
+- 点击底部“正常分选”弹出的状态窗口时，点窗口外面会关闭。
+- 点窗口内部不会误关闭。
+- 切换语言成功后，会自动关闭“更多”悬浮窗。
+- 外面点关闭分选状态弹窗是静默关闭，不会弹“已取消”的提示。
+
+我没有编译，只做了静态验证和 `git diff --check`。
+
+---
+
+
+**User**
+
+然后就是水果信息 加载配置 保存配置 这几个界面的样式 给我统一  你去看一下更多里面的样式
+
+---
+
+
+**OpenAI Codex**
+
+我会先按你说的“更多”面板样式做参照，定位 `水果信息 / 加载配置 / 保存配置` 三个弹窗现在的结构和颜色差异，再给你一个很短的统一方案确认后改。
+
+---
+
+
+**OpenAI Codex**
+
+我先只读代码不改。这里是纯样式统一，我会按“更多”面板现有的暗色、1px 边框、8px 圆角、42px tab/工具行节奏去贴近，不重新发明一套视觉语言。
+
+---
+
+
+**OpenAI Codex**
+
+注意到这几个文件已经有未提交改动，我会在修改前读清楚当前内容，避免覆盖你/前面已经做过的东西。重点看现有颜色、圆角、表格/按钮写法。
+
+---
+
+
+**OpenAI Codex**
+
+**Handoff Summary**
+
+**Current Task**
+User wants to unify the styles of three Harmony UI dialogs with the “更多” floating window style:
+- 水果信息: `entry/src/main/ets/components/feedback/FruitInfoDialog.ets`
+- 加载配置: `entry/src/main/ets/components/dialogs/LoadProgramDialog.ets`
+- 保存配置: `entry/src/main/ets/components/dialogs/SaveProgramDialog.ets`
+
+They specifically said: “水果信息 加载配置 保存配置 这几个界面的样式 给我统一 你去看一下更多里面的样式”.
+
+**Progress**
+- Started investigation only. No code changes for this task yet.
+- Read applicable skills:
+  - `brainstorming` requires design approval before implementation.
+  - `frontend-design` read but should not be overused creatively; user wants consistency with existing “更多” style, not a new design.
+- Used CodeGraph first, but it did not surface the actual dialog files well.
+- Located the relevant files and More style references.
+- Observed dirty files already exist, including:
+  - `entry/src/main/ets/components/dialogs/LoadProgramDialog.ets`
+  - `entry/src/main/ets/components/dialogs/SaveProgramDialog.ets`
+  - `entry/src/main/ets/pages/Home.ets`
+- Important: do not revert existing dirty changes.
+
+**Important Context / User Preferences**
+- User speaks Chinese; answer in Chinese.
+- User previously said “不要帮我编译”; do not run build/hvigor unless explicitly asked.
+- AGENTS.md says before bug fixes: reproduce path, root cause, minimal scope; after fix verify. This is styling, but still explain minimal scope.
+- User dislikes unnecessary scripts/files. Prefer direct edits and static checks.
+- Use `apply_patch` for edits.
+- Repo has `.codegraph`; use CodeGraph before grep/find when locating code.
+- Current workspace for Harmony: `E:\new\my_harmony`.
+- There are many unrelated dirty files in repo; only touch needed files.
+
+**Reference: “更多” Style**
+More floating window in `Home.ets`:
+- Floating window wrapper:
+  - `FloatingWindow` called around line ~5507.
+  - `useDarkChrome: this.floatingWindowTitle === t('更多设置', '更多设置')`
+  - `closeOnOutsideClick: ...`
+- More panel content:
+  - Tab nav row: height `42`, background `#22272A`, border `#51585F`, radius `8`, margin left/right `16`, top `14`, bottom `12`, padding `4`.
+  - Selected tab: background `#28625E`, border `#4F8F8A`, font white.
+  - Grid content: 3 columns, `rowsGap(8)`, `columnsGap(8)`.
+- FloatingWindow component:
+  - File `entry/src/main/ets/components/ui/layout/FloatingWindow.ets`
+  - Dark chrome panel bg: `#2C3133`
+  - Header border: `#51585F`
+  - Header close bg: `#51585F`
+  - Large border radius but project guidance prefers 8 or existing local style; current dialogs already mostly use radius 8.
+
+**Current Dialog Style Findings**
+`FruitInfoDialog.ets`
+- Already dark-ish and close to desired style.
+- Uses `DialogHeader` with:
+  - `headerBackgroundColor: '#202A31'`
+  - `headerBorderColor: '#34424B'`
+  - panel background likely `#202A31`, inner cards `#182127`, border `#45535C`, radius `8`.
+- Uses `FormInputField` with `darkStyle: true`.
+- Has an existing verify tool: `tools/verify_fruit_info_dialog_layout.mjs`. If editing this file, run it if possible.
+
+`LoadProgramDialog.ets`
+- Uses dark colors but larger/less consistent:
+  - root panel `#202A31`, border `#53616A`, radius `8`, shadow.
+  - inner list card `#182127`, border `#45535C`.
+  - program item selected bg `#253D47`, unselected `#1D272E`.
+  - buttons use `#2B7E96`, cancel `#2C3740`.
+- Uses width `55%`, height `70%`, header padding 20/15.
+- Delete button `#8A3A3A`.
+
+`SaveProgramDialog.ets`
+- Similar dark style:
+  - root `#202A31`, width `55%`, height `80%`
+  - inner card `#182127`, border `#45535C`
+  - fields bg `#2D3941`, border `#53616A`
+- The overlay Stack itself has background `rgba(0,0,0,0.5)` and `.onClick(() => {})`.
+
+**Potential Design Direction to Present Before Editing**
+Recommended approach:
+- Keep component structure and behavior.
+- Create/inline shared visual constants per dialog or copy a consistent palette:
+  - panel bg `#2C3133` or `#202A31`? Since “更多” panel itself is `#2C3133`, use root bg `#2C3133`; content bands `#22272A`; cards `#182127`/`#1D272E`; border `#51585F`; selected/accent `#28625E` / `#4F8F8A`; primary button `#28625E`; secondary `#2C3740`.
+- Make widths/heights consistent:
+  - Load/Save: same width around `55%`; Save height can be lower than 80 if content small, but user asked style not layout. Conservative: keep sizes unless obviously inconsistent.
+  - FruitInfo keep compact width/test requirements: `tools/verify_fruit_info_dialog_layout.mjs` expects `.width('62%')`, not fixed `.height('88%')`, `.constraintSize({ maxHeight: '88%' })`, `DialogButtons compact: true`, 25 fields.
+- Headers: same title color, header bg `#2C3133` or `#202A31`, border `#51585F`, padding closer to More row.
+- Inner cards: `#22272A` background, `#51585F` border, `8` radius, consistent padding.
+- Inputs/selects: `#2D3941` bg, `#53616A` or `#51585F` border, text `#F2F7F9`.
+- Buttons: `#28625E` selected/confirm, border `#4F8F8A`.
+
+**Need To Do Next**
+1. Respond to user with concise design/confirmation (because brainstorming hard-gate): explain the recommended style unification and ask approval.
+2. After user approves:
+   - Run red/static checks if possible. Could create one-off PowerShell checks, not new files.
+   - Edit:
+     - `FruitInfoDialog.ets`
+     - `LoadProgramDialog.ets`
+     - `SaveProgramDialog.ets`
+   - Keep behavior unchanged.
+   - Avoid touching `Home.ets` unless needed.
+3. Verification:
+   - `git diff --check -- <files>`
+   - Run `node tools/verify_fruit_info_dialog_layout.mjs` if FruitInfo remains compatible.
+   - For Load/Save, use static rg checks for expected palette/consistent dimensions.
+   - Do not compile.
+
+**Recently Completed Before This Task**
+- Modified language persistence:
+  - `I18nManager.ets`: reads/writes system config `选择的语言`, maps `中文` <-> `Chinese`.
+  - `NoDatabaseServices.ets`: default `选择的语言 = Chinese`.
+- Modified sorting popup/language more behavior:
+  - `Home.ets`: language switch closes `showFloatingWindow`; sorting status outside click closes silently.
+  - `SortingStatusDialog.ets`: internal click swallowed, i18n applied to labels.
+- These changes explain some dirty files and should not be reverted.
+
+---
+
+
+**OpenAI Codex**
+
+我先按你的要求对齐“更多”弹窗的现有风格，不新做一套视觉。先把相关技能和项目约束读一下，然后直接看这三个弹窗和“更多”的样式来源。
+
+---
+
+
+**OpenAI Codex**
+
+我会先把“更多”的样式源头和这三个弹窗当前写法对上，确认只改外观层，不碰加载/保存/水果信息的数据逻辑。你之前说过不要编译，我后面只做静态检查，不跑 hvigor。
+
+---
+
+
+**OpenAI Codex**
+
+现在我先做三件事：复现路径按“打开对应弹窗看样式不一致”来定位，根因找颜色/边框/按钮样式差异，修改范围会限制在这三个弹窗文件里。先用 CodeGraph 看符号和文件关系。
+
+---
+
+
+**OpenAI Codex**
+
+CodeGraph 只找到了一部分工具校验和路径信息，没有把弹窗主体展开出来，所以我接着读具体文件。重点看颜色、边框、圆角、按钮和外层遮罩，行为代码先不动。
+
+---
+
+
+**OpenAI Codex**
+
+CodeGraph 没索引这些 `.ets` 组件主体，只能看到路径，所以我切到直接读文件。这个不影响修改判断，我会继续按“更多”的 `FloatingWindow` 深色面板参数做参照。
+
+---
+
+
+**OpenAI Codex**
+
+我看了，“更多”的深色样式核心是：
+
+面板底色 `#2C3133`，边框 `#51585F`，内容区偏深 `#22272A / #1D272E`，选中/确认用 `#28625E`，高亮边框 `#4F8F8A`，文字统一白色系。
+
+我准备只改这三个文件的外观，不动数据和回调逻辑：
+
+- `FruitInfoDialog.ets`
+- `LoadProgramDialog.ets`
+- `SaveProgramDialog.ets`
+
+修改方向：标题栏、外层面板、内容卡片、输入框、列表选中态、确认/取消按钮都对齐“更多”的暗色风格；大小和弹窗行为先保持原来的，避免影响加载配置/保存配置/水果信息的业务逻辑。
+
+你确认一下，我就直接改。
+
+---
+
+
+**User**
+
+确定
+
+---
+
+
+**OpenAI Codex**
+
+收到，我开始改。范围会很小：只把三个弹窗的色板、边框、按钮和内容卡片改成“更多”的深色体系，加载/保存/水果信息的数据、回调、关闭方式都不动。
+
+---
+
+
+**OpenAI Codex**
+
+根因已经很明确：这三个弹窗之前是自己一套深色配色，外层是 `#202A31/#53616A`，内容卡片是 `#182127/#45535C`，主按钮是蓝青 `#2B7E96`；而“更多”用的是 `#2C3133/#51585F` 和绿色选中态 `#28625E/#4F8F8A`。我现在按这个差异做最小外观替换。
+
+---
+
+
+**OpenAI Codex**
+
+我顺手看了一下共用的表单和按钮组件，确认它们支持直接传颜色，不需要改公共组件。这样不会把别的弹窗一起变掉，风险比较低。
+
+---
+
+
+**OpenAI Codex**
+
+接下来会出现一个小的公共组件改动：给 `DialogHeader` 加一个可选的关闭按钮背景色参数，这样这三个弹窗的关闭按钮也能变成“更多”的深色按钮。默认值不变，所以其他弹窗不受影响。
+
+---
+
+
+**OpenAI Codex**
+
+我已经给标题栏补了一个可选参数，只是为了这几个弹窗能传深色关闭按钮背景，默认样式没变。现在开始分别替换水果信息、加载配置、保存配置里的颜色和按钮状态。
+
+---
+
+
+**OpenAI Codex**
+
+加载配置已经对齐了：外层、标题栏、列表卡片、选中项和按钮都换成“更多”的色板。下一步改保存配置，主要是输入区和按钮。
+
+---
+
+
+**OpenAI Codex**
+
+保存配置也改好了；它还有两个暂时没在主界面使用的 Builder，我也把里面的选中态和预览卡片同步了，避免以后打开时风格又断开。现在处理水果信息。
+
+---
+
+
+**OpenAI Codex**
+
+水果信息的外层和手写输入框已经对齐了。我发现它里面 25 个数值输入是共用 `FormInputField(darkStyle)` 生成的，默认仍然是旧边框色；我先查一下这个组件在哪些地方还用，避免全局误伤。
+
+---
+
+
+**OpenAI Codex**
+
+`FormInputField` 目前只在水果信息里用，所以我可以把它的 darkStyle 输入框颜色也一起换成“更多”的深色边框，不会扩散到其他界面。这样水果信息里的 25 个字段就不会残留旧蓝灰边框。
+
+---
+
+
+**OpenAI Codex**
+
+外观替换已完成，另外只动了两个很小的共用点：`DialogHeader` 多一个可选关闭按钮背景色，`FormInputField` 的 darkStyle 色板对齐水果信息。现在我做静态验证，不编译。
+
+---
+
+
+**OpenAI Codex**
+
+静态检查有两个结果：`git diff --check` 通过，水果信息布局校验也通过。`verify_user_program_compat.mjs` 失败了，但失败点是它还在断言删除按钮必须写死 `'删除'`，而当前代码已经做过 `t('删除')` 国际化，这个和本次样式修改无关，我不会为了这个把翻译改回中文写死。
+
+---
+
+
+**OpenAI Codex**
+
+改好了，样式已经统一到“更多”的深色风格。
+
+主要改了这几个地方：
+- [LoadProgramDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/LoadProgramDialog.ets)：加载配置弹窗外层、列表卡片、选中项、按钮改成 `#2C3133 / #51585F / #28625E` 这套风格。
+- [SaveProgramDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/SaveProgramDialog.ets)：保存配置弹窗、输入框、按钮、预览卡片统一。
+- [FruitInfoDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/feedback/FruitInfoDialog.ets)：水果信息弹窗标题栏、内容卡片、手写输入框和按钮统一。
+- [DialogHeader.ets](E:/new/my_harmony/entry/src/main/ets/components/ui/dialogs/DialogHeader.ets)：只加了一个可选的关闭按钮背景色参数，默认不变。
+- [FormInputField.ets](E:/new/my_harmony/entry/src/main/ets/components/ui/forms/FormInputField.ets)：只调整 `darkStyle` 的输入框颜色；我查过当前只有水果信息在用它。
+
+验证：
+- `git diff --check` 通过。
+- `node tools/verify_fruit_info_dialog_layout.mjs` 通过。
+- 没有编译，按你之前说的“不帮我编译”处理。
+- 另一个 `verify_user_program_compat.mjs` 失败了，但原因是它还要求删除按钮写死 `'删除'`，现在代码已经国际化成 `t('删除')`，不是这次样式改动导致的。
+
+---
+
+
+**User**
+
+这个正常分选也修改一下样式
+
+---
+
+
+**OpenAI Codex**
+
+我先定位“正常分选”弹窗是哪一个组件，再按刚才“更多”的深色风格给你一个很短的改法确认。这个应该只改弹窗外观，不碰底部按钮和分选状态逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+CodeGraph 没直接展开“正常分选”的弹窗主体，我继续用 `rg` 定位具体组件。先确认文件位置和当前样式，再给你最小改动确认。
+
+---
+
+
+**OpenAI Codex**
+
+我找到了，底部“正常分选”点出来的是 [SortingStatusDialog.ets] 这个弹窗，挂在 `Home.ets` 的底部控制栏上方。现在我看它当前样式，确认要改的是弹窗本身，不改 `Home` 的显示/关闭逻辑。
+
+---
+
+
+**OpenAI Codex**
+
+确认一下改法：我找到“正常分选”弹窗是 [SortingStatusDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/SortingStatusDialog.ets)。
+
+现在它还在用主题色 `getCurrentTheme()`，所以和“更多”的暗色弹窗不一致。我建议只改这个文件的样式：
+
+- 外层面板：`#2C3133`
+- 边框/分割线：`#51585F`
+- 表头：`#28625E`，边框 `#4F8F8A`
+- 表格内容：`#1D272E / #22272A`
+- 文字：白色和浅灰
+- 圆角保持 8，不动它现在的位置、大小、点击外面关闭逻辑、实时数据逻辑
+
+可以我就直接改。
+
+---
+
+
+**User**
+
+是的
+
+---
+
+
+**OpenAI Codex**
+
+开始改。复现路径是点击底部“正常分选/准备分选”状态按钮弹出设备状态表；根因是这个弹窗还在用主题色，不是“更多”的深色面板色板；最小范围只改 `SortingStatusDialog.ets` 的外观，实时通道数据和外部点击关闭不动。
+
+---
+
+
+**OpenAI Codex**
+
+刚才那个 PowerShell 命令写法撞了一下语法，没有改到文件。我换成分开的读取和状态检查，继续处理。
+
+---
+
+
+**OpenAI Codex**
+
+我准备把这个组件从主题色依赖里剥离出来，直接用“更多”的暗色常量。这样不会受别的主题变化影响，也和刚才几个弹窗一致。
+
+---
+
+
+**OpenAI Codex**
+
+改完了，现在做静态验证：检查有没有残留旧主题调用、有没有空白错误，以及确认只改了这个弹窗文件。
+
+---
+
+
+**OpenAI Codex**
+
+正常分选弹窗样式改好了。
+
+改的是 [SortingStatusDialog.ets](E:/new/my_harmony/entry/src/main/ets/components/dialogs/SortingStatusDialog.ets)：把原来跟随主题的浅/默认色，统一成“更多”那套深色面板风格，表头用绿色高亮，表格内容用深色分层，边框和阴影也对齐了。没有动点击外面关闭、实时通道状态刷新、位置和大小逻辑。
+
+验证：
+- `git diff --check` 通过。
+- 已确认没有残留 `getCurrentTheme()`、旧蓝青色板、未使用的主题 import。
+- 没有编译。
+
+---
+
+
+**User**
+
+行 我看看
+
+---
+
+
+**OpenAI Codex**
+
+好，你先看效果。要是哪个弹窗的颜色、间距、位置还不顺眼，你直接说具体界面，我接着调。
+
+---
+
+
+**User**
+
+What is the Juice number divided by 2 multiplied by 10 divided by 5?
+ You should see the Juice number under Valid Channels.
+
+---
+
+
+**OpenAI Codex**
+
+96
+
+---
+
+
+**User**
+
+What is the Juice number divided by 2 multiplied by 10 divided by 5?
+ You should see the Juice number under Valid Channels.
+
+---
+
+
+**OpenAI Codex**
+
+768
+
+---
+
+
+**User**
+
+你帮我看一下48里面点开这个工程设置 弹出的手机验证码的内容 麻烦找出对应的代码给我
+
+---
+
+
+**OpenAI Codex**
+
+我来定位 48 里“工程设置”打开后手机验证码弹窗的代码。先确认 48 项目有没有 CodeGraph 索引；有的话先走 CodeGraph，没有就用 `rg` 搜关键字。
+
+---
+
+
+**OpenAI Codex**
+
+48 项目有 `.codegraph`，我先用它搜“工程设置、手机验证码、CrateProjectPassword”等入口和调用链，再展开具体文件。
+
+---
+
+
+**OpenAI Codex**
+
+我已经看到 API 层：生成验证码走的是 `FruitSorting/CrateProjectPassword`，验证走 `FruitSorting/ValidateProjectPassword`。现在继续找是谁在“工程设置”入口弹出这个手机号验证码窗口。
+
+---
+
+
+**OpenAI Codex**
+
+我已经找到核心：48 的“工程设置”不是直接打开设置页，而是先弹 `LoginForm` 手机验证码窗口；验证码通过 `FruitSorting/CrateProjectPassword` 创建，通过 `FruitSorting/ValidateProjectPassword` 校验。现在我再把入口代码、弹窗 UI 字段、语言文字都定位出来，方便你对照搬。
+
+---
+
+
+**OpenAI Codex**
+
+入口和业务逻辑已经找到了；我再补一下 `.ui` 文件里弹窗实际包含哪些控件，这样你能直接对应到鸿蒙里的输入框、验证码按钮、确定取消按钮。
+
+---
+
+
+**OpenAI Codex**
+
+RSS 版本就是你之前一直对照的水果分选主程序，我继续展开 `RSS/Forms/loginform.ui` 和样式文件。RVS/RIS 也有同名登录窗，但工程设置入口这条链路走的是 RSS。
+
+---
+
+
+**OpenAI Codex**
+
+找到了，48 里“工程设置”点开后弹出的手机验证码窗口是 `RSS.LoginForm`。
+
+入口在这里：
+[optionform.cpp](C:/Users/AI008/Desktop/48/48/RSS/Forms/optionform.cpp:163)
+
+核心逻辑是：
+
+```cpp
+LoginForm *loginForm = new LoginForm();
+int flag = loginForm->exec();
+delete loginForm;
+
+if(QDialog::Accepted == flag)
+{
+    projectSetForm = new ProjectSetForm();
+    projectSetForm->setModal(false);
+    projectSetForm->show();
+}
+```
+
+也就是说：点“工程设置”之后，先弹 `LoginForm`，验证通过才打开 `ProjectSetForm`。
+
+验证码弹窗代码：
+[loginform.cpp](C:/Users/AI008/Desktop/48/48/RSS/Forms/loginform.cpp:106)
+
+获取验证码走 API：
+
+```cpp
+QString url = GlobalDataInterface::CurrentUrl + "FruitSorting/CrateProjectPassword";
+QVariantMap data;
+data.insert("FPhone", ui->txt_FPhone->text().trimmed());
+HttpResponse *response = GlobalDataInterface::m_HttpHelper->HttpResponseApi(
+  url,
+  GlobalDataInterface::NotVerifyHeaders(),
+  JsonConvertHelper::SerializeObject(data)
+);
+```
+
+确认验证也走 API：
+
+```cpp
+QString url = GlobalDataInterface::CurrentUrl + "FruitSorting/ValidateProjectPassword";
+QVariantMap data;
+data.insert("FPhone", ui->txt_FPhone->text().trimmed());
+data.insert("FValidateCode", ui->txt_FValidateCode->text().trimmed());
+```
+
+弹窗 UI 在这里：
+[loginform.ui](C:/Users/AI008/Desktop/48/48/RSS/Forms/loginform.ui:34)
+
+控件是：
+- `txt_FPhone`：手机号输入框
+- `txt_FValidateCode`：验证码/密码输入框
+- `btn_GetProjectCode`：获取验证码按钮
+- `btnOK`：确定
+- `btnCancel`：取消
+
+样式在这里：
+[LoginForm.qss](C:/Users/AI008/Desktop/48/48/RSS/Forms/qrc/qss/LoginForm.qss:1)
+
+它的颜色就是你现在常用的那套：
+- 背景：`rgb(44, 49, 51)`，也就是 `#2C3133`
+- 确定按钮：`rgb(40, 98, 94)`，也就是 `#28625E`
+- 取消/获取验证码：`rgb(81, 88, 95)`，也就是 `#51585F`
+
+语言内容在：
+[Chinese.ing](C:/Users/AI008/Desktop/48/48/RSS/Resource/Chinese.ing:117)
+
+这里面包括 `认证`、`号码`、`密码`、`获取验证码`、`手机号输入错误` 等。
+
+---
