@@ -587,7 +587,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 			return
 		}
 		setCTCPServerLastMessage("CTCP StWeightResult JSON 生成失败: %v", jsonErr)
-	case cmdFSMWaveInfo, cmdWAMWaveInfo:
+	case cmdFSMWaveInfo, cmdWAMWaveInfo: //WM FSMWaveInfo 0x1004 WAMWaveInfo 0x0122S
 		waveInfo, err := ParseData[StWaveInfo](payload)
 		if err != nil {
 			setCTCPServerLastMessage("CTCP handled %s: parse StWaveInfo failed (%v), payload=%d bytes, need sizeof=%d",
