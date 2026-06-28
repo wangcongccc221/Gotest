@@ -87,6 +87,7 @@ type webSocketControlMessage struct {
 	ExitAdditionalText         *webSocketExitAdditionalTextControl `json:"exitAdditionalText,omitempty"`
 	LevelAuxConfig             *webSocketLevelAuxConfigControl     `json:"levelAuxConfig,omitempty"`
 	PreserveCachedGradeExits   *bool                               `json:"preserveCachedGradeExits,omitempty"`
+	GradeNameTexts             *webSocketGradeNameTexts            `json:"gradeNameTexts,omitempty"`
 	FruitTypeConfig            *webSocketFruitTypeConfigControl    `json:"fruitTypeConfig,omitempty"`
 	ProjectScheme              *webSocketProjectSchemeControl      `json:"projectScheme,omitempty"`
 	DensityInfo                *StAnalogDensity                    `json:"densityInfo,omitempty"`
@@ -1734,7 +1735,7 @@ func DragLevelData(control webSocketControlMessage) (int, int32, int) {
 		summarizeGradeExitLowHigh(grade),
 	)
 
-	payload, err := encodeGradeInfoPayload(grade)
+	payload, err := encodeGradeInfoPayloadWithNameTexts(grade, control.GradeNameTexts)
 	if err != nil {
 		setCTCPServerLastMessage("WebSocket dropdata failed: encode StGradeInfo: %v", err)
 		return -1, destID, 0
@@ -1783,7 +1784,7 @@ func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) { //æ
 		summarizeGradeExitLowHigh(grade),
 	)
 
-	payload, err := encodeGradeInfoPayload(grade)
+	payload, err := encodeGradeInfoPayloadWithNameTexts(grade, control.GradeNameTexts)
 	if err != nil {
 		setCTCPServerLastMessage("WebSocket clearExitGrades failed: encode StGradeInfo: %v", err)
 		return -1, destID, 0
@@ -1866,7 +1867,7 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 		}
 	}
 
-	payload, err := encodeGradeInfoPayload(grade)
+	payload, err := encodeGradeInfoPayloadWithNameTexts(grade, control.GradeNameTexts)
 	if err != nil {
 		setCTCPServerLastMessage("WebSocket %s failed: encode StGradeInfo: %v", topic, err)
 		return -1, destID, 0
@@ -2945,6 +2946,11 @@ func applyGradeExitMapping(grade *StGradeInfo, exits []webSocketGradeExit) error
 }
 
 func encodeGradeInfoPayload(grade StGradeInfo) ([]byte, error) {
+	return encodeGradeInfoPayloadWithNameTexts(grade, nil)
+}
+
+func encodeGradeInfoPayloadWithNameTexts(grade StGradeInfo, names *webSocketGradeNameTexts) ([]byte, error) {
+	grade = gradeInfoForGBKWireWithNameTexts(grade, names)
 	size := int(unsafe.Sizeof(grade))
 	if size != cTCP48StGradeInfoWireSize {
 		return nil, fmt.Errorf("sizeof(StGradeInfo)=%d, expected=%d", size, cTCP48StGradeInfoWireSize)

@@ -192,7 +192,7 @@ func applyExitDisplayInfoToBroadcastSysConfig(config *StBroadcastSysConfig, info
 	for i, name := range info.DisplayNames {
 		start := i * cTCPExitDisplayNameWireSize
 		end := start + cTCPExitDisplayNameWireSize
-		copy(config.StrDisplayName[start:end], []byte(name))
+		writeGBKFixedTextSlot(config.StrDisplayName[start:end], name)
 	}
 }
 

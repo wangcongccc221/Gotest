@@ -126,10 +126,7 @@ func TestBuildExitDisplayBroadcastPacketUsesCustomNameWhenBitEnabled(t *testing.
 	if got := int(packet[1]) | int(packet[2])<<8 | int(packet[3])<<16 | int(packet[4])<<24; got != 1 {
 		t.Fatalf("first ExitIndex = %d, want 1", got)
 	}
-	name := string(packet[5 : 5+len("自定义出口")])
-	if name != "自定义出口" {
-		t.Fatalf("first GradeName prefix = %q, want 自定义出口", name)
-	}
+	assertBytesPrefix(t, packet[5:5+cTCPExitGradeNameWireSize], []byte{0xD7, 0xD4, 0xB6, 0xA8, 0xD2, 0xE5, 0xB3, 0xF6, 0xBF, 0xDA})
 }
 
 func TestBuildExitDisplayBroadcastPacketFallsBackToGradeNames(t *testing.T) {
@@ -144,8 +141,5 @@ func TestBuildExitDisplayBroadcastPacketFallsBackToGradeNames(t *testing.T) {
 	packet := buildExitDisplayBroadcastPacket(defaultExitDisplayInfo(), grade, true)
 
 	nameStart := 1 + 4
-	name := string(packet[nameStart : nameStart+len("中果.A级")])
-	if name != "中果.A级" {
-		t.Fatalf("first GradeName prefix = %q, want 中果.A级", name)
-	}
+	assertBytesPrefix(t, packet[nameStart:nameStart+cTCPExitGradeNameWireSize], []byte{0xD6, 0xD0, 0xB9, 0xFB, 0x2E, 0x41, 0xBC, 0xB6})
 }

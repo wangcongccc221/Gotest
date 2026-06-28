@@ -495,6 +495,7 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		if err != nil {
 			return
 		}
+		frontendStg := stGlobalFromGBKWireForFrontend(stg)
 		LogQualityGradeDiagnostics(
 			fmt.Sprintf("FSM_CMD_CONFIG src=0x%04X remote=%s", uint32(head.NSrcId), remoteAddr),
 			stg.Grade,
@@ -504,8 +505,8 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		cacheAboutStGlobal(stg)
 		cacheHomeStatsGlobalConfig(stg)
 		cacheRealtimeSaveGlobalConfig(stg)
-		cacheLatestGradeInfo(head.NSrcId, stg.Grade)
-		stgJSON, jsonErr := FormatDataFullJSON(stg)
+		cacheLatestGradeInfo(head.NSrcId, frontendStg.Grade)
+		stgJSON, jsonErr := FormatStGlobalFullJSON(stg)
 		goSz := int(unsafe.Sizeof(StGlobal{}))
 		setCTCPServerLastMessage(
 			"CTCP %s: sizeof(StGlobal)=%d, payload=%d bytes, nSubsysNum=%d, nSubsysId=%d, nVersion=%d, gradeActiveExits=%s, gradeByExit=%s",

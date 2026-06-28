@@ -92,7 +92,7 @@ func buildExitDisplayBroadcastPacket(info ExitDisplayInfo, grade StGradeInfo, ha
 		offset := 1 + exitIndex*cTCPExitGradeItemWireSize
 		binary.LittleEndian.PutUint32(packet[offset:offset+4], uint32(exitIndex+1))
 		name := resolveExitDisplayGradeName(info, grade, hasGrade, exitIndex)
-		copy(packet[offset+4:offset+4+cTCPExitGradeNameWireSize], []byte(name))
+		writeGBKFixedTextSlot(packet[offset+4:offset+4+cTCPExitGradeNameWireSize], name)
 	}
 	packet[len(packet)-1] = 0x55
 	return packet

@@ -24,7 +24,7 @@ func setCTCPLastStGlobalFullJSON(jsonText string) {
 }
 
 func saveCTCPStGlobalFullJSON(global StGlobal) string {
-	full, err := FormatDataFullJSON(global)
+	full, err := FormatStGlobalFullJSON(global)
 	if err != nil {
 		setCTCPLastStGlobalFullJSON("")
 	} else {
@@ -34,6 +34,18 @@ func saveCTCPStGlobalFullJSON(global StGlobal) string {
 		return ""
 	}
 	return full
+}
+
+type stGlobalFrontendJSON struct {
+	StGlobal
+	GradeNameTexts webSocketGradeNameTexts `json:"GradeNameTexts,omitempty"`
+}
+
+func FormatStGlobalFullJSON(global StGlobal) (string, error) {
+	return FormatDataFullJSON(stGlobalFrontendJSON{
+		StGlobal:       stGlobalFromGBKWireForFrontend(global),
+		GradeNameTexts: gradeNameTextsFromGBKWire(global.Grade),
+	})
 }
 
 // 解析传入的data转换成字符串  前提是 结构体中的字段开头必须是大写的 才可以用这个 不然需要导出

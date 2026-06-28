@@ -94,7 +94,7 @@ func applyExitAdditionalTextInfoToBroadcastData(data *StExitAdditionalTextData, 
 	for i, text := range info.AdditionalTexts {
 		start := i * cTCPExitAdditionalTextWireSize
 		end := start + cTCPExitAdditionalTextWireSize
-		copy(data.Additionaldata[start:end], []byte(text))
+		writeGBKFixedTextSlot(data.Additionaldata[start:end], text)
 	}
 }
 
