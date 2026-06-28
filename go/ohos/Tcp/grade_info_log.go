@@ -94,6 +94,78 @@ func LogStGradeInfo(grade StGradeInfo) {
 	appendCTCPLogChunks("StGradeInfo 全量", DumpStGradeInfo(grade))
 }
 
+// LogStGradeInfoParameterFields 输出参数设置相关字段，便于对照前端保存和下位机回读。
+func LogStGradeInfoParameterFields(source string, grade StGradeInfo) {
+	appendCTCPLogChunks(
+		"StGradeInfo 参数字段",
+		strings.TrimSpace(fmt.Sprintf("source=%s\n%s", source, formatStGradeInfoParameterFields(grade))),
+	)
+}
+
+func formatStGradeInfoParameterFields(grade StGradeInfo) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "ColorIntervals=%v\n", grade.ColorIntervals)
+	fmt.Fprintf(&b, "UnFlawAreaFactor=%v FlawPairs=[%s]\n", grade.UnFlawAreaFactor, formatUint32FactorPairs(grade.UnFlawAreaFactor))
+	fmt.Fprintf(&b, "UnBruiseFactor=%v BruisePairs=[%s]\n", grade.UnBruiseFactor, formatUint32FactorPairs(grade.UnBruiseFactor))
+	fmt.Fprintf(&b, "UnRotFactor=%v RotPairs=[%s]\n", grade.UnRotFactor, formatUint32FactorPairs(grade.UnRotFactor))
+	fmt.Fprintf(&b, "FDensityFactor=%v\n", grade.FDensityFactor)
+	fmt.Fprintf(&b, "FSugarFactor=%v\n", grade.FSugarFactor)
+	fmt.Fprintf(&b, "FAcidityFactor=%v\n", grade.FAcidityFactor)
+	fmt.Fprintf(&b, "FHollowFactor=%v\n", grade.FHollowFactor)
+	fmt.Fprintf(&b, "FSkinFactor=%v\n", grade.FSkinFactor)
+	fmt.Fprintf(&b, "FBrownFactor=%v\n", grade.FBrownFactor)
+	fmt.Fprintf(&b, "FTangxinFactor=%v\n", grade.FTangxinFactor)
+	fmt.Fprintf(&b, "FRigidityFactor=%v\n", grade.FRigidityFactor)
+	fmt.Fprintf(&b, "FWaterFactor=%v\n", grade.FWaterFactor)
+	fmt.Fprintf(&b, "FShapeFactor=%v\n", grade.FShapeFactor)
+	fmt.Fprintf(&b, "StrColorGradeName=%s\n", formatFixedTextSlotsForLog(grade.StrColorGradeName[:], cTCPServerMaxColorGradeNum))
+	fmt.Fprintf(&b, "StrShapeGradeName=%s\n", formatFixedTextSlotsForLog(grade.StrShapeGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StFlawareaGradeName=%s\n", formatFixedTextSlotsForLog(grade.StFlawareaGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StBruiseGradeName=%s\n", formatFixedTextSlotsForLog(grade.StBruiseGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StRotGradeName=%s\n", formatFixedTextSlotsForLog(grade.StRotGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StDensityGradeName=%s\n", formatFixedTextSlotsForLog(grade.StDensityGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StSugarGradeName=%s\n", formatFixedTextSlotsForLog(grade.StSugarGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StAcidityGradeName=%s\n", formatFixedTextSlotsForLog(grade.StAcidityGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StHollowGradeName=%s\n", formatFixedTextSlotsForLog(grade.StHollowGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StSkinGradeName=%s\n", formatFixedTextSlotsForLog(grade.StSkinGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StBrownGradeName=%s\n", formatFixedTextSlotsForLog(grade.StBrownGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StTangxinGradeName=%s\n", formatFixedTextSlotsForLog(grade.StTangxinGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StRigidityGradeName=%s\n", formatFixedTextSlotsForLog(grade.StRigidityGradeName[:], cTCPServerMinorGradeNum))
+	fmt.Fprintf(&b, "StWaterGradeName=%s", formatFixedTextSlotsForLog(grade.StWaterGradeName[:], cTCPServerMinorGradeNum))
+	return b.String()
+}
+
+func formatUint32FactorPairs(values [12]uint32) string {
+	parts := make([]string, 0, len(values)/2)
+	for index := 0; index+1 < len(values); index += 2 {
+		parts = append(parts, fmt.Sprintf("%d:(area=%d,count=%d)", index/2+1, values[index], values[index+1]))
+	}
+	return strings.Join(parts, ", ")
+}
+
+func formatFixedTextSlotsForLog(data []uint8, count int) string {
+	if count <= 0 || cTCPServerMaxTextLength <= 0 {
+		return "[]"
+	}
+	maxCount := len(data) / cTCPServerMaxTextLength
+	if count > maxCount {
+		count = maxCount
+	}
+	parts := make([]string, 0, count)
+	for index := 0; index < count; index++ {
+		start := index * cTCPServerMaxTextLength
+		end := start + cTCPServerMaxTextLength
+		slot := data[start:end]
+		text := realtimeSaveFixedText(slot)
+		raw := realtimeSaveCStringBytes(slot)
+		if text == "" && len(raw) == 0 {
+			continue
+		}
+		parts = append(parts, fmt.Sprintf("%d:%q bytes=% X", index+1, text, raw))
+	}
+	return "[" + strings.Join(parts, ", ") + "]"
+}
+
 // LogQualityGradeDiagnostics 输出每个品质等级在各尺寸档位下的分级条件。
 func LogQualityGradeDiagnostics(source string, grade StGradeInfo) {
 	var b strings.Builder

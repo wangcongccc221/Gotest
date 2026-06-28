@@ -663,7 +663,11 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 		setCTCPServerLastMessage("CTCP StWeightGlobal JSON 生成失败: %v", jsonErr)
 	case cmdIPMImage, cmdIPMImageSplice, cmdIPMImageSpot:
-		setCTCPServerLastMessage("CTCP handled %s: raw image payload saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
+		if err := publishCTCPIpmImageFrame(s.name, head, payload); err != nil {
+			setCTCPServerLastMessage("CTCP handled %s: raw image payload saved=%d bytes, publish image failed: %v", cTCPCommandName(head.NCmdId), len(payload), err)
+			return
+		}
+		setCTCPServerLastMessage("CTCP handled %s: raw image payload saved=%d bytes, image frame published", cTCPCommandName(head.NCmdId), len(payload))
 	case cmdIPMAutoBalanceCoefficient:
 		setCTCPServerLastMessage("CTCP handled %s: raw StWhiteBalanceCoefficient saved=%d bytes", cTCPCommandName(head.NCmdId), len(payload))
 	case cmdIPMShutterAdjust:

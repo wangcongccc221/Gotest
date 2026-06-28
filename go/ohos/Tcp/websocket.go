@@ -1867,6 +1867,13 @@ func SendGradeInfoData(topic string, commandID int32, control webSocketControlMe
 		}
 	}
 
+	if topic == "saveQualityData" {
+		LogStGradeInfoParameterFields(
+			fmt.Sprintf("WebSocket %s 下发前 dest=0x%04X cmd=0x%04X", topic, uint32(destID), uint32(commandID)),
+			grade,
+		)
+	}
+
 	payload, err := encodeGradeInfoPayloadWithNameTexts(grade, control.GradeNameTexts)
 	if err != nil {
 		setCTCPServerLastMessage("WebSocket %s failed: encode StGradeInfo: %v", topic, err)
