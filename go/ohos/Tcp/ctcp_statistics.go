@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"fmt"
 	"math"
 	"sync"
 	"time"
@@ -9,6 +10,7 @@ import (
 const (
 	cTCPStStatisticsSpeedPublishInterval = time.Second
 	cTCPStStatisticsSpeedStaleInterval   = 2500 * time.Millisecond
+	cTCPHomeBatchStatsLogInterval        = 5 * time.Second
 )
 
 type cTCPStStatisticsSpeedState struct {
@@ -18,9 +20,10 @@ type cTCPStStatisticsSpeedState struct {
 }
 
 var (
-	cTCPStStatisticsSpeedMu    sync.Mutex
-	cTCPStStatisticsSpeedBySys = make(map[int32]*cTCPStStatisticsSpeedState)
-	cTCPStStatisticsSpeedStop  chan struct{}
+	cTCPStStatisticsSpeedMu     sync.Mutex
+	cTCPStStatisticsSpeedBySys  = make(map[int32]*cTCPStStatisticsSpeedState)
+	cTCPStStatisticsSpeedStop   chan struct{}
+	cTCPHomeBatchStatsLastLogAt time.Time
 )
 
 func StartStStatisticsSpeedPublisher() {
@@ -62,6 +65,7 @@ func StopStStatisticsSpeedPublisher() {
 	stop := cTCPStStatisticsSpeedStop
 	cTCPStStatisticsSpeedStop = nil
 	cTCPStStatisticsSpeedBySys = make(map[int32]*cTCPStStatisticsSpeedState)
+	cTCPHomeBatchStatsLastLogAt = time.Time{}
 	cTCPStStatisticsSpeedMu.Unlock()
 	if stop != nil {
 		close(stop)
@@ -147,8 +151,55 @@ func latestStStatisticsSpeedSnapshots(now time.Time) []StStatistics {
 	return snapshots
 }
 
+func shouldLogHomeBatchStats(now time.Time) bool {
+	if now.IsZero() {
+		return false
+	}
+	return cTCPHomeBatchStatsLastLogAt.IsZero() ||
+		now.Sub(cTCPHomeBatchStatsLastLogAt) >= cTCPHomeBatchStatsLogInterval
+}
+
+func formatHomeBatchStatsLine(stats StStatistics) string {
+	subsysID := stats.NSubsysId
+	if subsysID <= 0 {
+		subsysID = 1
+	}
+	exitWeightTotal := sumHomeStatsUint64(stats.NExitWeightCount[:])
+	gradeWeightTotal := sumHomeStatsUint64(stats.NWeightGradeCount[:])
+	return fmt.Sprintf(
+		"subsys=%d, 本批个数(NChannelTotalCount)=%d, 本批重量=%.0f, NChannelWeightCount=%d, sum(NExitWeightCount)=%d, sum(NWeightGradeCount)=%d",
+		subsysID,
+		homeStatsTotalCount(stats),
+		homeStatsTotalWeight(stats),
+		stats.NChannelWeightCount,
+		exitWeightTotal,
+		gradeWeightTotal,
+	)
+}
+
+func logLatestHomeBatchStats(now time.Time, snapshots []StStatistics) {
+	cTCPStStatisticsSpeedMu.Lock()
+	if !shouldLogHomeBatchStats(now) {
+		cTCPStStatisticsSpeedMu.Unlock()
+		return
+	}
+	cTCPHomeBatchStatsLastLogAt = now
+	cTCPStStatisticsSpeedMu.Unlock()
+
+	if len(snapshots) == 0 {
+		setCTCPServerLastMessage(
+			"CTCP WAM本批统计 5秒打印: 尚无 StStatistics 快照（本批个数字段=NChannelTotalCount, 本批重量字段=NChannelWeightCount，回退=sum(NExitWeightCount)/sum(NWeightGradeCount)）",
+		)
+		return
+	}
+	for _, stats := range snapshots {
+		setCTCPServerLastMessage("CTCP WAM本批统计 5秒打印: %s", formatHomeBatchStatsLine(stats))
+	}
+}
+
 func publishLatestStStatisticsSpeed(now time.Time) {
 	snapshots := latestStStatisticsSpeedSnapshots(now)
+	logLatestHomeBatchStats(now, snapshots)
 	for _, state := range snapshots {
 		stateJSON, jsonErr := FormatDataFullJSON(state)
 		if stateJSON == "" || jsonErr != nil {

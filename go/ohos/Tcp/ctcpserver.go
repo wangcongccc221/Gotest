@@ -529,6 +529,26 @@ func (s *cTCPServer) handleCommandPayload(remoteAddr string, head cTCPServerComm
 		}
 
 	case cmdFSMStatistics: //0x1001
+		setCTCPServerLastMessage(
+			"[STSTATS_RAW] src=0x%04X payload=%d bytes sizeof(StStatistics)=%d HEX:\n%s",
+			uint32(head.NSrcId),
+			len(payload),
+			int(unsafe.Sizeof(StStatistics{})),
+			func() string {
+				var b strings.Builder
+				for i := 0; i < len(payload); i++ {
+					if i > 0 {
+						if i%32 == 0 {
+							b.WriteByte('\n')
+						} else {
+							b.WriteByte(' ')
+						}
+					}
+					fmt.Fprintf(&b, "%02X", payload[i])
+				}
+				return b.String()
+			}(),
+		)
 		state, programName, err := parseStStatisticsPayload(payload)
 		if err != nil {
 			setCTCPServerLastMessage("CTCP StStatistics 解析失败: %v", err)

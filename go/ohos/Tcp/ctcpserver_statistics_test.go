@@ -1,7 +1,9 @@
 package tcp
 
 import (
+	"strings"
 	"testing"
+	"time"
 	"unsafe"
 )
 
@@ -67,5 +69,44 @@ func TestParseStStatisticsPayloadKeepsPlainStatisticsCompatible(t *testing.T) {
 	}
 	if programName != "" {
 		t.Fatalf("programName = %q, want empty for plain StStatistics", programName)
+	}
+}
+
+func TestFormatHomeBatchStatsLinePrintsBatchCountAndWeightFields(t *testing.T) {
+	stats := StStatistics{
+		NSubsysId:             2,
+		NChannelTotalCount:    123,
+		NChannelWeightCount:   4567,
+		NIntervalSumperminute: 600,
+	}
+
+	line := formatHomeBatchStatsLine(stats)
+
+	for _, want := range []string{
+		"subsys=2",
+		"本批个数(NChannelTotalCount)=123",
+		"本批重量=4567",
+		"NChannelWeightCount=4567",
+		"sum(NExitWeightCount)=0",
+		"sum(NWeightGradeCount)=0",
+	} {
+		if !strings.Contains(line, want) {
+			t.Fatalf("formatHomeBatchStatsLine() = %q, want it to contain %q", line, want)
+		}
+	}
+}
+
+func TestShouldLogHomeBatchStatsEveryFiveSeconds(t *testing.T) {
+	first := time.Unix(100, 0)
+	cTCPHomeBatchStatsLastLogAt = time.Time{}
+	if !shouldLogHomeBatchStats(first) {
+		t.Fatal("first home batch stats log should be allowed")
+	}
+	cTCPHomeBatchStatsLastLogAt = first
+	if shouldLogHomeBatchStats(first.Add(4 * time.Second)) {
+		t.Fatal("home batch stats log should be throttled before five seconds")
+	}
+	if !shouldLogHomeBatchStats(first.Add(5 * time.Second)) {
+		t.Fatal("home batch stats log should be allowed at five seconds")
 	}
 }

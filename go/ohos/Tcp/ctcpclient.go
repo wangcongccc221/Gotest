@@ -162,6 +162,14 @@ func (tc *CTcpClient) SyncRequest(nDestID int32, nCmd int32, data []byte, ip str
 			nCmd != cTCPHCDisplayOn &&
 			!tc.SubsysIsConnected(getSubsysIndex(nDestID)) &&
 			!isMAX2WAMCommand(nCmd) {
+			targetIP, targetPort := resolveCTCPTarget(nDestID, nCmd, ip, port)
+			setCTCPServerLastMessage(
+				"CTCP client skipped: subsystem not connected, cmd=0x%04X, dest=0x%04X, target=%s:%d",
+				uint32(nCmd),
+				uint32(nDestID),
+				targetIP,
+				targetPort,
+			)
 			return false
 		}
 	}
@@ -169,6 +177,13 @@ func (tc *CTcpClient) SyncRequest(nDestID int32, nCmd int32, data []byte, ip str
 	strIP, nPortNum := resolveCTCPTarget(nDestID, nCmd, ip, port)
 
 	if !tc.Lock(1000) {
+		setCTCPServerLastMessage(
+			"CTCP client lock timeout: cmd=0x%04X, dest=0x%04X, target=%s:%d",
+			uint32(nCmd),
+			uint32(nDestID),
+			strIP,
+			nPortNum,
+		)
 		return false
 	}
 	defer tc.UnLock()
@@ -176,6 +191,16 @@ func (tc *CTcpClient) SyncRequest(nDestID int32, nCmd int32, data []byte, ip str
 	boRC = true
 	socket, err := tc.ConnectServer(strIP, nPortNum)
 	boRC = err == nil
+	if err != nil {
+		setCTCPServerLastMessage(
+			"CTCP client connect failed: cmd=0x%04X, dest=0x%04X, target=%s:%d, error=%v",
+			uint32(nCmd),
+			uint32(nDestID),
+			strIP,
+			nPortNum,
+			err,
+		)
+	}
 	conn = socket
 	if conn != nil {
 		defer conn.Close()
@@ -190,9 +215,28 @@ func (tc *CTcpClient) SyncRequest(nDestID int32, nCmd int32, data []byte, ip str
 		}
 
 		boRC = tc.Send(conn, cmd.Bytes())
+		if !boRC {
+			setCTCPServerLastMessage(
+				"CTCP client send SYNC failed: cmd=0x%04X, dest=0x%04X, target=%s:%d",
+				uint32(nCmd),
+				uint32(nDestID),
+				strIP,
+				nPortNum,
+			)
+		}
 		if boRC {
 			if len(data) > 0 {
 				boRC = tc.Send(conn, data)
+				if !boRC {
+					setCTCPServerLastMessage(
+						"CTCP client send payload failed: cmd=0x%04X, dest=0x%04X, target=%s:%d, payload=%d bytes",
+						uint32(nCmd),
+						uint32(nDestID),
+						strIP,
+						nPortNum,
+						len(data),
+					)
+				}
 			}
 		}
 	}
