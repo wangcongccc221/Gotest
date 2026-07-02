@@ -1,0 +1,25 @@
+{"at":"2026-06-30T16:54:11+08:00","event":"run_start","args":{"base_url":"http://127.0.0.1:2778","duration_seconds":28800,"batch_size":5000,"interval_seconds":60,"http_timeout":30,"ws_timeout":10,"ws_path":"/ws","ws_mode":"sort_log","fault_type":0,"fault_type_start":9000,"fault_type_end":9999,"run_id":"20260630-165411","seed":20260629,"output_dir":"reports\\db_ws_stability","failure_backoff_seconds":120,"max_consecutive_failures":5,"startup_retries":12,"startup_retry_seconds":10,"no_cleanup":false,"once":false},"ws_url":"ws://127.0.0.1:2778/ws"}
+{"at":"2026-06-30T16:54:11+08:00","event":"readiness_ok","readiness":{"ping":{"framework":"gin","message":"pong from Go"},"orm":{"database":"/data/storage/el2/database/entry/harmony_go_orm.db","driver":"github.com/glebarez/sqlite","package":"gorm.io/gorm","records":4,"status":"ready"}}}
+{"at":"2026-06-30T16:54:11+08:00","event":"fault_type_selected","fault_type":9000}
+{"at":"2026-06-30T16:54:11+08:00","event":"loop_start","loop":1,"rows":5000,"seed":20260630}
+{"at":"2026-06-30T16:54:36+08:00","event":"loop_ok","loop":1,"seconds":24.996079599999575,"rows":5000}
+{"at":"2026-06-30T16:55:37+08:00","event":"loop_start","loop":2,"rows":5000,"seed":20260631}
+{"at":"2026-06-30T16:56:03+08:00","event":"loop_ok","loop":2,"seconds":25.736348200000066,"rows":5000}
+{"at":"2026-06-30T16:57:03+08:00","event":"loop_start","loop":3,"rows":5000,"seed":20260632}
+{"at":"2026-06-30T16:57:27+08:00","event":"loop_ok","loop":3,"seconds":24.29766600000039,"rows":5000}
+{"at":"2026-06-30T16:58:28+08:00","event":"loop_start","loop":4,"rows":5000,"seed":20260633}
+{"at":"2026-06-30T16:58:51+08:00","event":"loop_ok","loop":4,"seconds":23.704389499998797,"rows":5000}
+{"at":"2026-06-30T16:59:52+08:00","event":"loop_start","loop":5,"rows":5000,"seed":20260634}
+{"at":"2026-06-30T17:00:17+08:00","event":"loop_ok","loop":5,"seconds":24.930953099999897,"rows":5000}
+{"at":"2026-06-30T17:01:17+08:00","event":"loop_start","loop":6,"rows":5000,"seed":20260635}
+{"at":"2026-06-30T17:01:42+08:00","event":"loop_ok","loop":6,"seconds":24.928203899999062,"rows":5000}
+{"at":"2026-06-30T17:02:42+08:00","event":"loop_start","loop":7,"rows":5000,"seed":20260636}
+{"at":"2026-06-30T17:03:07+08:00","event":"loop_ok","loop":7,"seconds":25.004902099999526,"rows":5000}
+{"at":"2026-06-30T17:04:08+08:00","event":"loop_start","loop":8,"rows":5000,"seed":20260637}
+{"at":"2026-06-30T17:04:27+08:00","event":"loop_ok","loop":8,"seconds":19.4345859999994,"rows":5000}
+{"at":"2026-06-30T17:05:28+08:00","event":"loop_start","loop":9,"rows":5000,"seed":20260638}
+{"at":"2026-06-30T17:05:47+08:00","event":"loop_ok","loop":9,"seconds":19.68881069999952,"rows":5000}
+{"at":"2026-06-30T17:06:48+08:00","event":"loop_start","loop":10,"rows":5000,"seed":20260639}
+{"at":"2026-06-30T17:07:06+08:00","event":"loop_ok","loop":10,"seconds":18.151945600000545,"rows":5000}
+{"at":"2026-06-30T17:08:06+08:00","event":"loop_start","loop":11,"rows":5000,"seed":20260640}
+{"at":"2026-06-30T17:08:06+08:00","event":"loop_failed","loop":11,"error":"/Api/Fault/SaveBaseFaults network error: [WinError 10054] 远程主机强迫关闭了一个现有的连接。"}

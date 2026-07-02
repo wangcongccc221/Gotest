@@ -94,5 +94,14 @@ func openMigrationTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("open sqlite test db: %v", err)
 	}
+	sqlDB, err := db.DB()
+	if err != nil {
+		t.Fatalf("get sqlite test db handle: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := sqlDB.Close(); err != nil {
+			t.Fatalf("close sqlite test db: %v", err)
+		}
+	})
 	return db
 }

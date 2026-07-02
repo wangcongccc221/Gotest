@@ -20,6 +20,29 @@ func realtimeSaveCurrentFruitInfo(tx *gorm.DB) (TbFruitInfo, bool, error) {
 	return fruit, true, nil
 }
 
+func CurrentFruitProcessStartTime() (time.Time, bool, error) {
+	db, err := getInitializedFileORMDB()
+	if err != nil {
+		return time.Time{}, false, err
+	}
+
+	fruit, ok, err := realtimeSaveCurrentFruitInfo(db)
+	if err != nil || !ok {
+		return time.Time{}, false, err
+	}
+
+	startTime := strings.TrimSpace(fruit.StartTime)
+	if startTime == "" {
+		return time.Time{}, false, nil
+	}
+
+	parsed, parsedOK := fruitProcessInfoParseTime(startTime)
+	if !parsedOK {
+		return time.Time{}, false, nil
+	}
+	return parsed, true, nil
+}
+
 func realtimeSaveSystemCountersDecreased(tx *gorm.DB, customerID int, systems []RealtimeSysFruitSaveInput) (bool, error) {
 	var oldSystems []TbSysFruitInfo
 	if err := tx.Where("CustomerID = ?", customerID).Find(&oldSystems).Error; err != nil {

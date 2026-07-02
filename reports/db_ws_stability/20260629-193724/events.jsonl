@@ -1,0 +1,22 @@
+{"at":"2026-06-29T19:37:24+08:00","event":"run_start","args":{"base_url":"http://127.0.0.1:2778","duration_seconds":43200,"batch_size":10000,"interval_seconds":60,"http_timeout":30,"ws_timeout":10,"ws_path":"/ws","ws_mode":"sort_log","fault_type":0,"fault_type_start":9000,"fault_type_end":9999,"run_id":"20260629-193724","seed":20260629,"output_dir":"reports\\db_ws_stability","no_cleanup":false,"once":false},"ws_url":"ws://127.0.0.1:2778/ws"}
+{"at":"2026-06-29T19:37:24+08:00","event":"readiness_ok","readiness":{"ping":{"framework":"gin","message":"pong from Go"},"orm":{"database":"/data/storage/el2/database/entry/harmony_go_orm.db","driver":"github.com/glebarez/sqlite","package":"gorm.io/gorm","records":4,"status":"ready"}}}
+{"at":"2026-06-29T19:37:24+08:00","event":"fault_type_selected","fault_type":9000}
+{"at":"2026-06-29T19:37:24+08:00","event":"loop_start","loop":1,"rows":10000,"seed":20260630}
+{"at":"2026-06-29T19:37:54+08:00","event":"loop_failed","loop":1,"error":"/Api/Fault/SaveBaseFaults timeout after 30s"}
+{"at":"2026-06-29T19:38:54+08:00","event":"loop_start","loop":2,"rows":10000,"seed":20260631}
+{"at":"2026-06-29T19:38:59+08:00","event":"loop_failed","loop":2,"error":"/Api/Fault/SaveBaseFaults returnCode=0: database is locked (5) (SQLITE_BUSY)"}
+{"at":"2026-06-29T19:40:00+08:00","event":"loop_start","loop":3,"rows":10000,"seed":20260632}
+{"at":"2026-06-29T19:40:30+08:00","event":"loop_failed","loop":3,"error":"/Api/Fault/SaveBaseFaults timeout after 30s"}
+{"at":"2026-06-29T19:41:30+08:00","event":"loop_start","loop":4,"rows":10000,"seed":20260633}
+{"at":"2026-06-29T19:41:35+08:00","event":"loop_failed","loop":4,"error":"/Api/Fault/SaveBaseFaults returnCode=0: database is locked (5) (SQLITE_BUSY)"}
+{"at":"2026-06-29T19:42:35+08:00","event":"loop_start","loop":5,"rows":10000,"seed":20260634}
+{"at":"2026-06-29T19:43:05+08:00","event":"loop_failed","loop":5,"error":"/Api/Fault/SaveBaseFaults timeout after 30s"}
+{"at":"2026-06-29T19:44:05+08:00","event":"loop_start","loop":6,"rows":10000,"seed":20260635}
+{"at":"2026-06-29T19:44:11+08:00","event":"loop_failed","loop":6,"error":"/Api/Fault/SaveBaseFaults returnCode=0: database is locked (5) (SQLITE_BUSY)"}
+{"at":"2026-06-29T19:45:11+08:00","event":"loop_start","loop":7,"rows":10000,"seed":20260636}
+{"at":"2026-06-29T19:45:41+08:00","event":"loop_failed","loop":7,"error":"/Api/Fault/SaveBaseFaults timeout after 30s"}
+{"at":"2026-06-29T19:46:41+08:00","event":"loop_start","loop":8,"rows":10000,"seed":20260637}
+{"at":"2026-06-29T19:47:11+08:00","event":"loop_failed","loop":8,"error":"/Api/Fault/SaveBaseFaults timeout after 30s"}
+{"at":"2026-06-29T19:47:35+08:00","event":"stop_requested","signum":2}
+{"at":"2026-06-29T19:47:35+08:00","event":"stop_requested","signum":2}
+{"at":"2026-06-29T19:47:35+08:00","event":"stop_requested","signum":2}

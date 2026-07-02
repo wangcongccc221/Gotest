@@ -9,7 +9,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -58,7 +57,6 @@ func registerVersionUpdateRoutes(router *gin.Engine) {
 func handleVersionCheck(ctx *gin.Context) {
 	result, err := CheckUpdateVersions()
 	if err != nil {
-		fmt.Printf("%s CheckVersion failed: %v\n", time.Now().Format("15:04:05.000"), err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
@@ -73,8 +71,6 @@ func handleVersionDownload(ctx *gin.Context) {
 	}
 	result, err := DownloadUpdateVersion(request)
 	if err != nil {
-		fmt.Printf("%s DownloadVersion failed: name=%s version=%s err=%v\n",
-			time.Now().Format("15:04:05.000"), request.Name, request.DownloadVersion, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
@@ -88,8 +84,6 @@ func CheckUpdateVersions() (VersionCheckResult, error) {
 		return VersionCheckResult{}, err
 	}
 	postData := string(postDataBytes)
-	fmt.Printf("%s CheckVersion: request versions RSS=%s FSM=%s WAM=%s\n",
-		time.Now().Format("15:04:05.000"), requestItems[0].FVersion, requestItems[1].FVersion, requestItems[2].FVersion)
 
 	response, err := callDeviceConfigCloud("Customer/GetDownLoadInfo", postData)
 	if err != nil {
@@ -101,8 +95,6 @@ func CheckUpdateVersions() (VersionCheckResult, error) {
 		return VersionCheckResult{}, fmt.Errorf("parse update version response: %w", err)
 	}
 	result := VersionCheckResult{Items: buildVersionCheckItems(cloudItems, local)}
-	fmt.Printf("%s CheckVersion success: cloudItems=%d uiItems=%d\n",
-		time.Now().Format("15:04:05.000"), len(cloudItems), len(result.Items))
 	return result, nil
 }
 
@@ -122,7 +114,6 @@ func DownloadUpdateVersion(request VersionDownloadRequest) (VersionDownloadResul
 	if err != nil {
 		return VersionDownloadResult{}, err
 	}
-	fmt.Printf("%s DownloadVersion: name=%s version=%s\n", time.Now().Format("15:04:05.000"), name, version)
 	response, err := callDeviceConfigCloud("Customer/Download", string(postDataBytes))
 	if err != nil {
 		return VersionDownloadResult{}, err
@@ -148,8 +139,6 @@ func DownloadUpdateVersion(request VersionDownloadRequest) (VersionDownloadResul
 	if err := os.WriteFile(localPath, data, 0o644); err != nil {
 		return VersionDownloadResult{}, err
 	}
-	fmt.Printf("%s DownloadVersion success: name=%s path=%s bytes=%d\n",
-		time.Now().Format("15:04:05.000"), name, localPath, len(data))
 	return VersionDownloadResult{Name: name, FileName: fileName, LocalPath: localPath}, nil
 }
 

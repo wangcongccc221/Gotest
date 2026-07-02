@@ -1,0 +1,14 @@
+{"at":"2026-06-30T16:47:06+08:00","event":"global_config_sent","elapsed_ms":6.505200000901823,"bytes":28712}
+{"at":"2026-06-30T16:47:06+08:00","event":"statistics_sent","count":10,"weight":100000,"elapsed_ms":1.0825999997905456}
+{"at":"2026-06-30T16:47:07+08:00","event":"statistics_sent","count":20,"weight":200000,"elapsed_ms":23.88480000081472}
+{"at":"2026-06-30T16:47:07+08:00","event":"statistics_sent","count":30,"weight":300000,"elapsed_ms":22.43569999882311}
+{"at":"2026-06-30T16:47:07+08:00","event":"statistics_sent","count":40,"weight":400000,"elapsed_ms":22.569499999008258}
+{"at":"2026-06-30T16:47:07+08:00","event":"statistics_sent","count":50,"weight":500000,"elapsed_ms":0.43989999903715216}
+{"at":"2026-06-30T16:47:08+08:00","event":"statistics_sent","count":60,"weight":600000,"elapsed_ms":24.19279999958235}
+{"at":"2026-06-30T16:47:08+08:00","event":"statistics_sent","count":70,"weight":700000,"elapsed_ms":24.154800001269905}
+{"at":"2026-06-30T16:47:08+08:00","event":"statistics_sent","count":80,"weight":800000,"elapsed_ms":22.361699999237317}
+{"at":"2026-06-30T16:47:08+08:00","event":"statistics_sent","count":90,"weight":900000,"elapsed_ms":21.909999999479624}
+{"at":"2026-06-30T16:47:08+08:00","event":"statistics_sent","count":100,"weight":1000000,"elapsed_ms":0.39850000030128285}
+{"at":"2026-06-30T16:47:09+08:00","event":"statistics_sent","count":110,"weight":1100000,"elapsed_ms":21.730300000854186}
+{"at":"2026-06-30T16:47:19+08:00","event":"db_query_failed","error":"timed out"}
+{"at":"2026-06-30T16:47:19+08:00","event":"run_failed","error":"timed out"}

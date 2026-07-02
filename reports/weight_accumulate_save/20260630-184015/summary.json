@@ -1,0 +1,58 @@
+{
+  "started_at": "2026-06-30T18:40:15+08:00",
+  "run_id": "20260630-184015",
+  "base_url": "http://127.0.0.1:2778",
+  "ctcp_target": "127.0.0.1:1128",
+  "send_interval": 1.0,
+  "verify_interval": 4.0,
+  "packets_sent": 60,
+  "db_queries": 7,
+  "db_query_failures": 2,
+  "save_observed": 3,
+  "max_count_lag": 9,
+  "max_weight_lag": 450000,
+  "last_sent_count": 60,
+  "last_sent_weight": 4000000,
+  "last_db_count": 60,
+  "last_db_weight": 4000000,
+  "last_error": "timed out",
+  "mismatches": [
+    {
+      "at": "2026-06-30T18:40:19+08:00",
+      "sent_count": 5,
+      "sent_weight": 1250000,
+      "db_count": 40,
+      "db_weight": 3000000,
+      "count_lag": -35,
+      "weight_lag": -1750000
+    },
+    {
+      "at": "2026-06-30T18:40:24+08:00",
+      "sent_count": 10,
+      "sent_weight": 1500000,
+      "db_count": 5,
+      "db_weight": 1250000,
+      "count_lag": 5,
+      "weight_lag": 250000
+    },
+    {
+      "at": "2026-06-30T18:40:44+08:00",
+      "sent_count": 30,
+      "sent_weight": 2500000,
+      "db_count": 25,
+      "db_weight": 2250000,
+      "count_lag": 5,
+      "weight_lag": 250000
+    },
+    {
+      "at": "2026-06-30T18:41:09+08:00",
+      "sent_count": 55,
+      "sent_weight": 3750000,
+      "db_count": 46,
+      "db_weight": 3300000,
+      "count_lag": 9,
+      "weight_lag": 450000
+    }
+  ],
+  "finished_at": "2026-06-30T18:41:25+08:00"
+}

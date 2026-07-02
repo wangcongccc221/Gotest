@@ -1,0 +1,6 @@
+{"at":"2026-06-30T08:46:37+08:00","event":"run_start","args":{"base_url":"http://127.0.0.1:2778","duration_seconds":28800,"batch_size":100,"interval_seconds":60,"http_timeout":30,"ws_timeout":10,"ws_path":"/ws","ws_mode":"sort_log","fault_type":0,"fault_type_start":9000,"fault_type_end":9999,"run_id":"20260630-084637","seed":20260629,"output_dir":"reports\\db_ws_stability","failure_backoff_seconds":120,"max_consecutive_failures":5,"startup_retries":12,"startup_retry_seconds":10,"no_cleanup":false,"once":true},"ws_url":"ws://127.0.0.1:2778/ws"}
+{"at":"2026-06-30T08:46:37+08:00","event":"readiness_ok","readiness":{"ping":{"framework":"gin","message":"pong from Go"},"orm":{"database":"/data/storage/el2/database/entry/harmony_go_orm.db","driver":"github.com/glebarez/sqlite","package":"gorm.io/gorm","records":4,"status":"ready"}}}
+{"at":"2026-06-30T08:46:38+08:00","event":"fault_type_selected","fault_type":9001}
+{"at":"2026-06-30T08:46:38+08:00","event":"loop_start","loop":1,"rows":100,"seed":20260630}
+{"at":"2026-06-30T08:46:38+08:00","event":"loop_ok","loop":1,"seconds":0.5634070999999494,"rows":100}
+{"at":"2026-06-30T08:46:41+08:00","event":"cleanup_done","deleted":100}

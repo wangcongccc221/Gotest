@@ -2,6 +2,7 @@ package database
 
 import (
 	"errors"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
 
 const (
@@ -43,6 +45,17 @@ var (
 	ormInitErr        error
 )
 
+func init() {
+	silenceDatabaseLogging()
+}
+
+func silenceDatabaseLogging() {
+	gin.SetMode(gin.ReleaseMode)
+	gin.DefaultWriter = io.Discard
+	gin.DefaultErrorWriter = io.Discard
+	logger.Default = logger.Default.LogMode(logger.Silent)
+}
+
 func registerORMRoutes(router *gin.Engine) {
 	router.GET("/orm", handleORMStatus)
 	router.POST("/orm/init", handleORMInit)
@@ -52,11 +65,14 @@ func registerORMRoutes(router *gin.Engine) {
 }
 
 func RegisterRoutes(router *gin.Engine) {
+	silenceDatabaseLogging()
+
 	registerORMRoutes(router)
 	registerFruitInfoRoutes(router)
 	registerFruitProcessInfoRoutes(router)
 	registerSysConfigRoutes(router)
 	registerFaultRoutes(router)
+	registerSysFruitInfoRoutes(router)
 	registerRunningTimeInfoRoutes(router)
 	registerDeviceConfigCloudRoutes(router)
 	registerPrintTemplateRoutes(router)
@@ -133,7 +149,9 @@ func initORMWithPath(dbPath string) error {
 		closeActiveORMLocked()
 	}
 
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+		Logger: logger.Default.LogMode(logger.Silent),
+	})
 	if err != nil {
 		ormInitErr = err
 		return err

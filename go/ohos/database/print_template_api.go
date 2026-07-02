@@ -317,8 +317,8 @@ func buildPrintReportHTML(item fruitInfoAPIModel, config printTemplateConfigAPIM
   <title>加工报表</title>
   <style>
     * { box-sizing: border-box; }
-    body { margin: 0; background: #d8d8d8; color: #000; font-family: SimSun, "宋体", "Microsoft YaHei", Arial, sans-serif; }
-    main { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 13mm 10.5mm 16mm; background: #fff; }
+    body { margin: 0; min-height: 252.45mm; background: #d8d8d8; color: #000; font-family: SimSun, "宋体", "Microsoft YaHei", Arial, sans-serif; }
+    main { position: relative; width: 210mm; min-height: 297mm; margin: 0 auto; padding: 13mm 10.5mm 16mm; background: #fff; transform: scale(0.85); transform-origin: top center; }
     .print-time { position: absolute; top: 7mm; right: 10.5mm; height: 22px; text-align: right; font-size: 15px; line-height: 22px; }
     .logo { display: block; width: 400px; height: 55px; object-fit: contain; margin: 8px auto 15px; }
     h1 { margin: 0 0 10px; font-size: 20px; font-weight: 700; text-align: center; letter-spacing: 0; }
@@ -337,7 +337,7 @@ func buildPrintReportHTML(item fruitInfoAPIModel, config printTemplateConfigAPIM
     @page { size: A4; margin: 0; }
     @media print {
       body { background: #fff; }
-      main { width: auto; min-height: 297mm; margin: 0; padding: 13mm 10.5mm 16mm; }
+      main { width: auto; min-height: 297mm; margin: 0; padding: 13mm 10.5mm 16mm; transform: none; }
       .page-footer { position: fixed; }
     }
   </style>
@@ -539,5 +539,4 @@ func emptyDash(value string) string {
 }
 
 func printTemplateAPILog(format string, args ...any) {
-	fmt.Printf("%s Web API printTemplate %s\n", databaseNow().Format("15:04:05.000"), fmt.Sprintf(format, args...))
 }

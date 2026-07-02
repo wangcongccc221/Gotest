@@ -2,7 +2,6 @@ package database
 
 import (
 	"errors"
-	"fmt"
 	"strings"
 	"time"
 
@@ -111,7 +110,6 @@ func baseFaultRowsType(rows []baseFaultAPIModel) int {
 }
 
 func baseFaultAPILog(format string, args ...any) {
-	fmt.Printf("%s Web API baseFault %s\n", databaseNow().Format("15:04:05.000"), fmt.Sprintf(format, args...))
 }
 
 func QueryBaseFaults(faultType int) ([]baseFaultAPIModel, error) {

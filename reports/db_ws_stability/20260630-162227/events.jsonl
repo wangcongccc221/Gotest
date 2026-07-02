@@ -1,0 +1,84 @@
+{"at":"2026-06-30T16:22:27+08:00","event":"run_start","args":{"base_url":"http://127.0.0.1:2778","duration_seconds":300,"batch_size":100,"interval_seconds":5,"http_timeout":30,"ws_timeout":10,"ws_path":"/ws","ws_mode":"ping","fault_type":0,"fault_type_start":9000,"fault_type_end":9999,"run_id":"20260630-162227","seed":20260629,"output_dir":"reports\\db_ws_stability","failure_backoff_seconds":120,"max_consecutive_failures":5,"startup_retries":12,"startup_retry_seconds":10,"no_cleanup":false,"once":false},"ws_url":"ws://127.0.0.1:2778/ws"}
+{"at":"2026-06-30T16:22:27+08:00","event":"readiness_ok","readiness":{"ping":{"framework":"gin","message":"pong from Go"},"orm":{"database":"/data/storage/el2/database/entry/harmony_go_orm.db","driver":"github.com/glebarez/sqlite","package":"gorm.io/gorm","records":4,"status":"ready"}}}
+{"at":"2026-06-30T16:22:27+08:00","event":"fault_type_selected","fault_type":9000}
+{"at":"2026-06-30T16:22:27+08:00","event":"loop_start","loop":1,"rows":100,"seed":20260630}
+{"at":"2026-06-30T16:22:27+08:00","event":"loop_ok","loop":1,"seconds":0.14612359999955515,"rows":100}
+{"at":"2026-06-30T16:22:32+08:00","event":"loop_start","loop":2,"rows":100,"seed":20260631}
+{"at":"2026-06-30T16:22:43+08:00","event":"loop_crashed","loop":2,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:22:48+08:00","event":"loop_start","loop":3,"rows":100,"seed":20260632}
+{"at":"2026-06-30T16:22:48+08:00","event":"loop_ok","loop":3,"seconds":0.1494777999996586,"rows":100}
+{"at":"2026-06-30T16:22:53+08:00","event":"loop_start","loop":4,"rows":100,"seed":20260633}
+{"at":"2026-06-30T16:22:53+08:00","event":"loop_ok","loop":4,"seconds":0.18685200000072655,"rows":100}
+{"at":"2026-06-30T16:22:58+08:00","event":"loop_start","loop":5,"rows":100,"seed":20260634}
+{"at":"2026-06-30T16:22:58+08:00","event":"loop_ok","loop":5,"seconds":0.12744609999936074,"rows":100}
+{"at":"2026-06-30T16:23:03+08:00","event":"loop_start","loop":6,"rows":100,"seed":20260635}
+{"at":"2026-06-30T16:23:03+08:00","event":"loop_ok","loop":6,"seconds":0.06961430000046676,"rows":100}
+{"at":"2026-06-30T16:23:08+08:00","event":"loop_start","loop":7,"rows":100,"seed":20260636}
+{"at":"2026-06-30T16:23:19+08:00","event":"loop_crashed","loop":7,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:23:24+08:00","event":"loop_start","loop":8,"rows":100,"seed":20260637}
+{"at":"2026-06-30T16:23:24+08:00","event":"loop_ok","loop":8,"seconds":0.14436010000099486,"rows":100}
+{"at":"2026-06-30T16:23:29+08:00","event":"loop_start","loop":9,"rows":100,"seed":20260638}
+{"at":"2026-06-30T16:23:39+08:00","event":"loop_crashed","loop":9,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:23:44+08:00","event":"loop_start","loop":10,"rows":100,"seed":20260639}
+{"at":"2026-06-30T16:23:44+08:00","event":"loop_ok","loop":10,"seconds":0.1844584999998915,"rows":100}
+{"at":"2026-06-30T16:23:49+08:00","event":"loop_start","loop":11,"rows":100,"seed":20260640}
+{"at":"2026-06-30T16:23:49+08:00","event":"loop_ok","loop":11,"seconds":0.13775499999974272,"rows":100}
+{"at":"2026-06-30T16:23:54+08:00","event":"loop_start","loop":12,"rows":100,"seed":20260641}
+{"at":"2026-06-30T16:23:54+08:00","event":"loop_ok","loop":12,"seconds":0.12631519999922602,"rows":100}
+{"at":"2026-06-30T16:23:59+08:00","event":"loop_start","loop":13,"rows":100,"seed":20260642}
+{"at":"2026-06-30T16:24:00+08:00","event":"loop_ok","loop":13,"seconds":0.1528571999988344,"rows":100}
+{"at":"2026-06-30T16:24:05+08:00","event":"loop_start","loop":14,"rows":100,"seed":20260643}
+{"at":"2026-06-30T16:24:15+08:00","event":"loop_crashed","loop":14,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:24:20+08:00","event":"loop_start","loop":15,"rows":100,"seed":20260644}
+{"at":"2026-06-30T16:24:30+08:00","event":"loop_crashed","loop":15,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:24:35+08:00","event":"loop_start","loop":16,"rows":100,"seed":20260645}
+{"at":"2026-06-30T16:24:45+08:00","event":"loop_crashed","loop":16,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:24:50+08:00","event":"loop_start","loop":17,"rows":100,"seed":20260646}
+{"at":"2026-06-30T16:25:00+08:00","event":"loop_crashed","loop":17,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:25:05+08:00","event":"loop_start","loop":18,"rows":100,"seed":20260647}
+{"at":"2026-06-30T16:25:06+08:00","event":"loop_ok","loop":18,"seconds":0.18935729999975592,"rows":100}
+{"at":"2026-06-30T16:25:11+08:00","event":"loop_start","loop":19,"rows":100,"seed":20260648}
+{"at":"2026-06-30T16:25:11+08:00","event":"loop_ok","loop":19,"seconds":0.14923620000081428,"rows":100}
+{"at":"2026-06-30T16:25:16+08:00","event":"loop_start","loop":20,"rows":100,"seed":20260649}
+{"at":"2026-06-30T16:25:16+08:00","event":"loop_ok","loop":20,"seconds":0.141788799999631,"rows":100}
+{"at":"2026-06-30T16:25:21+08:00","event":"loop_start","loop":21,"rows":100,"seed":20260650}
+{"at":"2026-06-30T16:25:31+08:00","event":"loop_crashed","loop":21,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:25:36+08:00","event":"loop_start","loop":22,"rows":100,"seed":20260651}
+{"at":"2026-06-30T16:25:36+08:00","event":"loop_ok","loop":22,"seconds":0.16697059999933117,"rows":100}
+{"at":"2026-06-30T16:25:41+08:00","event":"loop_start","loop":23,"rows":100,"seed":20260652}
+{"at":"2026-06-30T16:25:42+08:00","event":"loop_ok","loop":23,"seconds":0.18207670000083453,"rows":100}
+{"at":"2026-06-30T16:25:47+08:00","event":"loop_start","loop":24,"rows":100,"seed":20260653}
+{"at":"2026-06-30T16:25:47+08:00","event":"loop_ok","loop":24,"seconds":0.16597009999895818,"rows":100}
+{"at":"2026-06-30T16:25:52+08:00","event":"loop_start","loop":25,"rows":100,"seed":20260654}
+{"at":"2026-06-30T16:25:52+08:00","event":"loop_ok","loop":25,"seconds":0.16913729999942007,"rows":100}
+{"at":"2026-06-30T16:25:57+08:00","event":"loop_start","loop":26,"rows":100,"seed":20260655}
+{"at":"2026-06-30T16:25:57+08:00","event":"loop_ok","loop":26,"seconds":0.15907089999927848,"rows":100}
+{"at":"2026-06-30T16:26:02+08:00","event":"loop_start","loop":27,"rows":100,"seed":20260656}
+{"at":"2026-06-30T16:26:02+08:00","event":"loop_ok","loop":27,"seconds":0.13376160000007076,"rows":100}
+{"at":"2026-06-30T16:26:07+08:00","event":"loop_start","loop":28,"rows":100,"seed":20260657}
+{"at":"2026-06-30T16:26:08+08:00","event":"loop_ok","loop":28,"seconds":0.19335510000018985,"rows":100}
+{"at":"2026-06-30T16:26:13+08:00","event":"loop_start","loop":29,"rows":100,"seed":20260658}
+{"at":"2026-06-30T16:26:13+08:00","event":"loop_ok","loop":29,"seconds":0.15934679999918444,"rows":100}
+{"at":"2026-06-30T16:26:18+08:00","event":"loop_start","loop":30,"rows":100,"seed":20260659}
+{"at":"2026-06-30T16:26:18+08:00","event":"loop_ok","loop":30,"seconds":0.19314889999986917,"rows":100}
+{"at":"2026-06-30T16:26:23+08:00","event":"loop_start","loop":31,"rows":100,"seed":20260660}
+{"at":"2026-06-30T16:26:23+08:00","event":"loop_ok","loop":31,"seconds":0.1316320000005362,"rows":100}
+{"at":"2026-06-30T16:26:28+08:00","event":"loop_start","loop":32,"rows":100,"seed":20260661}
+{"at":"2026-06-30T16:26:28+08:00","event":"loop_ok","loop":32,"seconds":0.14460010000038892,"rows":100}
+{"at":"2026-06-30T16:26:33+08:00","event":"loop_start","loop":33,"rows":100,"seed":20260662}
+{"at":"2026-06-30T16:26:44+08:00","event":"loop_crashed","loop":33,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:26:49+08:00","event":"loop_start","loop":34,"rows":100,"seed":20260663}
+{"at":"2026-06-30T16:26:49+08:00","event":"loop_ok","loop":34,"seconds":0.15939590000016324,"rows":100}
+{"at":"2026-06-30T16:26:54+08:00","event":"loop_start","loop":35,"rows":100,"seed":20260664}
+{"at":"2026-06-30T16:26:54+08:00","event":"loop_ok","loop":35,"seconds":0.165602700000818,"rows":100}
+{"at":"2026-06-30T16:26:59+08:00","event":"loop_start","loop":36,"rows":100,"seed":20260665}
+{"at":"2026-06-30T16:26:59+08:00","event":"loop_ok","loop":36,"seconds":0.13191139999980805,"rows":100}
+{"at":"2026-06-30T16:27:04+08:00","event":"loop_start","loop":37,"rows":100,"seed":20260666}
+{"at":"2026-06-30T16:27:04+08:00","event":"loop_ok","loop":37,"seconds":0.12299560000064957,"rows":100}
+{"at":"2026-06-30T16:27:09+08:00","event":"loop_start","loop":38,"rows":100,"seed":20260667}
+{"at":"2026-06-30T16:27:09+08:00","event":"loop_ok","loop":38,"seconds":0.11581259999911708,"rows":100}
+{"at":"2026-06-30T16:27:14+08:00","event":"loop_start","loop":39,"rows":100,"seed":20260668}
+{"at":"2026-06-30T16:27:15+08:00","event":"loop_ok","loop":39,"seconds":0.17273299999942537,"rows":100}
+{"at":"2026-06-30T16:27:20+08:00","event":"loop_start","loop":40,"rows":100,"seed":20260669}
+{"at":"2026-06-30T16:27:30+08:00","event":"loop_crashed","loop":40,"error":"TimeoutError('timed out')"}
+{"at":"2026-06-30T16:27:32+08:00","event":"cleanup_done","deleted":100}

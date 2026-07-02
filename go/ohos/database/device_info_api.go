@@ -110,7 +110,6 @@ func registerDeviceInfoRoutes(router *gin.Engine) {
 func handleDeviceInfoGet(ctx *gin.Context) {
 	result, err := LoadDeviceInfo()
 	if err != nil {
-		fmt.Printf("%s DeviceInfo GetDeviceInfo failed: %v\n", time.Now().Format("15:04:05.000"), err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
@@ -125,8 +124,6 @@ func handleDeviceInfoGetLocations(ctx *gin.Context) {
 	}
 	locations, err := GetDeviceInfoLocations(request.FID)
 	if err != nil {
-		fmt.Printf("%s DeviceInfo GetLocationList failed: parent=%d err=%v\n",
-			time.Now().Format("15:04:05.000"), request.FID, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
@@ -141,8 +138,6 @@ func handleDeviceInfoGetByDeviceCode(ctx *gin.Context) {
 	}
 	info, err := GetDeviceInfoByDeviceCode(request.DeviceID)
 	if err != nil {
-		fmt.Printf("%s DeviceInfo GetByDeviceCode failed: device=%s err=%v\n",
-			time.Now().Format("15:04:05.000"), request.DeviceID, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
@@ -157,8 +152,6 @@ func handleDeviceInfoRegister(ctx *gin.Context) {
 	}
 	info, err := RegisterDeviceInfo(request)
 	if err != nil {
-		fmt.Printf("%s DeviceInfo Register failed: device=%s err=%v\n",
-			time.Now().Format("15:04:05.000"), request.DeviceID, err)
 		fruitInfoAPIFail(ctx, err.Error())
 		return
 	}
@@ -177,13 +170,10 @@ func LoadDeviceInfo() (DeviceInfoLoadResult, error) {
 	}
 
 	if secret, err := GetConfigValuePreferNonEmpty("SecretKey"); err == nil && strings.TrimSpace(secret) != "" {
-		if err := updateCloudDeviceInfo(info); err != nil {
-			fmt.Printf("%s DeviceInfo UpdateDeviceInfo warning: %v\n", time.Now().Format("15:04:05.000"), err)
-		}
+		_ = updateCloudDeviceInfo(info)
 		cloudInfo, err := getCloudCustomerDeviceInfo()
 		if err != nil {
 			result.Message = err.Error()
-			fmt.Printf("%s DeviceInfo GetCustomerDeviceInfo warning: %v\n", time.Now().Format("15:04:05.000"), err)
 		} else {
 			result.Info = mergeDeviceInfoWithCloud(info, cloudInfo)
 			result.Registered = true
@@ -196,8 +186,6 @@ func LoadDeviceInfo() (DeviceInfoLoadResult, error) {
 		result.Info.DeviceID = strings.TrimSpace(code)
 	}
 
-	fmt.Printf("%s DeviceInfo GetDeviceInfo success: registered=%v, device=%s\n",
-		time.Now().Format("15:04:05.000"), result.Registered, result.Info.DeviceID)
 	return result, nil
 }
 
@@ -218,8 +206,6 @@ func GetDeviceInfoLocations(parentID int) ([]DeviceInfoLocation, error) {
 	if err := json.Unmarshal([]byte(response.Data), &rows); err != nil {
 		return nil, fmt.Errorf("parse device locations: %w", err)
 	}
-	fmt.Printf("%s DeviceInfo GetLocationList success: parent=%d, count=%d\n",
-		time.Now().Format("15:04:05.000"), parentID, len(rows))
 	return rows, nil
 }
 
@@ -269,8 +255,6 @@ func RegisterDeviceInfo(info DeviceInfoModel) (DeviceInfoModel, error) {
 	if strings.TrimSpace(info.ExpirationDate) != "" {
 		_ = SaveConfigValue("DeviceUseEndDate", strings.TrimSpace(info.ExpirationDate))
 	}
-	fmt.Printf("%s DeviceInfo Register success: device=%s, secret=%v\n",
-		time.Now().Format("15:04:05.000"), info.DeviceID, secret != "")
 	return info, nil
 }
 

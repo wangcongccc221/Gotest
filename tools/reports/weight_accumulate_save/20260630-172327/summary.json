@@ -1,0 +1,85 @@
+{
+  "started_at": "2026-06-30T17:23:27+08:00",
+  "run_id": "20260630-172327",
+  "base_url": "http://127.0.0.1:2778",
+  "ctcp_target": "127.0.0.1:1128",
+  "send_interval": 1.0,
+  "verify_interval": 3.0,
+  "packets_sent": 30,
+  "db_queries": 8,
+  "db_query_failures": 0,
+  "save_observed": 0,
+  "max_count_lag": 0,
+  "max_weight_lag": 0,
+  "last_sent_count": 30,
+  "last_sent_weight": 2500000,
+  "last_db_count": 1581828,
+  "last_db_weight": 711821658,
+  "last_error": "",
+  "mismatches": [
+    {
+      "at": "2026-06-30T17:23:30+08:00",
+      "sent_count": 4,
+      "sent_weight": 1200000,
+      "db_count": 1579308,
+      "db_weight": 710684148,
+      "count_lag": -1579304,
+      "weight_lag": -709484148
+    },
+    {
+      "at": "2026-06-30T17:23:34+08:00",
+      "sent_count": 8,
+      "sent_weight": 1400000,
+      "db_count": 1579308,
+      "db_weight": 710684148,
+      "count_lag": -1579300,
+      "weight_lag": -709284148
+    },
+    {
+      "at": "2026-06-30T17:23:38+08:00",
+      "sent_count": 12,
+      "sent_weight": 1600000,
+      "db_count": 1579308,
+      "db_weight": 710684148,
+      "count_lag": -1579296,
+      "weight_lag": -709084148
+    },
+    {
+      "at": "2026-06-30T17:23:42+08:00",
+      "sent_count": 16,
+      "sent_weight": 1800000,
+      "db_count": 1580148,
+      "db_weight": 711065910,
+      "count_lag": -1580132,
+      "weight_lag": -709265910
+    },
+    {
+      "at": "2026-06-30T17:23:46+08:00",
+      "sent_count": 20,
+      "sent_weight": 2000000,
+      "db_count": 1580148,
+      "db_weight": 711065910,
+      "count_lag": -1580128,
+      "weight_lag": -709065910
+    },
+    {
+      "at": "2026-06-30T17:23:50+08:00",
+      "sent_count": 24,
+      "sent_weight": 2200000,
+      "db_count": 1580988,
+      "db_weight": 711446688,
+      "count_lag": -1580964,
+      "weight_lag": -709246688
+    },
+    {
+      "at": "2026-06-30T17:23:54+08:00",
+      "sent_count": 28,
+      "sent_weight": 2400000,
+      "db_count": 1580988,
+      "db_weight": 711446688,
+      "count_lag": -1580960,
+      "weight_lag": -709046688
+    }
+  ],
+  "finished_at": "2026-06-30T17:24:02+08:00"
+}

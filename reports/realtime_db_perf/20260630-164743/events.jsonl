@@ -1,0 +1,13 @@
+{"at":"2026-06-30T16:47:43+08:00","event":"statistics_sent","count":10,"weight":100000,"elapsed_ms":2.9340000000956934}
+{"at":"2026-06-30T16:47:43+08:00","event":"statistics_sent","count":20,"weight":200000,"elapsed_ms":15.787399999680929}
+{"at":"2026-06-30T16:47:43+08:00","event":"statistics_sent","count":30,"weight":300000,"elapsed_ms":15.478100000109407}
+{"at":"2026-06-30T16:47:43+08:00","event":"statistics_sent","count":40,"weight":400000,"elapsed_ms":15.403900000819704}
+{"at":"2026-06-30T16:47:43+08:00","event":"statistics_sent","count":50,"weight":500000,"elapsed_ms":0.28160000147181563}
+{"at":"2026-06-30T16:47:44+08:00","event":"statistics_sent","count":60,"weight":600000,"elapsed_ms":16.828399999212706}
+{"at":"2026-06-30T16:47:44+08:00","event":"statistics_sent","count":70,"weight":700000,"elapsed_ms":14.919100000042818}
+{"at":"2026-06-30T16:47:44+08:00","event":"statistics_sent","count":80,"weight":800000,"elapsed_ms":0.5570000012085075}
+{"at":"2026-06-30T16:47:44+08:00","event":"statistics_sent","count":90,"weight":900000,"elapsed_ms":14.753299999938463}
+{"at":"2026-06-30T16:47:44+08:00","event":"statistics_sent","count":100,"weight":1000000,"elapsed_ms":0.6386999993992504}
+{"at":"2026-06-30T16:47:45+08:00","event":"statistics_sent","count":110,"weight":1100000,"elapsed_ms":12.1142999996664}
+{"at":"2026-06-30T16:47:55+08:00","event":"db_query_failed","error":"timed out"}
+{"at":"2026-06-30T16:47:55+08:00","event":"run_failed","error":"timed out"}
