@@ -69,7 +69,8 @@ func LogStGradeInfo(grade StGradeInfo) {
 func logQualityParameterFields(source string, destID int32, grade StGradeInfo) {
 	colorType := int(grade.ColorType)
 	colorTypeBase := colorType & 0x07
-	colorPercentMode := (colorType & 0x80) != 0
+	// 48 用 0x08 位表示百分比模式（qualityparametersetform.cpp: m_nColorType & 0x08）
+	colorPercentMode := (colorType & 0x08) != 0
 	events.Info(
 		"[QUALITY_PARAMS] %s dest=0x%04X sizeGrade=%d qualityGrade=%d classify=%d colorType=%d(base=%d,percent=%t) colorIntervals=%s colorNames=%s",
 		source,
@@ -89,6 +90,26 @@ func logQualityParameterFields(source string, destID int32, grade StGradeInfo) {
 		uint32(destID),
 		formatQualityFixedTextSlots(grade.StrShapeGradeName[:], cTCPServerMaxTextLength, cTCPServerMinorGradeNum),
 		formatQualityFloat32Slice(grade.FShapeFactor[:]),
+	)
+	// percent 布局 [(行*3+区间)]，线上值=显示值×2；与前端 [QUALITY_PARAMS] 确认写入 日志逐项对照
+	percentParts := make([]string, 0, 18)
+	percentLimit := len(grade.Percent)
+	if percentLimit > 18 {
+		percentLimit = 18
+	}
+	for i := 0; i < percentLimit; i++ {
+		percentParts = append(percentParts, fmt.Sprintf("%d-%d", grade.Percent[i].NMin, grade.Percent[i].NMax))
+	}
+	uvParts := make([]string, 0, len(grade.Intervals))
+	for i := range grade.Intervals {
+		uvParts = append(uvParts, fmt.Sprintf("V%d-%d/U%d-%d", grade.Intervals[i].NMinV, grade.Intervals[i].NMaxV, grade.Intervals[i].NMinU, grade.Intervals[i].NMaxU))
+	}
+	events.Info(
+		"[QUALITY_PARAMS] %s dest=0x%04X percent(nMin-nMax,前18)=[%s] uv=[%s]",
+		source,
+		uint32(destID),
+		strings.Join(percentParts, " "),
+		strings.Join(uvParts, " "),
 	)
 }
 
