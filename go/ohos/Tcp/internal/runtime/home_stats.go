@@ -276,8 +276,9 @@ func updateHomeStatsHistoryLocked(now time.Time, aggregate homeStatsAggregate, s
 	efficiency := calculateHomeStatsEfficiencyPercent(deltaExit, deltaCup)
 
 	realtimeOutput := 0.0
-	if deltaWeight > 0 {
-		realtimeOutput = (deltaWeight / homeStatsWeightScale) * homeStatsRealtimeOutputMultiplier()
+	elapsed := now.Sub(prevAt)
+	if deltaWeight > 0 && elapsed > 0 {
+		realtimeOutput = (deltaWeight / homeStatsWeightScale) * (float64(time.Hour) / float64(elapsed))
 	}
 	realtimeOutputPercent := calculateHomeStatsRealtimeOutputPercent(realtimeOutput)
 
@@ -463,13 +464,6 @@ func calculateHomeStatsRealtimeOutputPercent(realtimeOutputTonPerHour float64) f
 		return 0
 	}
 	return clampHomeStats(math.Round((realtimeOutputTonPerHour*100.0)/maxOutput), 0, 100)
-}
-
-func homeStatsRealtimeOutputMultiplier() float64 {
-	if homeStatsHistoryInterval <= 0 {
-		return 0
-	}
-	return float64(time.Hour) / float64(homeStatsHistoryInterval)
 }
 
 func readHomeStatsFloatConfig(name string, fallback float64) float64 {

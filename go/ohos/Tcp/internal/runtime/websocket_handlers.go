@@ -21,6 +21,20 @@ func (c *webSocketClient) handleRequestStGlobal() {
 	}()
 }
 
+func (c *webSocketClient) handleRequestHomeStats() {
+	go func() {
+		publishLatestHomeStats(time.Now())
+		setCTCPServerLastMessage("WebSocket requestHomeStats: pushed latest homeStats snapshot")
+	}()
+}
+
+func (c *webSocketClient) handleRequestStatistics() {
+	go func() {
+		publishLatestStStatisticsSpeed(time.Now())
+		setCTCPServerLastMessage("WebSocket requestStatistics: pushed latest statistics snapshot")
+	}()
+}
+
 func (c *webSocketClient) handleDropData(control webSocketControlMessage) {
 	go func() {
 		result, destID, payloadBytes := DragLevelData(control)

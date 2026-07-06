@@ -24,11 +24,11 @@ func TestSysConfigAPIListsVisibleRowsFromDatabase(t *testing.T) {
 	}
 
 	rows := []TbSysConfigs{
-		{FModuleName: "RSS", FType: "MaxSpeed", FValue: "680", FVisible: 1, FEnType: "Max Speed", FValueType: 3, FZhType: "最大速度"},
-		{FModuleName: "RSS", FType: "MaxRealWeightCount", FValue: "66", FVisible: 1, FEnType: "Max Real Weight Count", FValueType: 3, FZhType: "最大产量"},
-		{FModuleName: "RSS", FType: "MaxEmptyContent", FValue: "", FVisible: 1, FEnType: "Max Empty Content", FValueType: 3, FZhType: "空内容配置"},
-		{FModuleName: "RSS", FType: "MaxHidden", FValue: "1", FVisible: 0, FEnType: "Hidden", FValueType: 1},
-		{FModuleName: "OTHER", FType: "MaxSpeed", FValue: "999", FVisible: 1, FEnType: "Other", FValueType: 3},
+		{FModuleName: "RSS", FType: "TestMaxSpeed", FValue: "680", FVisible: 1, FEnType: "Max Speed", FValueType: 3, FZhType: "最大速度"},
+		{FModuleName: "RSS", FType: "TestMaxRealWeightCount", FValue: "66", FVisible: 1, FEnType: "Max Real Weight Count", FValueType: 3, FZhType: "最大产量"},
+		{FModuleName: "RSS", FType: "TestMaxEmptyContent", FValue: "", FVisible: 1, FEnType: "Max Empty Content", FValueType: 3, FZhType: "空内容配置"},
+		{FModuleName: "RSS", FType: "TestMaxHidden", FValue: "1", FVisible: 0, FEnType: "Hidden", FValueType: 1},
+		{FModuleName: "OTHER", FType: "TestMaxSpeed", FValue: "999", FVisible: 1, FEnType: "Other", FValueType: 3},
 	}
 	if err := db.Create(&rows).Error; err != nil {
 		t.Fatalf("seed sys config rows: %v", err)
@@ -37,7 +37,8 @@ func TestSysConfigAPIListsVisibleRowsFromDatabase(t *testing.T) {
 	router := gin.New()
 	RegisterRoutes(router)
 
-	body := bytes.NewBufferString(`{"FType":"Max","FVisible":1,"FModuleName":"RSS"}`)
+	// 前缀 TestMax 避免命中 0505/0506 迁移种子的 MaxSpeed/MaxRealWeightCount 行
+	body := bytes.NewBufferString(`{"FType":"TestMax","FVisible":1,"FModuleName":"RSS"}`)
 	request := httptest.NewRequest(http.MethodPost, "/Api/SysConfig/GetListSysConfigs", body)
 	request.Header.Set("Content-Type", "application/json")
 	response := httptest.NewRecorder()
@@ -60,14 +61,14 @@ func TestSysConfigAPIListsVisibleRowsFromDatabase(t *testing.T) {
 	if len(got) != 3 {
 		t.Fatalf("len(got) = %d, want 3: %#v", len(got), got)
 	}
-	if got[0].FType != "MaxSpeed" || got[0].FValue != "680" || got[0].FZhType != "最大速度" {
-		t.Fatalf("first row = %#v, want MaxSpeed with FZhType", got[0])
+	if got[0].FType != "TestMaxSpeed" || got[0].FValue != "680" || got[0].FZhType != "最大速度" {
+		t.Fatalf("first row = %#v, want TestMaxSpeed with FZhType", got[0])
 	}
-	if got[1].FType != "MaxRealWeightCount" {
-		t.Fatalf("second row FType = %q, want MaxRealWeightCount", got[1].FType)
+	if got[1].FType != "TestMaxRealWeightCount" {
+		t.Fatalf("second row FType = %q, want TestMaxRealWeightCount", got[1].FType)
 	}
-	if got[2].FType != "MaxEmptyContent" || got[2].FValue != "" {
-		t.Fatalf("third row = %#v, want MaxEmptyContent with empty FValue", got[2])
+	if got[2].FType != "TestMaxEmptyContent" || got[2].FValue != "" {
+		t.Fatalf("third row = %#v, want TestMaxEmptyContent with empty FValue", got[2])
 	}
 }
 

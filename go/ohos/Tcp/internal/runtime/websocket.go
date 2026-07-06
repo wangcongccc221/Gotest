@@ -222,9 +222,10 @@ type webSocketHub struct {
 }
 
 type webSocketClient struct {
-	hub  *webSocketHub
-	conn *websocket.Conn
-	send chan []byte
+	hub     *webSocketHub
+	conn    *websocket.Conn
+	send    chan []byte
+	session *webSocketSessionState
 }
 
 func newWebSocketHub() *webSocketHub { //管理中心
@@ -254,15 +255,14 @@ func handleWebSocket(ctx *gin.Context) {
 	}
 
 	client := &webSocketClient{
-		hub:  defaultWebSocketHub,
-		conn: conn,
-		send: make(chan []byte, webSocketSendBufferSize),
+		hub:     defaultWebSocketHub,
+		conn:    conn,
+		send:    make(chan []byte, webSocketSendBufferSize),
+		session: newWebSocketSessionState(),
 	}
 
 	client.hub.register <- client
 	go client.writePump()
-
-	resetHomeStatsEfficiencyWindow("WebSocket client connected")
 
 	client.sendFrame(webSocketFrame{
 		Type: "ready",
@@ -337,6 +337,7 @@ func (c *webSocketClient) readPump() { //读取前端发送的数据
 	defer func() {
 		c.hub.unregister <- c
 		_ = c.conn.Close()
+		c.session.flushOffCommands()
 	}()
 
 	c.conn.SetReadLimit(webSocketMaxMessageSize)                  //设置读取最大值
@@ -406,6 +407,12 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 	case "requestStGlobal":
 		c.handleRequestStGlobal()
 
+	case "requestHomeStats":
+		c.handleRequestHomeStats()
+
+	case "requestStatistics":
+		c.handleRequestStatistics()
+
 	case "close_client":
 
 	case "dropdata":
@@ -436,12 +443,16 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleValidateProjectPassword(control)
 	case "fsmTestCupOn":
 		c.handleSimpleFSMCommand("fsmTestCupOn", cTCPHCTestCupOn, control)
+		c.recordFSMOn(cTCPHCTestCupOn, cTCPHCTestCupOff, control)
 	case "fsmTestCupOff":
 		c.handleSimpleFSMCommand("fsmTestCupOff", cTCPHCTestCupOff, control)
+		c.session.clearOnCommand(cTCPHCTestCupOn)
 	case "fruitGradeInfoOn":
 		c.handleSimpleFSMCommand("fruitGradeInfoOn", cTCPHCFruitGradeOn, control)
+		c.recordFSMOn(cTCPHCFruitGradeOn, cTCPHCFruitGradeOff, control)
 	case "fruitGradeInfoOff":
 		c.handleSimpleFSMCommand("fruitGradeInfoOff", cTCPHCFruitGradeOff, control)
+		c.session.clearOnCommand(cTCPHCFruitGradeOn)
 	case "motorEnable":
 		c.handleSimpleFSMCommand("motorEnable", cTCPHCMotorEnable, control)
 	case "exitClear":
@@ -461,20 +472,28 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleResetCupCommand("cupStateReset", cTCPHCWAMCupStateReset, control)
 	case "wamSimulatedPulseOn":
 		c.handleSimpleWAMCommand("wamSimulatedPulseOn", cTCPHCWAMSimulatedPulseOn, control)
+		c.recordWAMOn(cTCPHCWAMSimulatedPulseOn, cTCPHCWAMSimulatedPulseOff, control)
 	case "wamSimulatedPulseOff":
 		c.handleSimpleWAMCommand("wamSimulatedPulseOff", cTCPHCWAMSimulatedPulseOff, control)
+		c.session.clearOnCommand(cTCPHCWAMSimulatedPulseOn)
 	case "wamTestCupOn":
 		c.handleSimpleWAMCommand("wamTestCupOn", cTCPHCWAMTestCupOn, control)
+		c.recordWAMOn(cTCPHCWAMTestCupOn, cTCPHCWAMTestCupOff, control)
 	case "wamTestCupOff":
 		c.handleSimpleWAMCommand("wamTestCupOff", cTCPHCWAMTestCupOff, control)
+		c.session.clearOnCommand(cTCPHCWAMTestCupOn)
 	case "wamWaveFormOn":
 		c.handleSimpleWAMChannelCommand("wamWaveFormOn", cTCPHCWAMWaveFormOn, control)
+		c.recordWAMChannelOn(cTCPHCWAMWaveFormOn, cTCPHCWAMWaveFormOff, control)
 	case "wamWaveFormOff":
 		c.handleSimpleWAMChannelCommand("wamWaveFormOff", cTCPHCWAMWaveFormOff, control)
+		c.session.clearOnCommand(cTCPHCWAMWaveFormOn)
 	case "wamDataTrackingOn":
 		c.handleSimpleWAMChannelCommand("wamDataTrackingOn", cTCPHCWAMDataTrackingOn, control)
+		c.recordWAMChannelOn(cTCPHCWAMDataTrackingOn, cTCPHCWAMDataTrackingOff, control)
 	case "wamDataTrackingOff":
 		c.handleSimpleWAMChannelCommand("wamDataTrackingOff", cTCPHCWAMDataTrackingOff, control)
+		c.session.clearOnCommand(cTCPHCWAMDataTrackingOn)
 	case "wamResetAd":
 		c.handleWAMResetAD(control)
 	case "saveWamWeightInfo":
@@ -500,8 +519,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleIpmCameraCommand("ipmSingleSample", cTCPHCSingleSample, control)
 	case "ipmContinuousSampleOn":
 		c.handleIpmCameraCommand("ipmContinuousSampleOn", cTCPHCContinuousSampleOn, control)
+		c.recordFSMOn(cTCPHCContinuousSampleOn, cTCPHCContinuousSampleOff, control)
 	case "ipmContinuousSampleOff":
 		c.handleIpmCameraCommand("ipmContinuousSampleOff", cTCPHCContinuousSampleOff, control)
+		c.session.clearOnCommand(cTCPHCContinuousSampleOn)
 	case "ipmShowBlobOn":
 		c.handleIpmCameraCommand("ipmShowBlobOn", cTCPHCShowBlobOn, control)
 	case "ipmAutoBalanceOnCamera":
@@ -514,8 +535,10 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleIpmCameraCommand("ipmShutdown", cTCPHCIpmShutdown, control)
 	case "ipmShutterAdjustOn":
 		c.handleIpmCameraCommand("ipmShutterAdjustOn", cTCPHCShutterAdjustOn, control)
+		c.recordFSMOn(cTCPHCShutterAdjustOn, cTCPHCShutterAdjustOff, control)
 	case "ipmShutterAdjustOff":
 		c.handleIpmCameraCommand("ipmShutterAdjustOff", cTCPHCShutterAdjustOff, control)
+		c.session.clearOnCommand(cTCPHCShutterAdjustOn)
 	case "ipmGetMac":
 		c.handleIpmGetMAC(control)
 	case "ipmWakeOnLan":
