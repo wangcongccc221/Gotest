@@ -12,7 +12,7 @@ import (
 
 const (
 	homeStatsDefaultProgramName        = "未选择"
-	homeStatsDefaultMaxSpeed           = 680.0
+	homeStatsDefaultMaxSpeed           = 660.0
 	homeStatsDefaultMaxRealWeightCount = 66.0
 	homeStatsWeightScale               = 1000000.0
 	homeStatsHistoryInterval           = 20 * time.Second
