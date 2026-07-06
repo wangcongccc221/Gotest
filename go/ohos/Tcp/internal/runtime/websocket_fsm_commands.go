@@ -295,12 +295,21 @@ func SendSysConfigData(control webSocketControlMessage) (int, int32, int) { // �
 
 func requestStGlobalAfterSysConfig(destID int32) {
 	go func() {
-		time.Sleep(webSocketSysConfigRefreshDelay)
-		if result := RequestStGlobalFromFSM(destID); result != 0 {
-			setCTCPServerLastMessage("WebSocket saveSysConfig refresh StGlobal failed: dest=0x%04X, result=%d", uint32(destID), result)
-			return
+		// FSM 应用系统结构参数可能晚于首个回读窗口，只读一次会把未生效的旧
+		// exitstate 推回前端、导致主页出口卡片布局回滚，追加两次回读兜底
+		delays := []time.Duration{
+			webSocketSysConfigRefreshDelay,
+			1500 * time.Millisecond,
+			3 * time.Second,
 		}
-		setCTCPServerLastMessage("WebSocket saveSysConfig refresh StGlobal requested: dest=0x%04X", uint32(destID))
+		for index, delay := range delays {
+			time.Sleep(delay)
+			if result := RequestStGlobalFromFSM(destID); result != 0 {
+				setCTCPServerLastMessage("WebSocket saveSysConfig refresh StGlobal failed: attempt=%d, dest=0x%04X, result=%d", index+1, uint32(destID), result)
+				return
+			}
+			setCTCPServerLastMessage("WebSocket saveSysConfig refresh StGlobal requested: attempt=%d, dest=0x%04X", index+1, uint32(destID))
+		}
 	}()
 }
 
