@@ -149,7 +149,13 @@ func initORMWithPath(dbPath string) error {
 		closeActiveORMLocked()
 	}
 
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{
+	// 文件库启用 WAL:默认 DELETE 日志模式下,每3秒的实时落库事务提交期间会阻塞全部读请求,
+	// HTTP 查询(如配置信息)要干等 busy_timeout(驱动默认5秒)才拿到数据
+	openDSN := dsn
+	if database != "sqlite-memory" {
+		openDSN = dsn + "?_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)"
+	}
+	db, err := gorm.Open(sqlite.Open(openDSN), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
