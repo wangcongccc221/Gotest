@@ -29,6 +29,8 @@ type RealtimeFruitSaveInput struct {
 	Exports              []RealtimeExportSaveInput
 	Systems              []RealtimeSysFruitSaveInput
 	Process              *RealtimeFruitProcessSaveInput
+	// ClearWithinBatch 为真时(48 数据清零语义):计数器递减不结束批次,批内数据缩回重新累计
+	ClearWithinBatch bool
 }
 
 type RealtimeGradeSaveInput struct {
@@ -102,8 +104,9 @@ func SaveRealtimeFruitInfo(input RealtimeFruitSaveInput) (int, error) {
 			if err != nil {
 				return err
 			}
-			if decreased {
-				// 计数器递减，说明设备清零或重启，需要结束旧批次并开始新批次
+			// 计数器递减，说明设备清零或重启，需要结束旧批次并开始新批次;
+			// 但数据清零(ClearWithinBatch,对齐48 HC_SERVICE_CMD_CLEAR)例外:批次保留,数据缩回重新累计
+			if decreased && !input.ClearWithinBatch {
 				endTime := savedAt.Format("2006-01-02 15:04:05")
 				if err := tx.Model(&TbFruitInfo{}).
 					Where("CustomerID = ?", fruit.CustomerID).
@@ -201,6 +204,41 @@ func RealtimeSaveDatabaseForLog() string {
 		return dsn
 	}
 	return "unknown"
+}
+
+// ClearCurrentFruitBatchData 立即清空当前未完成批次的累计数据(对齐 48 服务端 HC_SERVICE_CMD_CLEAR):
+// 批次行与原开始时间保留,计数清零,等级/出口/子系统明细删除,后续统计在同批次上重新累计。
+// 由数据清零指令直接触发,不依赖统计流——设备已停机时清零,库里也当场归零。
+func ClearCurrentFruitBatchData() (int, error) {
+	db, err := getInitializedFileORMDB()
+	if err != nil {
+		return 0, err
+	}
+
+	customerID := 0
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		fruit, hasFruit, err := realtimeSaveCurrentFruitInfo(tx)
+		if err != nil || !hasFruit {
+			return err
+		}
+		customerID = fruit.CustomerID
+		if err := tx.Model(&TbFruitInfo{}).Where("CustomerID = ?", customerID).Updates(map[string]any{
+			"BatchWeight": 0,
+			"BatchNumber": 0,
+		}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("CustomerID = ?", customerID).Delete(&TbGradeInfo{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Where("CustomerID = ?", customerID).Delete(&TbExportInfo{}).Error; err != nil {
+			return err
+		}
+		return tx.Where("CustomerID = ?", customerID).Delete(&TbSysFruitInfo{}).Error
+	}); err != nil {
+		return 0, err
+	}
+	return customerID, nil
 }
 
 func getInitializedFileORMDB() (*gorm.DB, error) {

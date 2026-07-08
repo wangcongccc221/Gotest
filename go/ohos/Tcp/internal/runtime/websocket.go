@@ -422,6 +422,8 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		c.handleClearGradeExitData(control)
 
 	case "clearData": //数据清零
+		// 对齐48 HC_SERVICE_CMD_CLEAR:数据清零不结批,窗口期内的计数递减按批内清零处理
+		markRealtimeSaveClearRequested()
 		c.handleSimpleFSMCommand("clearData", cTCPHCClearData, control)
 	case "saveParasToFlash":
 		c.handleSimpleFSMCommand("saveParasToFlash", cTCPHCSaveParas, control)

@@ -120,7 +120,8 @@ func ClearGradeExitData(control webSocketControlMessage) (int, int32, int) { //æ
 	}
 
 	cacheLatestGradeInfo(destID, grade)
-	setCTCPServerLastMessage("WebSocket clearExitGrades success: HC_CMD_GRADE_INFO sent, dest=0x%04X", uint32(destID))
+	requestStGlobalAfterConfigCommand("clearExitGrades", destID)
+	setCTCPServerLastMessage("WebSocket clearExitGrades success: HC_CMD_GRADE_INFO sent, dest=0x%04X, refresh StGlobal scheduled", uint32(destID))
 	return 0, destID, len(payload)
 }
 

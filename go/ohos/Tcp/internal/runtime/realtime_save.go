@@ -11,6 +11,8 @@ import (
 const (
 	cTCPRealtimeSaveInterval       = 3 * time.Second
 	cTCPRealtimeSaveErrorLogPeriod = 30 * time.Second
+	// 数据清零标记的有效窗口:FSM 收到清零后计数器立即归零,下一个3秒落库周期内必然观测到递减
+	cTCPRealtimeSaveClearWindow = 90 * time.Second
 )
 
 type realtimeSaveAggregate struct {
@@ -53,6 +55,7 @@ var (
 	realtimeSavePausedAfterEnd bool
 	realtimeSaveEndBaseline    database.RealtimeFruitSaveInput
 	realtimeSaveHasEndBaseline bool
+	realtimeSaveClearRequestedAt time.Time
 )
 
 func cacheRealtimeSaveGlobalConfig(stg StGlobal) {
@@ -60,6 +63,33 @@ func cacheRealtimeSaveGlobalConfig(stg StGlobal) {
 	realtimeSaveLatestGlobal = stg
 	realtimeSaveHasGlobal = true
 	realtimeSaveMu.Unlock()
+}
+
+// markRealtimeSaveClearRequested 记录前端刚下发了数据清零指令。
+// 对齐 48 数据清零(HC_SERVICE_CMD_CLEAR)语义:窗口期内的计数器递减按"批内清零"处理,
+// 不结束批次——批次和原开始时间保留,数据缩回重新累计;结批只属于结束加工/设备重启。
+func markRealtimeSaveClearRequested() {
+	realtimeSaveMu.Lock()
+	realtimeSaveClearRequestedAt = time.Now()
+	// 清零后产量/效率的增量基线作废,防止拿清零前的累计算出异常增量
+	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{}
+	realtimeSaveMu.Unlock()
+
+	// 对齐48服务端 CLEAR:立即清空当前批次库内数据,不等下一次统计落库(设备停机时也生效)
+	go func() {
+		if customerID, err := database.ClearCurrentFruitBatchData(); err != nil {
+			setCTCPServerLastMessage("clearData: 清空当前批次数据失败: %v", err)
+		} else if customerID > 0 {
+			setCTCPServerLastMessage("clearData: 当前批次(CustomerID=%d)库内数据已清零,批次保留", customerID)
+		}
+	}()
+}
+
+func realtimeSaveClearRecentlyRequested() bool {
+	realtimeSaveMu.Lock()
+	at := realtimeSaveClearRequestedAt
+	realtimeSaveMu.Unlock()
+	return !at.IsZero() && time.Since(at) <= cTCPRealtimeSaveClearWindow
 }
 
 func resetRealtimeSaveState() {
@@ -76,6 +106,7 @@ func resetRealtimeSaveState() {
 	realtimeSavePausedAfterEnd = false
 	realtimeSaveEndBaseline = database.RealtimeFruitSaveInput{}
 	realtimeSaveHasEndBaseline = false
+	realtimeSaveClearRequestedAt = time.Time{}
 	realtimeSaveMu.Unlock()
 }
 
@@ -113,6 +144,9 @@ func maybeSaveRealtimeStatistics(now time.Time) {
 		input = deltaInput
 		resumeRealtimeSaveAfterEnd("StStatistics increased after end process; saving delta as new batch")
 	}
+
+	// 对齐48:清零指令窗口期内的计数回落按批内清零落库,不拆批次
+	input.ClearWithinBatch = realtimeSaveClearRecentlyRequested()
 
 	go func() {
 		_, err := database.SaveRealtimeFruitInfo(input)
