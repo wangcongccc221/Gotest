@@ -56,6 +56,10 @@ var (
 	realtimeSaveEndBaseline    database.RealtimeFruitSaveInput
 	realtimeSaveHasEndBaseline bool
 	realtimeSaveClearRequestedAt time.Time
+	// 落库耗时统计(吞吐验证):累计数据模式下事务工作量固定,耗时应长期平稳
+	realtimeSaveDurCount   uint64
+	realtimeSaveDurTotalMs int64
+	realtimeSaveDurMaxMs   int64
 )
 
 func cacheRealtimeSaveGlobalConfig(stg StGlobal) {
@@ -74,6 +78,12 @@ func markRealtimeSaveClearRequested() {
 	// 清零后产量/效率的增量基线作废,防止拿清零前的累计算出异常增量
 	realtimeSaveProcessHistory = realtimeSaveProcessSnapshot{}
 	realtimeSaveMu.Unlock()
+
+	// 丢弃缓存的统计帧并重置 homeStats 基线(复用结束加工的清理函数):
+	// 否则速度发布定时器会周期性把旧帧重新推给前端(卡片清完几秒又被旧值顶回),
+	// 3秒落库线程也会把旧总数写回刚清零的批次(重启后旧数据"复活")
+	resetStStatisticsCacheAfterEndProcess()
+	resetHomeStatsHistoryAfterEndProcess()
 
 	// 对齐48服务端 CLEAR:立即清空当前批次库内数据,不等下一次统计落库(设备停机时也生效)
 	go func() {
@@ -149,9 +159,36 @@ func maybeSaveRealtimeStatistics(now time.Time) {
 	input.ClearWithinBatch = realtimeSaveClearRecentlyRequested()
 
 	go func() {
+		start := time.Now()
 		_, err := database.SaveRealtimeFruitInfo(input)
+		logRealtimeSaveDuration(time.Since(start), len(input.Grades), len(input.Exports), err)
 		finishRealtimeSave(err)
 	}()
+}
+
+// logRealtimeSaveDuration 记录每次实时落库事务耗时:慢保存(>=500ms)立即告警,
+// 正常节奏每20次(约1分钟)输出一次 本次/平均/最大,供全天观察耗时是否随累计数据增长而变慢
+func logRealtimeSaveDuration(elapsed time.Duration, gradeRows int, exportRows int, err error) {
+	ms := elapsed.Milliseconds()
+	realtimeSaveMu.Lock()
+	realtimeSaveDurCount++
+	realtimeSaveDurTotalMs += ms
+	if ms > realtimeSaveDurMaxMs {
+		realtimeSaveDurMaxMs = ms
+	}
+	count := realtimeSaveDurCount
+	avgMs := realtimeSaveDurTotalMs / int64(count)
+	maxMs := realtimeSaveDurMaxMs
+	realtimeSaveMu.Unlock()
+
+	if err != nil {
+		return // 失败路径已有专门日志
+	}
+	if ms >= 500 {
+		setCTCPServerLastMessage("realtime save 慢: 本次%dms (等级行%d 出口行%d), 平均%dms 最大%dms 累计%d次", ms, gradeRows, exportRows, avgMs, maxMs, count)
+	} else if count%20 == 0 {
+		setCTCPServerLastMessage("realtime save 耗时: 本次%dms 平均%dms 最大%dms 累计%d次 (等级行%d 出口行%d)", ms, avgMs, maxMs, count, gradeRows, exportRows)
+	}
 }
 
 func finishRealtimeSaveSkip(reason string) {

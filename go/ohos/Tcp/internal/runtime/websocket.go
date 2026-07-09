@@ -240,6 +240,10 @@ func newWebSocketHub() *webSocketHub { //管理中心
 func registerWebSocketRoutes(router *gin.Engine) { //注册路由
 	router.GET("/ws", handleWebSocket)
 	router.GET("/ws/data", handleWebSocketData)
+	// 后端运行日志(落库耗时/清零/保存失败等),纯文本,最近800条
+	router.GET("/Api/Debug/GoLogs", func(ctx *gin.Context) {
+		ctx.String(http.StatusOK, strings.Join(snapshotCTCPServerLogs(), "\n"))
+	})
 }
 
 func handleWebSocketData(ctx *gin.Context) {
