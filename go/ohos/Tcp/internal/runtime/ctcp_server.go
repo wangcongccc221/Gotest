@@ -694,7 +694,7 @@ var (
 
 // setCTCPServerLastMessage 后端运行日志:写入内存环形缓冲(最近800条,约40分钟量),
 // 通过 GET /Api/Debug/GoLogs 查看——PC 上 `hdc fport tcp:18080 tcp:18080` 后浏览器访问
-// http://127.0.0.1:18080/Api/Debug/GoLogs 即可(落库耗时/清零/保存失败等全部走这里)
+// http://127.0.0.1:16666/Api/Debug/GoLogs 即可(落库耗时/清零/保存失败等全部走这里)
 func setCTCPServerLastMessage(format string, args ...any) {
 	line := time.Now().Format("01-02 15:04:05.000") + " " + fmt.Sprintf(format, args...)
 	ctcpServerLogMu.Lock()
