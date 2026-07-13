@@ -179,32 +179,60 @@ func BuildPrintReportPreview(customerID int) (printReportPreviewAPIModel, error)
 func defaultPrintTemplateConfig() printTemplateConfigAPIModel {
 	return printTemplateConfigAPIModel{
 		TopFields: []printTemplateFieldAPIModel{
-			{Key: "CustomerName", Label: "Customer", Checked: true},
-			{Key: "FarmName", Label: "Farm", Checked: true},
-			{Key: "FruitName", Label: "Fruit", Checked: true},
-			{Key: "BatchNumber", Label: "TotalPieces", Checked: true},
-			{Key: "BatchWeight", Label: "TotalWeight", Checked: true},
-			{Key: "BoxNumber", Label: "TotalBox", Checked: true},
-			{Key: "AverWeight", Label: "AverFruitWeig", Checked: true},
-			{Key: "ProgramName", Label: "SortProcedure", Checked: true},
-			{Key: "CustomerID", Label: "SerialNum", Checked: true},
-			{Key: "StartTime", Label: "StartTime", Checked: true},
-			{Key: "EndTime", Label: "EndTime", Checked: true},
+			{Key: "CustomerName", Label: "客户名称", Checked: true},
+			{Key: "FarmName", Label: "农场名称", Checked: true},
+			{Key: "FruitName", Label: "水果品种", Checked: true},
+			{Key: "BatchNumber", Label: "个数汇总", Checked: true},
+			{Key: "BatchWeight", Label: "重量汇总", Checked: true},
+			{Key: "BoxNumber", Label: "箱数汇总", Checked: true},
+			{Key: "AverWeight", Label: "平均果重", Checked: true},
+			{Key: "ProgramName", Label: "分选程序", Checked: true},
+			{Key: "CustomerID", Label: "序列号", Checked: true},
+			{Key: "StartTime", Label: "开始时间", Checked: true},
+			{Key: "EndTime", Label: "结束时间", Checked: true},
 		},
 		ContentFields: []printTemplateFieldAPIModel{
-			{Key: "WeightOrSizeName", Label: "GradeName", Checked: true, Width: 120},
-			{Key: "WeightOrSizeLimit", Label: "Weight/Size", Checked: true, Width: 120},
-			{Key: "GradeCount", Label: "GradeTotalNum", Checked: true, Width: 120},
-			{Key: "GradeCountPercent", Label: "Pieces Percentage", Checked: true, Width: 120},
-			{Key: "WeightGradeCount", Label: "GradeTotalWeight", Checked: true, Width: 120},
-			{Key: "WeightGradeCountPercent", Label: "Weight Percentage", Checked: true, Width: 120},
-			{Key: "BoxGradeCount", Label: "TotalBox", Checked: true, Width: 120},
-			{Key: "BoxGradeCountPercent", Label: "LblMainReportCartonsPer", Checked: true, Width: 120},
-			{Key: "FPrice", Label: "Unit price(RMB/kg)", Checked: false, Width: 120},
-			{Key: "Amount", Label: "Amount", Checked: false, Width: 120},
-			{Key: "Notes", Label: "Notes", Checked: false, Width: 120},
+			{Key: "WeightOrSizeName", Label: "等级名称", Checked: true, Width: 120},
+			{Key: "WeightOrSizeLimit", Label: "重量/尺寸", Checked: true, Width: 120},
+			{Key: "GradeCount", Label: "等级个数", Checked: true, Width: 120},
+			{Key: "GradeCountPercent", Label: "个数百分比", Checked: true, Width: 120},
+			{Key: "WeightGradeCount", Label: "等级重量", Checked: true, Width: 120},
+			{Key: "WeightGradeCountPercent", Label: "重量百分比", Checked: true, Width: 120},
+			{Key: "BoxGradeCount", Label: "箱数", Checked: true, Width: 120},
+			{Key: "BoxGradeCountPercent", Label: "箱数百分比", Checked: true, Width: 120},
+			{Key: "FPrice", Label: "单价(元/kg)", Checked: false, Width: 120},
+			{Key: "Amount", Label: "金额", Checked: false, Width: 120},
+			{Key: "Notes", Label: "备注", Checked: false, Width: 120},
 		},
 	}
+}
+
+// legacyDefaultPrintTemplateLabels 记录旧版本写入数据库的英文默认标签。
+// 已保存配置中与旧默认值完全一致的标签视为“未自定义”，加载时回退到当前
+// 中文默认值；用户自行修改过的标签不受影响。
+var legacyDefaultPrintTemplateLabels = map[string]string{
+	"CustomerName":            "Customer",
+	"FarmName":                "Farm",
+	"FruitName":               "Fruit",
+	"BatchNumber":             "TotalPieces",
+	"BatchWeight":             "TotalWeight",
+	"BoxNumber":               "TotalBox",
+	"AverWeight":              "AverFruitWeig",
+	"ProgramName":             "SortProcedure",
+	"CustomerID":              "SerialNum",
+	"StartTime":               "StartTime",
+	"EndTime":                 "EndTime",
+	"WeightOrSizeName":        "GradeName",
+	"WeightOrSizeLimit":       "Weight/Size",
+	"GradeCount":              "GradeTotalNum",
+	"GradeCountPercent":       "Pieces Percentage",
+	"WeightGradeCount":        "GradeTotalWeight",
+	"WeightGradeCountPercent": "Weight Percentage",
+	"BoxGradeCount":           "TotalBox",
+	"BoxGradeCountPercent":    "LblMainReportCartonsPer",
+	"FPrice":                  "Unit price(RMB/kg)",
+	"Amount":                  "Amount",
+	"Notes":                   "Notes",
 }
 
 func normalizePrintTemplateConfig(config printTemplateConfigAPIModel) printTemplateConfigAPIModel {
@@ -231,8 +259,9 @@ func mergePrintTemplateFields(defaults []printTemplateFieldAPIModel, input []pri
 	for _, item := range defaults {
 		if override, ok := byKey[item.Key]; ok {
 			item.Checked = override.Checked
-			if strings.TrimSpace(override.Label) != "" {
-				item.Label = strings.TrimSpace(override.Label)
+			label := strings.TrimSpace(override.Label)
+			if label != "" && label != legacyDefaultPrintTemplateLabels[item.Key] {
+				item.Label = label
 			}
 			if withWidth && override.Width > 0 {
 				item.Width = math.Max(20, math.Min(600, override.Width))
@@ -296,7 +325,7 @@ func buildPrintReportHTML(item fruitInfoAPIModel, config printTemplateConfigAPIM
 
 	var bodyBuilder strings.Builder
 	if len(rows) == 0 {
-		bodyBuilder.WriteString(fmt.Sprintf(`<tr><td colspan="%d" class="empty">No data</td></tr>`, len(contentFields)))
+		bodyBuilder.WriteString(fmt.Sprintf(`<tr><td colspan="%d" class="empty">暂无数据</td></tr>`, len(contentFields)))
 	} else {
 		for _, row := range rows {
 			bodyBuilder.WriteString("<tr>")
@@ -355,7 +384,7 @@ func buildPrintReportHTML(item fruitInfoAPIModel, config printTemplateConfigAPIM
       <thead>%s</thead>
       <tbody>%s</tbody>
     </table>
-    <div class="page-footer">Page 1/1</div>
+    <div class="page-footer">页 1/1</div>
   </main>
 </body>
 </html>`, html.EscapeString(printTime), metaBuilder.String(), colBuilder.String(), headBuilder.String(), bodyBuilder.String()), nil
@@ -430,7 +459,7 @@ func buildPrintReportRows(item fruitInfoAPIModel, priceEnabled bool) []printRepo
 
 	if len(rows) > 0 {
 		totalRow := map[string]string{
-			"WeightOrSizeName":        "Total",
+			"WeightOrSizeName":        "小计",
 			"GradeCount":              fmt.Sprintf("%d", totalCount),
 			"GradeCountPercent":       formatPercent(float64(totalCount), float64(totalCount), 3),
 			"WeightGradeCount":        formatFloat(totalWeight/1000.0, 3),
@@ -442,7 +471,7 @@ func buildPrintReportRows(item fruitInfoAPIModel, priceEnabled bool) []printRepo
 		rows = append(rows, printReportTableRow{values: totalRow})
 		if priceEnabled && totalWeight > 0 {
 			rows = append(rows, printReportTableRow{values: map[string]string{
-				"WeightOrSizeName": "AverAmount",
+				"WeightOrSizeName": "平均单价",
 				"Amount":           formatFloat(totalAmount*1000.0/totalWeight, 2),
 			}})
 		}

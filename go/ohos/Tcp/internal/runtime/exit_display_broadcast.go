@@ -116,25 +116,15 @@ func resolveExitDisplayGradeName(info ExitDisplayInfo, grade StGradeInfo, hasGra
 
 func exitDisplayGradeNameFromGrade(grade StGradeInfo, exitIndex int) string {
 	qualityCount := 1
-	if grade.NClassifyType > 0 && grade.NQualityGradeNum > 0 {
-		qualityCount = int(grade.NQualityGradeNum)
-	}
-	if qualityCount <= 0 {
-		qualityCount = 1
-	}
-	if qualityCount > cTCPServerMaxSizeGradeNum {
-		qualityCount = cTCPServerMaxSizeGradeNum
+	if grade.NClassifyType > 0 {
+		if stored := realtimeSaveStoredGradeCount(grade.NQualityGradeNum); stored > 0 {
+			qualityCount = stored
+		}
 	}
 
 	sizeCount := 1
-	if grade.NSizeGradeNum > 0 {
-		sizeCount = int(grade.NSizeGradeNum)
-	}
-	if sizeCount <= 0 {
-		sizeCount = 1
-	}
-	if sizeCount > cTCPServerMaxSizeGradeNum {
-		sizeCount = cTCPServerMaxSizeGradeNum
+	if stored := realtimeSaveStoredGradeCount(grade.NSizeGradeNum); stored > 0 {
+		sizeCount = stored
 	}
 
 	parts := make([]string, 0, sizeCount)
@@ -154,7 +144,7 @@ func exitDisplayGradeNameFromGrade(grade StGradeInfo, exitIndex int) string {
 			if sizeName == "" {
 				continue
 			}
-			if grade.NQualityGradeNum > 0 {
+			if realtimeSaveStoredGradeCount(grade.NQualityGradeNum) > 0 {
 				qualityName := realtimeSaveFixedName(grade.StrQualityGradeName[:], qualityIndex)
 				if qualityName != "" {
 					sizeName += "." + qualityName

@@ -9,9 +9,14 @@ import (
 	"golang.org/x/text/transform"
 )
 
+// cTCPGradeCountSentinel 对齐 48 协议(interface.h): 0x7F 表示"未使用/忽略该维度",
+// 不是第 127 个等级。等级数量字段读到 0x7F 及以上说明 FSM 侧未初始化或无效,
+// 若按上限钳制成 16 会凭空落库 16 组不存在的品质(重启瞬间的首帧尤其如此)。
+const cTCPGradeCountSentinel = 0x7F
+
 func realtimeSaveStoredGradeCount(value uint8) int {
 	count := int(value)
-	if count < 0 {
+	if count >= cTCPGradeCountSentinel {
 		return 0
 	}
 	if count > cTCPServerMaxSizeGradeNum {

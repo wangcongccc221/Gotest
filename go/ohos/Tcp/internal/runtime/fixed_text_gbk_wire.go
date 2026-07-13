@@ -202,14 +202,8 @@ func fixedTextStringsFromGBKWire(src []uint8, slotSize int, count int) []string 
 }
 
 func gradeNameTextsFromGBKWire(grade StGradeInfo) webSocketGradeNameTexts {
-	sizeCount := int(grade.NSizeGradeNum)
-	if sizeCount > cTCPServerMaxSizeGradeNum {
-		sizeCount = cTCPServerMaxSizeGradeNum
-	}
-	qualityCount := int(grade.NQualityGradeNum)
-	if qualityCount > cTCPServerMaxQualityGradeNum {
-		qualityCount = cTCPServerMaxQualityGradeNum
-	}
+	sizeCount := realtimeSaveStoredGradeCount(grade.NSizeGradeNum)
+	qualityCount := realtimeSaveStoredGradeCount(grade.NQualityGradeNum)
 	return webSocketGradeNameTexts{
 		SizeGradeNames:    fixedTextStringsFromGBKWire(grade.StrSizeGradeName[:], cTCPServerMaxTextLength, sizeCount),
 		QualityGradeNames: fixedTextStringsFromGBKWire(grade.StrQualityGradeName[:], cTCPServerMaxTextLength, qualityCount),
