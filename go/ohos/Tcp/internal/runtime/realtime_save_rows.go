@@ -119,7 +119,6 @@ func buildRealtimeSaveProcess(now time.Time, aggregate realtimeSaveAggregate) *d
 	}
 
 	elapsed := now.Sub(prev.At)
-	deltaExit := int64(aggregate.TotalExitCount) - int64(prev.TotalExitCount)
 	deltaCount := int64(aggregate.TotalCount) - int64(prev.TotalCount)
 	deltaCup := int64(aggregate.TotalCupNum) - int64(prev.TotalCupNum)
 	deltaWeight := aggregate.TotalWeight - prev.TotalWeight
@@ -144,7 +143,7 @@ func buildRealtimeSaveProcess(now time.Time, aggregate realtimeSaveAggregate) *d
 		AvgWeight:    avgWeight,
 	}
 	if deltaCount >= 0 {
-		process.SeparationEfficiency = roundHomeStats(calculateHomeStatsEfficiencyPercent(deltaExit, deltaCup), 1)
+		process.SeparationEfficiency = roundHomeStats(calculateHomeStatsEfficiencyPercent(deltaCount, deltaCup), 1)
 	}
 	if deltaWeight > 0 && elapsed > 0 {
 		process.RealWeightCount = (deltaWeight / homeStatsWeightScale) * (float64(time.Hour) / float64(elapsed))

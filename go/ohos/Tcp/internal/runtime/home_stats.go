@@ -273,7 +273,7 @@ func updateHomeStatsHistoryLocked(now time.Time, aggregate homeStatsAggregate, s
 	deltaGrade := int64(aggregate.TotalGradeCount) - int64(homeStatsHistory.PrevGradeCount)
 	deltaWeight := aggregate.TotalWeight - homeStatsHistory.PrevTotalWeight
 
-	efficiency := calculateHomeStatsEfficiencyPercent(deltaExit, deltaCup)
+	efficiency := calculateHomeStatsEfficiencyPercent(deltaCount, deltaCup)
 
 	realtimeOutput := 0.0
 	elapsed := now.Sub(prevAt)
@@ -407,11 +407,11 @@ func homeStatsTotalWeight(stats StStatistics) float64 {
 	return float64(sumHomeStatsUint64(stats.NWeightGradeCount[:]))
 }
 
-func calculateHomeStatsEfficiencyPercent(deltaExit int64, deltaCup int64) float64 {
-	if deltaCup <= 0 || deltaExit < 0 {
+func calculateHomeStatsEfficiencyPercent(deltaCount int64, deltaCup int64) float64 {
+	if deltaCup <= 0 || deltaCount < 0 {
 		return 0
 	}
-	return clampHomeStats((float64(deltaExit)*100.0)/float64(deltaCup), 0, 100)
+	return clampHomeStats((float64(deltaCount)*100.0)/float64(deltaCup), 0, 100)
 }
 
 func sumHomeStatsUint64(values []uint64) uint64 {

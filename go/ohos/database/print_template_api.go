@@ -48,6 +48,7 @@ func registerPrintTemplateRoutes(router *gin.Engine) {
 	group.POST("/GetPrintTemplate", handlePrintTemplateGet)
 	group.POST("/SavePrintTemplate", handlePrintTemplateSave)
 	group.POST("/PreviewReport", handlePrintTemplatePreviewReport)
+	group.POST("/ExportWeightTrackingExcel", handleWeightTrackingExportExcel)
 }
 
 func handlePrintTemplateGet(ctx *gin.Context) {

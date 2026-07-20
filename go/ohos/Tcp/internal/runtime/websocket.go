@@ -390,8 +390,8 @@ func (c *webSocketClient) writePump() { // 主动推消息给前端
 }
 
 func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送的数据s
-	text := strings.TrimSpace(string(payload))
-	if strings.EqualFold(text, "ping") { //如果前端发了个ping 就回复个pong 这个是心跳机制的一部分
+	text := strings.TrimSpace(string(payload)) //去掉前后空格 test =发送过来的字段内容
+	if strings.EqualFold(text, "ping") {       //如果前端发了个ping 就回复个pong 这个是心跳机制的一部分
 		c.sendFrame(webSocketFrame{Type: "pong"})
 		return
 	}
@@ -409,7 +409,7 @@ func (c *webSocketClient) handleIncoming(payload []byte) { //处理前端发送�
 		})
 
 	case "requestStGlobal":
-		c.handleRequestStGlobal()
+		c.handleRequestStGlobal(control)
 
 	case "requestHomeStats":
 		c.handleRequestHomeStats()
