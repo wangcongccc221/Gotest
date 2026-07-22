@@ -10,17 +10,8 @@ var requestStGlobalFromFSM = RequestStGlobalFromFSM
 
 func (c *webSocketClient) handleRequestStGlobal(control webSocketControlMessage) {
 	fsmID := normalizeRequestStGlobalFSMID(control.FSMID)
-	// 先回放缓存/本地配置：FSM 未连接时这是前端（主页出口卡片等）唯一的数据来源。
-	c.sendLatestExitInfosData()
-	c.sendLatestExitDisplayData()
-	c.sendLatestExitAdditionalTextData()
-	c.sendLatestLevelAuxConfigData()
-	c.sendLatestFruitTypeConfigData()
-	// 前端 WebSocket 连接成功后发 requestStGlobal，表示前端已经准备接收数据。
-	// 这里异步触发 CTCP 客户端发送 DISPLAY_ON，避免阻塞 WebSocket 的读循环。
 	go func() {
-		if result := requestStGlobalFromFSM(fsmID); result != 0 {
-			setCTCPServerLastMessage("WebSocket requestStGlobal failed: result=%d", result)
+		if result := RequestStGlobalFromFSM(fsmID); result != 0 {
 		}
 	}()
 }

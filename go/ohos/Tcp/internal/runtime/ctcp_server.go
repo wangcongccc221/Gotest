@@ -273,7 +273,7 @@ func (s *cTCPServer) stopServer() {
 	s.wg.Wait()
 }
 
-func (s *cTCPServer) acceptLoop() {
+func (s *cTCPServer) acceptLoop() { //接收数据
 	defer s.wg.Done()
 
 	for {
@@ -303,12 +303,12 @@ func (s *cTCPServer) handleConnection(conn net.Conn) {
 	remoteAddr := conn.RemoteAddr().String()
 	_ = conn.SetDeadline(time.Now().Add(cTCPServerReadTimeout))
 
-	if err := recvCTCPSync(conn); err != nil {
+	if err := recvCTCPSync(conn); err != nil { //sync
 		setCTCPServerLastMessage("CTCP %s server rejected %s on port %d: %v", s.name, remoteAddr, s.port, err)
 		return
 	}
 
-	head, err := recvCTCPCommand(conn)
+	head, err := recvCTCPCommand(conn) //读取12字节
 	if err != nil {
 		setCTCPServerLastMessage("CTCP %s server read command failed from %s on port %d: %v", s.name, remoteAddr, s.port, err)
 		return
@@ -578,7 +578,7 @@ func ParseData[T any](payload []byte) (T, error) {
 	if len(payload) < n {
 		return zero, fmt.Errorf("payload too short for %T: need %d, got %d", zero, n, len(payload))
 	}
-	return *(*T)(unsafe.Pointer(&payload[0])), nil
+	return *(*T)(unsafe.Pointer(&payload[0])), nil //强转
 }
 
 func parseStStatisticsPayload(payload []byte) (StStatistics, string, error) {
